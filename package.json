@@ -1,0 +1,147 @@
+{
+  "name": "@xtr-dev/payload-billing",
+  "version": "0.1.0",
+  "description": "PayloadCMS plugin for billing and payment provider integrations with tracking and local testing",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./src/index.ts",
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./client": {
+      "import": "./src/exports/client.tsx",
+      "types": "./src/exports/client.tsx",
+      "default": "./src/exports/client.tsx"
+    },
+    "./rsc": {
+      "import": "./src/exports/rsc.tsx",
+      "types": "./src/exports/rsc.tsx",
+      "default": "./src/exports/rsc.tsx"
+    }
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "pnpm copyfiles && pnpm build:types && pnpm build:swc",
+    "build:swc": "swc ./src -d ./dist --config-file .swcrc --strip-leading-paths",
+    "build:types": "tsc --project tsconfig.build.json",
+    "clean": "rimraf {dist,*.tsbuildinfo}",
+    "copyfiles": "copyfiles -u 1 \"src/**/*.{html,css,scss,ttf,woff,woff2,eot,svg,jpg,png,json}\" dist/",
+    "dev": "next dev dev --turbo",
+    "dev:generate-importmap": "pnpm dev:payload generate:importmap",
+    "dev:generate-types": "pnpm dev:payload generate:types",
+    "dev:payload": "cross-env PAYLOAD_CONFIG_PATH=./dev/payload.config.ts payload",
+    "generate:importmap": "pnpm dev:generate-importmap",
+    "generate:types": "pnpm dev:generate-types",
+    "lint": "eslint",
+    "lint:fix": "eslint ./src --fix",
+    "prepublishOnly": "pnpm clean && pnpm build",
+    "test": "pnpm test:int && pnpm test:e2e",
+    "test:e2e": "playwright test",
+    "test:int": "vitest",
+    "typecheck": "tsc --noEmit",
+    "release": "changeset publish"
+  },
+  "keywords": [
+    "payloadcms",
+    "plugin",
+    "billing",
+    "payments",
+    "stripe",
+    "mollie",
+    "ecommerce",
+    "subscription",
+    "invoice"
+  ],
+  "author": "XTR Development <dev@xtr.dev>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/xtr-dev/payload-billing.git"
+  },
+  "bugs": {
+    "url": "https://github.com/xtr-dev/payload-billing/issues"
+  },
+  "homepage": "https://github.com/xtr-dev/payload-billing#readme",
+  "devDependencies": {
+    "@changesets/cli": "^2.27.1",
+    "@eslint/eslintrc": "^3.2.0",
+    "@payloadcms/db-mongodb": "3.37.0",
+    "@payloadcms/db-postgres": "3.37.0",
+    "@payloadcms/db-sqlite": "3.37.0",
+    "@payloadcms/eslint-config": "3.9.0",
+    "@payloadcms/next": "3.37.0",
+    "@payloadcms/richtext-lexical": "3.37.0",
+    "@payloadcms/ui": "3.37.0",
+    "@playwright/test": "^1.52.0",
+    "@swc-node/register": "1.10.9",
+    "@swc/cli": "0.6.0",
+    "@types/node": "^22.5.4",
+    "@types/react": "19.1.8",
+    "@types/react-dom": "19.1.6",
+    "copyfiles": "2.4.1",
+    "cross-env": "^7.0.3",
+    "eslint": "^9.23.0",
+    "eslint-config-next": "15.4.4",
+    "graphql": "^16.8.1",
+    "mongodb-memory-server": "10.1.4",
+    "next": "15.4.4",
+    "open": "^10.1.0",
+    "payload": "3.37.0",
+    "prettier": "^3.4.2",
+    "qs-esm": "7.0.2",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "rimraf": "3.0.2",
+    "sharp": "0.34.2",
+    "sort-package-json": "^2.10.0",
+    "typescript": "5.7.3",
+    "vite-tsconfig-paths": "^5.1.4",
+    "vitest": "^3.1.2"
+  },
+  "peerDependencies": {
+    "payload": "^3.37.0"
+  },
+  "dependencies": {
+    "stripe": "^14.15.0",
+    "@mollie/api-client": "^3.7.0",
+    "zod": "^3.22.4"
+  },
+  "engines": {
+    "node": "^18.20.2 || >=20.9.0",
+    "pnpm": "^9 || ^10"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "import": "./dist/index.js",
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "./client": {
+        "import": "./dist/exports/client.js",
+        "types": "./dist/exports/client.d.ts",
+        "default": "./dist/exports/client.js"
+      },
+      "./rsc": {
+        "import": "./dist/exports/rsc.js",
+        "types": "./dist/exports/rsc.d.ts",
+        "default": "./dist/exports/rsc.js"
+      }
+    },
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "access": "public"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "sharp",
+      "esbuild"
+    ]
+  },
+  "packageManager": "pnpm@10.12.4+sha512.5ea8b0deed94ed68691c9bad4c955492705c5eeb8a87ef86bc62c74a26b037b08ff9570f108b2e4dbd1dd1a9186fea925e527f141c648e85af45631074680184"
+}

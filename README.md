@@ -8,7 +8,6 @@ A billing and payment provider plugin for PayloadCMS 3.x. Supports Stripe, Molli
 
 - 💳 Multiple payment providers (Stripe, Mollie, Test)
 - 🧾 Invoice generation and management
-- 👥 Customer profiles with billing information
 - 📊 Complete payment tracking and history
 - 🪝 Secure webhook processing for all providers
 - 🧪 Built-in test provider for local development

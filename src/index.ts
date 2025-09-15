@@ -1,6 +1,6 @@
 import type { Config } from 'payload'
 
-import type { BillingPluginConfig } from './types'
+import type { BillingPluginConfig, CustomerInfoExtractor } from './types'
 
 import { createCustomersCollection } from './collections/customers'
 import { createInvoicesCollection } from './collections/invoices'
@@ -8,6 +8,25 @@ import { createPaymentsCollection } from './collections/payments'
 import { createRefundsCollection } from './collections/refunds'
 
 export * from './types'
+
+// Default customer info extractor for the built-in customer collection
+export const defaultCustomerInfoExtractor: CustomerInfoExtractor = (customer) => {
+  return {
+    name: customer.name || '',
+    email: customer.email || '',
+    phone: customer.phone,
+    company: customer.company,
+    taxId: customer.taxId,
+    billingAddress: customer.address ? {
+      line1: customer.address.line1 || '',
+      line2: customer.address.line2,
+      city: customer.address.city || '',
+      state: customer.address.state,
+      postalCode: customer.address.postalCode || '',
+      country: customer.address.country || '',
+    } : undefined,
+  }
+}
 
 export const billingPlugin = (pluginConfig: BillingPluginConfig = {}) => (config: Config): Config => {
   if (pluginConfig.disabled) {
@@ -26,7 +45,8 @@ export const billingPlugin = (pluginConfig: BillingPluginConfig = {}) => (config
     createCustomersCollection(customerSlug),
     createInvoicesCollection(
       pluginConfig.collections?.invoices || 'invoices',
-      pluginConfig.collections?.customerRelation !== false ? customerSlug : undefined
+      pluginConfig.collections?.customerRelation !== false ? customerSlug : undefined,
+      pluginConfig.customerInfoExtractor
     ),
     createRefundsCollection(pluginConfig.collections?.refunds || 'refunds'),
   )

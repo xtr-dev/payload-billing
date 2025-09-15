@@ -93,6 +93,25 @@ export interface TestProviderConfig {
   simulateFailures?: boolean
 }
 
+// Customer info extractor callback type
+export interface CustomerInfoExtractor {
+  (customer: any): {
+    name: string
+    email: string
+    phone?: string
+    company?: string
+    taxId?: string
+    billingAddress?: {
+      line1: string
+      line2?: string
+      city: string
+      state?: string
+      postalCode: string
+      country: string
+    }
+  }
+}
+
 // Plugin configuration
 export interface BillingPluginConfig {
   admin?: {
@@ -106,6 +125,7 @@ export interface BillingPluginConfig {
     payments?: string
     refunds?: string
   }
+  customerInfoExtractor?: CustomerInfoExtractor // Callback to extract customer info from relationship
   disabled?: boolean
   providers?: {
     mollie?: MollieConfig

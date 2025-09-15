@@ -1,6 +1,6 @@
 import type { CollectionConfig } from 'payload'
 
-import type { 
+import type {
   AccessArgs,
   CollectionAfterChangeHook,
   CollectionBeforeChangeHook,
@@ -9,10 +9,12 @@ import type {
   InvoiceDocument,
   InvoiceItemData
 } from '../types/payload'
+import type { CustomerInfoExtractor } from '../types'
 
 export function createInvoicesCollection(
   slug: string = 'invoices',
-  customerCollectionSlug?: string
+  customerCollectionSlug?: string,
+  customerInfoExtractor?: CustomerInfoExtractor
 ): CollectionConfig {
   return {
     slug,
@@ -54,8 +56,10 @@ export function createInvoicesCollection(
         name: 'customerInfo',
         type: 'group',
         admin: {
-          description: 'Customer billing information',
-          condition: customerCollectionSlug ? (data: InvoiceData) => !data.customer : undefined,
+          description: customerCollectionSlug && customerInfoExtractor
+            ? 'Customer billing information (auto-populated from customer relationship)'
+            : 'Customer billing information',
+          readOnly: customerCollectionSlug && customerInfoExtractor ? true : false,
         },
         fields: [
           {
@@ -63,22 +67,25 @@ export function createInvoicesCollection(
             type: 'text',
             admin: {
               description: 'Customer name',
+              readOnly: customerCollectionSlug && customerInfoExtractor ? true : false,
             },
-            required: !customerCollectionSlug,
+            required: true,
           },
           {
             name: 'email',
             type: 'email',
             admin: {
               description: 'Customer email address',
+              readOnly: customerCollectionSlug && customerInfoExtractor ? true : false,
             },
-            required: !customerCollectionSlug,
+            required: true,
           },
           {
             name: 'phone',
             type: 'text',
             admin: {
               description: 'Customer phone number',
+              readOnly: customerCollectionSlug && customerInfoExtractor ? true : false,
             },
           },
           {
@@ -86,6 +93,7 @@ export function createInvoicesCollection(
             type: 'text',
             admin: {
               description: 'Company name (optional)',
+              readOnly: customerCollectionSlug && customerInfoExtractor ? true : false,
             },
           },
           {
@@ -93,6 +101,7 @@ export function createInvoicesCollection(
             type: 'text',
             admin: {
               description: 'Tax ID or VAT number',
+              readOnly: customerCollectionSlug && customerInfoExtractor ? true : false,
             },
           },
         ],
@@ -101,8 +110,10 @@ export function createInvoicesCollection(
         name: 'billingAddress',
         type: 'group',
         admin: {
-          description: 'Billing address',
-          condition: customerCollectionSlug ? (data: InvoiceData) => !data.customer : undefined,
+          description: customerCollectionSlug && customerInfoExtractor
+            ? 'Billing address (auto-populated from customer relationship)'
+            : 'Billing address',
+          readOnly: customerCollectionSlug && customerInfoExtractor ? true : false,
         },
         fields: [
           {
@@ -110,26 +121,32 @@ export function createInvoicesCollection(
             type: 'text',
             admin: {
               description: 'Address line 1',
+              readOnly: customerCollectionSlug && customerInfoExtractor ? true : false,
             },
-            required: !customerCollectionSlug,
+            required: true,
           },
           {
             name: 'line2',
             type: 'text',
             admin: {
               description: 'Address line 2',
+              readOnly: customerCollectionSlug && customerInfoExtractor ? true : false,
             },
           },
           {
             name: 'city',
             type: 'text',
-            required: !customerCollectionSlug,
+            admin: {
+              readOnly: customerCollectionSlug && customerInfoExtractor ? true : false,
+            },
+            required: true,
           },
           {
             name: 'state',
             type: 'text',
             admin: {
               description: 'State or province',
+              readOnly: customerCollectionSlug && customerInfoExtractor ? true : false,
             },
           },
           {
@@ -137,17 +154,19 @@ export function createInvoicesCollection(
             type: 'text',
             admin: {
               description: 'Postal or ZIP code',
+              readOnly: customerCollectionSlug && customerInfoExtractor ? true : false,
             },
-            required: !customerCollectionSlug,
+            required: true,
           },
           {
             name: 'country',
             type: 'text',
             admin: {
               description: 'Country code (e.g., US, GB)',
+              readOnly: customerCollectionSlug && customerInfoExtractor ? true : false,
             },
             maxLength: 2,
-            required: !customerCollectionSlug,
+            required: true,
           },
         ],
       },
@@ -299,7 +318,43 @@ export function createInvoicesCollection(
         },
       ],
       beforeChange: [
-        ({ data, operation }: CollectionBeforeChangeHook<InvoiceData>) => {
+        async ({ data, operation, req, originalDoc }: CollectionBeforeChangeHook<InvoiceData>) => {
+          // Sync customer info from relationship if extractor is provided
+          if (customerCollectionSlug && customerInfoExtractor && data.customer) {
+            // Check if customer changed or this is a new invoice
+            const customerChanged = operation === 'create' ||
+              (originalDoc && originalDoc.customer !== data.customer)
+
+            if (customerChanged) {
+              try {
+                // Fetch the customer data
+                const customer = await req.payload.findByID({
+                  collection: customerCollectionSlug,
+                  id: data.customer,
+                })
+
+                // Extract customer info using the provided callback
+                const extractedInfo = customerInfoExtractor(customer)
+
+                // Update the invoice data with extracted info
+                data.customerInfo = {
+                  name: extractedInfo.name,
+                  email: extractedInfo.email,
+                  phone: extractedInfo.phone,
+                  company: extractedInfo.company,
+                  taxId: extractedInfo.taxId,
+                }
+
+                if (extractedInfo.billingAddress) {
+                  data.billingAddress = extractedInfo.billingAddress
+                }
+              } catch (error) {
+                req.payload.logger.error(`Failed to extract customer info: ${error}`)
+                throw new Error('Failed to extract customer information')
+              }
+            }
+          }
+
           if (operation === 'create') {
             // Generate invoice number if not provided
             if (!data.number) {
@@ -333,8 +388,14 @@ export function createInvoicesCollection(
         ({ data }: CollectionBeforeValidateHook<InvoiceData>) => {
           if (!data) return
 
-          // Validate customer data: either relationship or embedded info must be provided
-          if (customerCollectionSlug && !data.customer && (!data.customerInfo?.name || !data.customerInfo?.email)) {
+          // If using extractor, customer relationship is required
+          if (customerCollectionSlug && customerInfoExtractor && !data.customer) {
+            throw new Error('Please select a customer')
+          }
+
+          // If not using extractor but have customer collection, either relationship or info is required
+          if (customerCollectionSlug && !customerInfoExtractor &&
+              !data.customer && (!data.customerInfo?.name || !data.customerInfo?.email)) {
             throw new Error('Either select a customer or provide customer information')
           }
 

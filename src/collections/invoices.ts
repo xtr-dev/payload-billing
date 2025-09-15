@@ -10,7 +10,10 @@ import type {
   InvoiceItemData
 } from '../types/payload'
 
-export function createInvoicesCollection(slug: string = 'invoices'): CollectionConfig {
+export function createInvoicesCollection(
+  slug: string = 'invoices',
+  customerCollectionSlug?: string
+): CollectionConfig {
   return {
     slug,
     access: {
@@ -20,7 +23,7 @@ export function createInvoicesCollection(slug: string = 'invoices'): CollectionC
       update: ({ req: { user } }: AccessArgs) => !!user,
     },
     admin: {
-      defaultColumns: ['number', 'customer', 'status', 'amount', 'currency', 'dueDate'],
+      defaultColumns: ['number', 'customerInfo.name', 'status', 'amount', 'currency', 'dueDate'],
       group: 'Billing',
       useAsTitle: 'number',
     },
@@ -35,14 +38,116 @@ export function createInvoicesCollection(slug: string = 'invoices'): CollectionC
         required: true,
         unique: true,
       },
-      {
+      // Optional customer relationship
+      ...(customerCollectionSlug ? [{
         name: 'customer',
-        type: 'relationship',
+        type: 'relationship' as const,
         admin: {
-          position: 'sidebar',
+          position: 'sidebar' as const,
+          description: 'Link to customer record (optional)',
         },
-        relationTo: 'customers',
-        required: true,
+        relationTo: customerCollectionSlug as any,
+        required: false,
+      }] : []),
+      // Basic customer info fields (embedded)
+      {
+        name: 'customerInfo',
+        type: 'group',
+        admin: {
+          description: 'Customer billing information',
+        },
+        fields: [
+          {
+            name: 'name',
+            type: 'text',
+            admin: {
+              description: 'Customer name',
+            },
+            required: true,
+          },
+          {
+            name: 'email',
+            type: 'email',
+            admin: {
+              description: 'Customer email address',
+            },
+            required: true,
+          },
+          {
+            name: 'phone',
+            type: 'text',
+            admin: {
+              description: 'Customer phone number',
+            },
+          },
+          {
+            name: 'company',
+            type: 'text',
+            admin: {
+              description: 'Company name (optional)',
+            },
+          },
+          {
+            name: 'taxId',
+            type: 'text',
+            admin: {
+              description: 'Tax ID or VAT number',
+            },
+          },
+        ],
+      },
+      {
+        name: 'billingAddress',
+        type: 'group',
+        admin: {
+          description: 'Billing address',
+        },
+        fields: [
+          {
+            name: 'line1',
+            type: 'text',
+            admin: {
+              description: 'Address line 1',
+            },
+            required: true,
+          },
+          {
+            name: 'line2',
+            type: 'text',
+            admin: {
+              description: 'Address line 2',
+            },
+          },
+          {
+            name: 'city',
+            type: 'text',
+            required: true,
+          },
+          {
+            name: 'state',
+            type: 'text',
+            admin: {
+              description: 'State or province',
+            },
+          },
+          {
+            name: 'postalCode',
+            type: 'text',
+            admin: {
+              description: 'Postal or ZIP code',
+            },
+            required: true,
+          },
+          {
+            name: 'country',
+            type: 'text',
+            admin: {
+              description: 'Country code (e.g., US, GB)',
+            },
+            maxLength: 2,
+            required: true,
+          },
+        ],
       },
       {
         name: 'status',

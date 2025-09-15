@@ -92,7 +92,7 @@ export interface Config {
     'payload-migrations': PayloadMigrationsSelect<false> | PayloadMigrationsSelect<true>;
   };
   db: {
-    defaultIDType: string;
+    defaultIDType: number;
   };
   globals: {};
   globalsSelect: {};
@@ -128,7 +128,7 @@ export interface UserAuthOperations {
  * via the `definition` "posts".
  */
 export interface Post {
-  id: string;
+  id: number;
   updatedAt: string;
   createdAt: string;
 }
@@ -137,7 +137,7 @@ export interface Post {
  * via the `definition` "media".
  */
 export interface Media {
-  id: string;
+  id: number;
   updatedAt: string;
   createdAt: string;
   url?: string | null;
@@ -155,7 +155,7 @@ export interface Media {
  * via the `definition` "payments".
  */
 export interface Payment {
-  id: string;
+  id: number;
   provider: 'stripe' | 'mollie' | 'test';
   /**
    * The payment ID from the payment provider
@@ -174,8 +174,8 @@ export interface Payment {
    * Payment description
    */
   description?: string | null;
-  customer?: (string | null) | Customer;
-  invoice?: (string | null) | Invoice;
+  customer?: (number | null) | Customer;
+  invoice?: (number | null) | Invoice;
   /**
    * Additional metadata for the payment
    */
@@ -200,7 +200,7 @@ export interface Payment {
     | number
     | boolean
     | null;
-  refunds?: (string | Refund)[] | null;
+  refunds?: (number | Refund)[] | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -209,7 +209,7 @@ export interface Payment {
  * via the `definition` "customers".
  */
 export interface Customer {
-  id: string;
+  id: number;
   /**
    * Customer email address
    */
@@ -260,11 +260,11 @@ export interface Customer {
   /**
    * Customer payments
    */
-  payments?: (string | Payment)[] | null;
+  payments?: (number | Payment)[] | null;
   /**
    * Customer invoices
    */
-  invoices?: (string | Invoice)[] | null;
+  invoices?: (number | Invoice)[] | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -273,12 +273,12 @@ export interface Customer {
  * via the `definition` "invoices".
  */
 export interface Invoice {
-  id: string;
+  id: number;
   /**
    * Invoice number (e.g., INV-001)
    */
   number: string;
-  customer: string | Customer;
+  customer: number | Customer;
   status: 'draft' | 'open' | 'paid' | 'void' | 'uncollectible';
   /**
    * ISO 4217 currency code (e.g., USD, EUR)
@@ -311,7 +311,7 @@ export interface Invoice {
   amount?: number | null;
   dueDate?: string | null;
   paidAt?: string | null;
-  payment?: (string | null) | Payment;
+  payment?: (number | null) | Payment;
   /**
    * Internal notes
    */
@@ -336,12 +336,12 @@ export interface Invoice {
  * via the `definition` "refunds".
  */
 export interface Refund {
-  id: string;
+  id: number;
   /**
    * The refund ID from the payment provider
    */
   providerId: string;
-  payment: string | Payment;
+  payment: number | Payment;
   status: 'pending' | 'processing' | 'succeeded' | 'failed' | 'canceled';
   /**
    * Refund amount in cents
@@ -391,7 +391,7 @@ export interface Refund {
  * via the `definition` "users".
  */
 export interface User {
-  id: string;
+  id: number;
   updatedAt: string;
   createdAt: string;
   email: string;
@@ -408,40 +408,40 @@ export interface User {
  * via the `definition` "payload-locked-documents".
  */
 export interface PayloadLockedDocument {
-  id: string;
+  id: number;
   document?:
     | ({
         relationTo: 'posts';
-        value: string | Post;
+        value: number | Post;
       } | null)
     | ({
         relationTo: 'media';
-        value: string | Media;
+        value: number | Media;
       } | null)
     | ({
         relationTo: 'payments';
-        value: string | Payment;
+        value: number | Payment;
       } | null)
     | ({
         relationTo: 'customers';
-        value: string | Customer;
+        value: number | Customer;
       } | null)
     | ({
         relationTo: 'invoices';
-        value: string | Invoice;
+        value: number | Invoice;
       } | null)
     | ({
         relationTo: 'refunds';
-        value: string | Refund;
+        value: number | Refund;
       } | null)
     | ({
         relationTo: 'users';
-        value: string | User;
+        value: number | User;
       } | null);
   globalSlug?: string | null;
   user: {
     relationTo: 'users';
-    value: string | User;
+    value: number | User;
   };
   updatedAt: string;
   createdAt: string;
@@ -451,10 +451,10 @@ export interface PayloadLockedDocument {
  * via the `definition` "payload-preferences".
  */
 export interface PayloadPreference {
-  id: string;
+  id: number;
   user: {
     relationTo: 'users';
-    value: string | User;
+    value: number | User;
   };
   key?: string | null;
   value?:
@@ -474,7 +474,7 @@ export interface PayloadPreference {
  * via the `definition` "payload-migrations".
  */
 export interface PayloadMigration {
-  id: string;
+  id: number;
   name?: string | null;
   batch?: number | null;
   updatedAt: string;

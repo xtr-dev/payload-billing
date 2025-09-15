@@ -100,6 +100,7 @@ export interface BillingPluginConfig {
     dashboard?: boolean
   }
   collections?: {
+    customerRelation?: boolean | string // false to disable, string for custom collection slug
     customers?: string
     invoices?: string
     payments?: string
@@ -154,9 +155,24 @@ export interface CustomerRecord {
 
 export interface InvoiceRecord {
   amount: number
+  billingAddress?: {
+    city: string
+    country: string
+    line1: string
+    line2?: string
+    postalCode: string
+    state?: string
+  }
   createdAt: string
   currency: string
-  customer?: string
+  customer?: string // Optional relationship to customer collection
+  customerInfo?: {
+    company?: string
+    email: string
+    name: string
+    phone?: string
+    taxId?: string
+  }
   dueDate?: string
   id: string
   items: InvoiceItem[]

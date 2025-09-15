@@ -6,8 +6,8 @@ import { billingPlugin } from '../dist/index.js'
 import sharp from 'sharp'
 import { fileURLToPath } from 'url'
 
-import { testEmailAdapter } from './helpers/testEmailAdapter.js'
-import { seed } from './seed.js'
+import { testEmailAdapter } from './helpers/testEmailAdapter'
+import { seed } from './seed'
 
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
@@ -59,6 +59,8 @@ const buildConfigWithSQLite = () => {
           customers: 'customers',
           invoices: 'invoices',
           refunds: 'refunds',
+          // customerRelation: false, // Set to false to disable customer relationship in invoices
+          // customerRelation: 'clients', // Or set to a custom collection slug
         }
       }),
     ],

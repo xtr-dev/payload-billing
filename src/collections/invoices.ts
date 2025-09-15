@@ -69,7 +69,7 @@ export function createInvoicesCollection(
               description: 'Customer name',
               readOnly: customerCollectionSlug && customerInfoExtractor ? true : false,
             },
-            required: true,
+            required: !customerCollectionSlug || !customerInfoExtractor,
           },
           {
             name: 'email',
@@ -78,7 +78,7 @@ export function createInvoicesCollection(
               description: 'Customer email address',
               readOnly: customerCollectionSlug && customerInfoExtractor ? true : false,
             },
-            required: true,
+            required: !customerCollectionSlug || !customerInfoExtractor,
           },
           {
             name: 'phone',
@@ -123,7 +123,7 @@ export function createInvoicesCollection(
               description: 'Address line 1',
               readOnly: customerCollectionSlug && customerInfoExtractor ? true : false,
             },
-            required: true,
+            required: !customerCollectionSlug || !customerInfoExtractor,
           },
           {
             name: 'line2',
@@ -139,7 +139,7 @@ export function createInvoicesCollection(
             admin: {
               readOnly: customerCollectionSlug && customerInfoExtractor ? true : false,
             },
-            required: true,
+            required: !customerCollectionSlug || !customerInfoExtractor,
           },
           {
             name: 'state',
@@ -156,7 +156,7 @@ export function createInvoicesCollection(
               description: 'Postal or ZIP code',
               readOnly: customerCollectionSlug && customerInfoExtractor ? true : false,
             },
-            required: true,
+            required: !customerCollectionSlug || !customerInfoExtractor,
           },
           {
             name: 'country',
@@ -166,7 +166,7 @@ export function createInvoicesCollection(
               readOnly: customerCollectionSlug && customerInfoExtractor ? true : false,
             },
             maxLength: 2,
-            required: true,
+            required: !customerCollectionSlug || !customerInfoExtractor,
           },
         ],
       },

@@ -2,6 +2,7 @@ import type { Config } from 'payload'
 
 import type { BillingPluginConfig, CustomerInfoExtractor } from './types'
 
+import { createCustomersCollection } from './collections/customers'
 import { createInvoicesCollection } from './collections/invoices'
 import { createPaymentsCollection } from './collections/payments'
 import { createRefundsCollection } from './collections/refunds'
@@ -41,6 +42,7 @@ export const billingPlugin = (pluginConfig: BillingPluginConfig = {}) => (config
 
   config.collections.push(
     createPaymentsCollection(pluginConfig.collections?.payments || 'payments'),
+    createCustomersCollection(customerSlug),
     createInvoicesCollection(
       pluginConfig.collections?.invoices || 'invoices',
       pluginConfig.collections?.customerRelation !== false ? customerSlug : undefined,
@@ -57,18 +59,19 @@ export const billingPlugin = (pluginConfig: BillingPluginConfig = {}) => (config
   config.endpoints?.push(
     // Webhook endpoints
     {
-      handler: (req) => {
+      handler: (_req) => {
         try {
           const provider = null
           if (!provider) {
             return Response.json({ error: 'Provider not found' }, { status: 404 })
           }
 
-
           // TODO: Process webhook event and update database
 
           return Response.json({ received: true })
         } catch (error) {
+          // TODO: Use proper logger instead of console
+          // eslint-disable-next-line no-console
           console.error('[BILLING] Webhook error:', error)
           return Response.json({ error: 'Webhook processing failed' }, { status: 400 })
         }

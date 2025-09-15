@@ -2,7 +2,6 @@ import type { Config } from 'payload'
 
 import type { BillingPluginConfig, CustomerInfoExtractor } from './types'
 
-import { createCustomersCollection } from './collections/customers'
 import { createInvoicesCollection } from './collections/invoices'
 import { createPaymentsCollection } from './collections/payments'
 import { createRefundsCollection } from './collections/refunds'
@@ -42,7 +41,6 @@ export const billingPlugin = (pluginConfig: BillingPluginConfig = {}) => (config
 
   config.collections.push(
     createPaymentsCollection(pluginConfig.collections?.payments || 'payments'),
-    createCustomersCollection(customerSlug),
     createInvoicesCollection(
       pluginConfig.collections?.invoices || 'invoices',
       pluginConfig.collections?.customerRelation !== false ? customerSlug : undefined,

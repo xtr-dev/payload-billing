@@ -1,6 +1,11 @@
+import { CollectionConfig } from 'payload'
+import { FieldsOverride } from '@/plugin/utils'
 
 export const defaults = {
-  paymentsCollection: 'payments'
+  paymentsCollection: 'payments',
+  invoicesCollection: 'invoices',
+  refundsCollection: 'refunds',
+  customerRelationSlug: 'customer'
 }
 
 // Provider configurations
@@ -51,13 +56,12 @@ export interface BillingPluginConfig {
     dashboard?: boolean
   }
   collections?: {
-    customerRelation?: boolean | string // false to disable, string for custom collection slug
-    customers?: string
-    invoices?: string
-    payments?: string
-    refunds?: string
+    invoices?: string | (Partial<CollectionConfig> & {fields?: FieldsOverride})
+    payments?: string | (Partial<CollectionConfig> & {fields?: FieldsOverride})
+    refunds?: string | (Partial<CollectionConfig> & {fields?: FieldsOverride})
   }
   customerInfoExtractor?: CustomerInfoExtractor // Callback to extract customer info from relationship
+  customerRelationSlug?: string // Customer collection slug for relationship
   disabled?: boolean
   providers?: {
     mollie?: MollieConfig

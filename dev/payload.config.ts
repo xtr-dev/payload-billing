@@ -2,12 +2,12 @@ import { sqliteAdapter } from '@payloadcms/db-sqlite'
 import { lexicalEditor } from '@payloadcms/richtext-lexical'
 import path from 'path'
 import { buildConfig } from 'payload'
-import { billingPlugin, defaultCustomerInfoExtractor } from '../dist/index.js'
 import sharp from 'sharp'
 import { fileURLToPath } from 'url'
 
 import { testEmailAdapter } from './helpers/testEmailAdapter'
 import { seed } from './seed'
+import billingPlugin from '../src/plugin'
 
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
@@ -56,27 +56,29 @@ const buildConfigWithSQLite = () => {
         },
         collections: {
           payments: 'payments',
-          customers: 'customers',
           invoices: 'invoices',
           refunds: 'refunds',
-          // customerRelation: false, // Set to false to disable customer relationship in invoices
-          // customerRelation: 'clients', // Or set to a custom collection slug
         },
-        // Use the default extractor for the built-in customer collection
-        customerInfoExtractor: defaultCustomerInfoExtractor,
-        // Or provide a custom extractor for your own customer collection structure:
+        // // Customer relationship configuration
+        // customerRelationSlug: 'customers', // Use 'customers' collection for relationship
+        // // customerRelationSlug: false,     // Or set to false to disable customer relationship
+        // // customerRelationSlug: 'clients', // Or use a custom collection slug
+        //
+        // // Provide an extractor for your customer collection structure:
         // customerInfoExtractor: (customer) => ({
-        //   name: customer.fullName,
-        //   email: customer.contactEmail,
-        //   phone: customer.phoneNumber,
-        //   company: customer.companyName,
-        //   taxId: customer.vatNumber,
-        //   billingAddress: {
-        //     line1: customer.billing.street,
-        //     city: customer.billing.city,
-        //     postalCode: customer.billing.zip,
-        //     country: customer.billing.countryCode,
-        //   }
+        //   name: customer.name || '',
+        //   email: customer.email || '',
+        //   phone: customer.phone,
+        //   company: customer.company,
+        //   taxId: customer.taxId,
+        //   billingAddress: customer.address ? {
+        //     line1: customer.address.line1 || '',
+        //     line2: customer.address.line2,
+        //     city: customer.address.city || '',
+        //     state: customer.address.state,
+        //     postalCode: customer.address.postalCode || '',
+        //     country: customer.address.country || '',
+        //   } : undefined,
         // })
       }),
     ],

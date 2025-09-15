@@ -1,10 +1,117 @@
-import { AccessArgs, CollectionAfterChangeHook, CollectionBeforeChangeHook, CollectionConfig } from 'payload'
-import { Payment } from '@/plugin/types'
+import type { AccessArgs, CollectionBeforeChangeHook, CollectionConfig, Field } from 'payload'
+import type { Payment } from '@/plugin/types'
+import type { BillingPluginConfig} from '@/plugin/config';
+import { defaults } from '@/plugin/config'
+import { extractSlug } from '@/plugin/utils'
 
-export function createPaymentsCollection(slug: string = 'payments'): CollectionConfig {
+export function createPaymentsCollection(pluginConfig: BillingPluginConfig): CollectionConfig {
+  const overrides = typeof pluginConfig.collections?.payments === 'object' ? pluginConfig.collections?.payments : {}
+  let fields: Field[] = [
+    {
+      name: 'provider',
+      type: 'select',
+      admin: {
+        position: 'sidebar',
+      },
+      options: [
+        { label: 'Stripe', value: 'stripe' },
+        { label: 'Mollie', value: 'mollie' },
+        { label: 'Test', value: 'test' },
+      ],
+      required: true,
+    },
+    {
+      name: 'providerId',
+      type: 'text',
+      admin: {
+        description: 'The payment ID from the payment provider',
+      },
+      label: 'Provider Payment ID',
+      required: true,
+      unique: true,
+    },
+    {
+      name: 'status',
+      type: 'select',
+      admin: {
+        position: 'sidebar',
+      },
+      options: [
+        { label: 'Pending', value: 'pending' },
+        { label: 'Processing', value: 'processing' },
+        { label: 'Succeeded', value: 'succeeded' },
+        { label: 'Failed', value: 'failed' },
+        { label: 'Canceled', value: 'canceled' },
+        { label: 'Refunded', value: 'refunded' },
+        { label: 'Partially Refunded', value: 'partially_refunded' },
+      ],
+      required: true,
+    },
+    {
+      name: 'amount',
+      type: 'number',
+      admin: {
+        description: 'Amount in cents (e.g., 2000 = $20.00)',
+      },
+      min: 1,
+      required: true,
+    },
+    {
+      name: 'currency',
+      type: 'text',
+      admin: {
+        description: 'ISO 4217 currency code (e.g., USD, EUR)',
+      },
+      maxLength: 3,
+      required: true,
+    },
+    {
+      name: 'description',
+      type: 'text',
+      admin: {
+        description: 'Payment description',
+      },
+    },
+    {
+      name: 'invoice',
+      type: 'relationship',
+      admin: {
+        position: 'sidebar',
+      },
+      relationTo: 'invoices',
+    },
+    {
+      name: 'metadata',
+      type: 'json',
+      admin: {
+        description: 'Additional metadata for the payment',
+      },
+    },
+    {
+      name: 'providerData',
+      type: 'json',
+      admin: {
+        description: 'Raw data from the payment provider',
+        readOnly: true,
+      },
+    },
+    {
+      name: 'refunds',
+      type: 'relationship',
+      admin: {
+        position: 'sidebar',
+        readOnly: true,
+      },
+      hasMany: true,
+      relationTo: 'refunds',
+    },
+  ]
+  if (overrides?.fields) {
+    fields = overrides?.fields({defaultFields: fields})
+  }
   return {
-    slug,
-    access: {
+    slug: extractSlug(pluginConfig.collections?.payments || defaults.paymentsCollection),
+    access: overrides?.access || {
       create: ({ req: { user } }: AccessArgs) => !!user,
       delete: ({ req: { user } }: AccessArgs) => !!user,
       read: ({ req: { user } }: AccessArgs) => !!user,
@@ -14,115 +121,9 @@ export function createPaymentsCollection(slug: string = 'payments'): CollectionC
       defaultColumns: ['id', 'provider', 'status', 'amount', 'currency', 'createdAt'],
       group: 'Billing',
       useAsTitle: 'id',
+      ...overrides?.admin
     },
-    fields: [
-      {
-        name: 'provider',
-        type: 'select',
-        admin: {
-          position: 'sidebar',
-        },
-        options: [
-          { label: 'Stripe', value: 'stripe' },
-          { label: 'Mollie', value: 'mollie' },
-          { label: 'Test', value: 'test' },
-        ],
-        required: true,
-      },
-      {
-        name: 'providerId',
-        type: 'text',
-        admin: {
-          description: 'The payment ID from the payment provider',
-        },
-        label: 'Provider Payment ID',
-        required: true,
-        unique: true,
-      },
-      {
-        name: 'status',
-        type: 'select',
-        admin: {
-          position: 'sidebar',
-        },
-        options: [
-          { label: 'Pending', value: 'pending' },
-          { label: 'Processing', value: 'processing' },
-          { label: 'Succeeded', value: 'succeeded' },
-          { label: 'Failed', value: 'failed' },
-          { label: 'Canceled', value: 'canceled' },
-          { label: 'Refunded', value: 'refunded' },
-          { label: 'Partially Refunded', value: 'partially_refunded' },
-        ],
-        required: true,
-      },
-      {
-        name: 'amount',
-        type: 'number',
-        admin: {
-          description: 'Amount in cents (e.g., 2000 = $20.00)',
-        },
-        min: 1,
-        required: true,
-      },
-      {
-        name: 'currency',
-        type: 'text',
-        admin: {
-          description: 'ISO 4217 currency code (e.g., USD, EUR)',
-        },
-        maxLength: 3,
-        required: true,
-      },
-      {
-        name: 'description',
-        type: 'text',
-        admin: {
-          description: 'Payment description',
-        },
-      },
-      {
-        name: 'customer',
-        type: 'relationship',
-        admin: {
-          position: 'sidebar',
-        },
-        relationTo: 'customers',
-      },
-      {
-        name: 'invoice',
-        type: 'relationship',
-        admin: {
-          position: 'sidebar',
-        },
-        relationTo: 'invoices',
-      },
-      {
-        name: 'metadata',
-        type: 'json',
-        admin: {
-          description: 'Additional metadata for the payment',
-        },
-      },
-      {
-        name: 'providerData',
-        type: 'json',
-        admin: {
-          description: 'Raw data from the payment provider',
-          readOnly: true,
-        },
-      },
-      {
-        name: 'refunds',
-        type: 'relationship',
-        admin: {
-          position: 'sidebar',
-          readOnly: true,
-        },
-        hasMany: true,
-        relationTo: 'refunds',
-      },
-    ],
+    fields,
     hooks: {
       beforeChange: [
         ({ data, operation }) => {

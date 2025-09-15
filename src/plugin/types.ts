@@ -1,6 +1,57 @@
-import { Customer, Refund } from '../../dev/payload-types'
 
 export type Id = string | number
+
+export interface Refund {
+  id: number;
+  /**
+   * The refund ID from the payment provider
+   */
+  providerId: string;
+  payment: number | Payment;
+  status: 'pending' | 'processing' | 'succeeded' | 'failed' | 'canceled';
+  /**
+   * Refund amount in cents
+   */
+  amount: number;
+  /**
+   * ISO 4217 currency code (e.g., USD, EUR)
+   */
+  currency: string;
+  /**
+   * Reason for the refund
+   */
+  reason?: ('duplicate' | 'fraudulent' | 'requested_by_customer' | 'other') | null;
+  /**
+   * Additional details about the refund
+   */
+  description?: string | null;
+  /**
+   * Additional refund metadata
+   */
+  metadata?:
+    | {
+    [k: string]: unknown;
+  }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  /**
+   * Raw data from the payment provider
+   */
+  providerData?:
+    | {
+    [k: string]: unknown;
+  }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  updatedAt: string;
+  createdAt: string;
+}
 
 export interface Payment {
   id: Id;
@@ -22,7 +73,6 @@ export interface Payment {
    * Payment description
    */
   description?: string | null;
-  customer?: (Id | null) | Customer;
   invoice?: (Id | null) | Invoice;
   /**
    * Additional metadata for the payment
@@ -53,7 +103,7 @@ export interface Payment {
   createdAt: string;
 }
 
-export interface Invoice {
+export interface Invoice<TCustomer = unknown> {
   id: Id;
   /**
    * Invoice number (e.g., INV-001)
@@ -62,7 +112,7 @@ export interface Invoice {
   /**
    * Link to customer record (optional)
    */
-  customer?: (Id | null) | Customer;
+  customer?: (Id | null) | TCustomer;
   /**
    * Customer billing information (auto-populated from customer relationship)
    */
@@ -166,3 +216,4 @@ export interface Invoice {
   updatedAt: string;
   createdAt: string;
 }
+

@@ -1,6 +1,6 @@
 import type { Config } from 'payload'
 import { createInvoicesCollection, createPaymentsCollection, createRefundsCollection } from '@/collections'
-import { BillingPluginConfig } from '@/plugin/config'
+import type { BillingPluginConfig } from '@/plugin/config'
 
 export const billingPlugin = (pluginConfig: BillingPluginConfig = {}) => (config: Config): Config => {
   if (pluginConfig.disabled) {
@@ -12,16 +12,10 @@ export const billingPlugin = (pluginConfig: BillingPluginConfig = {}) => (config
     config.collections = []
   }
 
-  const customerSlug = pluginConfig.collections?.customers || 'customers'
-
   config.collections.push(
-    createPaymentsCollection(pluginConfig.collections?.payments || 'payments'),
-    createInvoicesCollection(
-      pluginConfig.collections?.invoices || 'invoices',
-      pluginConfig.collections?.customerRelation !== false ? customerSlug : undefined,
-      pluginConfig.customerInfoExtractor
-    ),
-    createRefundsCollection(pluginConfig.collections?.refunds || 'refunds'),
+    createPaymentsCollection(pluginConfig),
+    createInvoicesCollection(pluginConfig),
+    createRefundsCollection(pluginConfig),
   )
 
   // Initialize endpoints

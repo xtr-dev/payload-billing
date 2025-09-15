@@ -47,8 +47,23 @@ export interface InvoiceItemData {
 // Invoice data type for hooks
 export interface InvoiceData {
   amount?: number
+  billingAddress?: {
+    city?: string
+    country?: string
+    line1?: string
+    line2?: string
+    postalCode?: string
+    state?: string
+  }
   currency?: string
-  customer?: string
+  customer?: string // Optional relationship
+  customerInfo?: {
+    company?: string
+    email?: string
+    name?: string
+    phone?: string
+    taxId?: string
+  }
   dueDate?: string
   items?: InvoiceItemData[]
   metadata?: Record<string, unknown>
@@ -71,7 +86,7 @@ export interface PaymentData {
   metadata?: Record<string, unknown>
   provider?: string
   providerData?: Record<string, unknown>
-  providerId?: string
+  providerId?: string | number
   status?: string
 }
 
@@ -82,14 +97,14 @@ export interface CustomerData {
     country?: string
     line1?: string
     line2?: string
-    postal_code?: string
+    postalCode?: string
     state?: string
   }
   email?: string
   metadata?: Record<string, unknown>
   name?: string
   phone?: string
-  providerIds?: Record<string, string>
+  providerIds?: Record<string, string | number>
 }
 
 // Refund data type for hooks
@@ -98,9 +113,9 @@ export interface RefundData {
   currency?: string
   description?: string
   metadata?: Record<string, unknown>
-  payment?: { id: string } | string
+  payment?: { id: string | number } | string
   providerData?: Record<string, unknown>
-  providerId?: string
+  providerId?: string | number
   reason?: string
   status?: string
 }
@@ -110,16 +125,16 @@ export interface PaymentDocument extends PaymentData {
   amount: number
   createdAt: string
   currency: string
-  id: string
+  id: string | number
   provider: string
-  providerId: string
+  providerId: string | number
   status: string
   updatedAt: string
 }
 
 export interface CustomerDocument extends CustomerData {
   createdAt: string
-  id: string
+  id: string | number
   updatedAt: string
 }
 
@@ -127,8 +142,23 @@ export interface InvoiceDocument extends InvoiceData {
   amount: number
   createdAt: string
   currency: string
-  customer: string
-  id: string
+  customer?: string // Optional relationship
+  customerInfo?: { // Optional when customer relationship exists
+    company?: string
+    email: string
+    name: string
+    phone?: string
+    taxId?: string
+  }
+  billingAddress?: { // Optional when customer relationship exists
+    city: string
+    country: string
+    line1: string
+    line2?: string
+    postalCode: string
+    state?: string
+  }
+  id: string | number
   items: InvoiceItemData[]
   number: string
   status: string
@@ -139,7 +169,7 @@ export interface RefundDocument extends RefundData {
   amount: number
   createdAt: string
   currency: string
-  id: string
+  id: string | number
   payment: { id: string } | string
   providerId: string
   refunds?: string[]

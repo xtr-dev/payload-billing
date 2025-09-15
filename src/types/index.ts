@@ -93,6 +93,25 @@ export interface TestProviderConfig {
   simulateFailures?: boolean
 }
 
+// Customer info extractor callback type
+export interface CustomerInfoExtractor {
+  (customer: any): {
+    name: string
+    email: string
+    phone?: string
+    company?: string
+    taxId?: string
+    billingAddress?: {
+      line1: string
+      line2?: string
+      city: string
+      state?: string
+      postalCode: string
+      country: string
+    }
+  }
+}
+
 // Plugin configuration
 export interface BillingPluginConfig {
   admin?: {
@@ -100,11 +119,13 @@ export interface BillingPluginConfig {
     dashboard?: boolean
   }
   collections?: {
+    customerRelation?: boolean | string // false to disable, string for custom collection slug
     customers?: string
     invoices?: string
     payments?: string
     refunds?: string
   }
+  customerInfoExtractor?: CustomerInfoExtractor // Callback to extract customer info from relationship
   disabled?: boolean
   providers?: {
     mollie?: MollieConfig
@@ -139,7 +160,7 @@ export interface CustomerRecord {
     country?: string
     line1?: string
     line2?: string
-    postal_code?: string
+    postalCode?: string
     state?: string
   }
   createdAt: string
@@ -154,9 +175,24 @@ export interface CustomerRecord {
 
 export interface InvoiceRecord {
   amount: number
+  billingAddress?: {
+    city: string
+    country: string
+    line1: string
+    line2?: string
+    postalCode: string
+    state?: string
+  }
   createdAt: string
   currency: string
-  customer?: string
+  customer?: string // Optional relationship to customer collection
+  customerInfo?: {
+    company?: string
+    email: string
+    name: string
+    phone?: string
+    taxId?: string
+  }
   dueDate?: string
   id: string
   items: InvoiceItem[]

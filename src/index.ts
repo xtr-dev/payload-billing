@@ -1,17 +1,32 @@
 import type { Config } from 'payload'
 
-import type { BillingPluginConfig } from './types'
+import type { BillingPluginConfig, CustomerInfoExtractor } from './types'
 
 import { createCustomersCollection } from './collections/customers'
 import { createInvoicesCollection } from './collections/invoices'
 import { createPaymentsCollection } from './collections/payments'
 import { createRefundsCollection } from './collections/refunds'
-import { providerRegistry } from './providers/base/provider'
-import { TestPaymentProvider } from './providers/test/provider'
 
-export * from './providers/base/provider'
-export * from './providers/test/provider'
 export * from './types'
+
+// Default customer info extractor for the built-in customer collection
+export const defaultCustomerInfoExtractor: CustomerInfoExtractor = (customer) => {
+  return {
+    name: customer.name || '',
+    email: customer.email || '',
+    phone: customer.phone,
+    company: customer.company,
+    taxId: customer.taxId,
+    billingAddress: customer.address ? {
+      line1: customer.address.line1 || '',
+      line2: customer.address.line2,
+      city: customer.address.city || '',
+      state: customer.address.state,
+      postalCode: customer.address.postalCode || '',
+      country: customer.address.country || '',
+    } : undefined,
+  }
+}
 
 export const billingPlugin = (pluginConfig: BillingPluginConfig = {}) => (config: Config): Config => {
   if (pluginConfig.disabled) {
@@ -23,10 +38,16 @@ export const billingPlugin = (pluginConfig: BillingPluginConfig = {}) => (config
     config.collections = []
   }
 
+  const customerSlug = pluginConfig.collections?.customers || 'customers'
+
   config.collections.push(
     createPaymentsCollection(pluginConfig.collections?.payments || 'payments'),
-    createCustomersCollection(pluginConfig.collections?.customers || 'customers'),
-    createInvoicesCollection(pluginConfig.collections?.invoices || 'invoices'),
+    createCustomersCollection(customerSlug),
+    createInvoicesCollection(
+      pluginConfig.collections?.invoices || 'invoices',
+      pluginConfig.collections?.customerRelation !== false ? customerSlug : undefined,
+      pluginConfig.customerInfoExtractor
+    ),
     createRefundsCollection(pluginConfig.collections?.refunds || 'refunds'),
   )
 
@@ -38,22 +59,19 @@ export const billingPlugin = (pluginConfig: BillingPluginConfig = {}) => (config
   config.endpoints?.push(
     // Webhook endpoints
     {
-      handler: async (req) => {
+      handler: (_req) => {
         try {
-          const provider = providerRegistry.get(req.routeParams?.provider as string)
+          const provider = null
           if (!provider) {
             return Response.json({ error: 'Provider not found' }, { status: 404 })
           }
 
-          const signature = req.headers.get('stripe-signature') || 
-                          req.headers.get('x-mollie-signature')
-
-          const event = await provider.handleWebhook(req as unknown as Request, signature || '')
-          
           // TODO: Process webhook event and update database
-          
-          return Response.json({ eventId: event.id, received: true })
+
+          return Response.json({ received: true })
         } catch (error) {
+          // TODO: Use proper logger instead of console
+          // eslint-disable-next-line no-console
           console.error('[BILLING] Webhook error:', error)
           return Response.json({ error: 'Webhook processing failed' }, { status: 400 })
         }
@@ -61,23 +79,6 @@ export const billingPlugin = (pluginConfig: BillingPluginConfig = {}) => (config
       method: 'post',
       path: '/billing/webhooks/:provider'
     },
-    // Health check endpoint
-    {
-      handler: async () => {
-        const providers = providerRegistry.getAll().map(p => ({
-          name: p.name,
-          status: 'active'
-        }))
-        
-        return Response.json({
-          providers,
-          status: 'ok',
-          version: '0.1.0'
-        })
-      },
-      method: 'get',
-      path: '/billing/health'
-    }
   )
 
   // Initialize providers and onInit hook
@@ -89,44 +90,9 @@ export const billingPlugin = (pluginConfig: BillingPluginConfig = {}) => (config
       await incomingOnInit(payload)
     }
 
-    // Initialize payment providers
-    initializeProviders(pluginConfig)
-    
-    // Log initialization
-    console.log('[BILLING] Plugin initialized with providers:', 
-      providerRegistry.getAll().map(p => p.name).join(', ')
-    )
   }
 
   return config
-}
-
-function initializeProviders(config: BillingPluginConfig) {
-  // Initialize test provider if enabled
-  if (config.providers?.test?.enabled) {
-    const testProvider = new TestPaymentProvider(config.providers.test)
-    providerRegistry.register(testProvider)
-  }
-
-  // TODO: Initialize Stripe provider
-  // TODO: Initialize Mollie provider
-}
-
-// Utility function to get payment provider
-export function getPaymentProvider(name: string) {
-  const provider = providerRegistry.get(name)
-  if (!provider) {
-    throw new Error(`Payment provider '${name}' not found`)
-  }
-  return provider
-}
-
-// Utility function to list available providers
-export function getAvailableProviders() {
-  return providerRegistry.getAll().map(p => ({
-    name: p.name,
-    // Add provider-specific info here
-  }))
 }
 
 export default billingPlugin

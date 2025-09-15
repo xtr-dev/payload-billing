@@ -1,6 +1,6 @@
 import type { CollectionConfig } from 'payload'
 
-import type { 
+import type {
   AccessArgs,
   CollectionAfterChangeHook,
   CollectionBeforeChangeHook,
@@ -116,21 +116,20 @@ export function createRefundsCollection(slug: string = 'refunds'): CollectionCon
         async ({ doc, operation, req }: CollectionAfterChangeHook<RefundDocument>) => {
           if (operation === 'create') {
             req.payload.logger.info(`Refund created: ${doc.id} for payment: ${doc.payment}`)
-            
+
             // Update the related payment's refund relationship
             try {
               const payment = await req.payload.findByID({
                 id: typeof doc.payment === 'string' ? doc.payment : doc.payment.id,
                 collection: 'payments',
               })
-              
+
               const refundIds = Array.isArray(payment.refunds) ? payment.refunds : []
-              
               await req.payload.update({
                 id: typeof doc.payment === 'string' ? doc.payment : doc.payment.id,
                 collection: 'payments',
                 data: {
-                  refunds: [...refundIds, doc.id],
+                  refunds: [...refundIds, doc.id as any],
                 },
               })
             } catch (error) {
@@ -146,7 +145,7 @@ export function createRefundsCollection(slug: string = 'refunds'): CollectionCon
             if (data.amount && !Number.isInteger(data.amount)) {
               throw new Error('Amount must be an integer (in cents)')
             }
-            
+
             // Validate currency format
             if (data.currency) {
               data.currency = data.currency.toUpperCase()

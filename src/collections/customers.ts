@@ -71,7 +71,7 @@ export function createCustomersCollection(slug: string = 'customers'): Collectio
             label: 'State/Province',
           },
           {
-            name: 'postal_code',
+            name: 'postalCode',
             type: 'text',
             label: 'Postal Code',
           },

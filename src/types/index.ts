@@ -140,7 +140,7 @@ export interface CustomerRecord {
     country?: string
     line1?: string
     line2?: string
-    postal_code?: string
+    postalCode?: string
     state?: string
   }
   createdAt: string

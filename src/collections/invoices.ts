@@ -55,6 +55,7 @@ export function createInvoicesCollection(
         type: 'group',
         admin: {
           description: 'Customer billing information',
+          condition: customerCollectionSlug ? (data: InvoiceData) => !data.customer : undefined,
         },
         fields: [
           {
@@ -63,7 +64,7 @@ export function createInvoicesCollection(
             admin: {
               description: 'Customer name',
             },
-            required: true,
+            required: !customerCollectionSlug,
           },
           {
             name: 'email',
@@ -71,7 +72,7 @@ export function createInvoicesCollection(
             admin: {
               description: 'Customer email address',
             },
-            required: true,
+            required: !customerCollectionSlug,
           },
           {
             name: 'phone',
@@ -101,6 +102,7 @@ export function createInvoicesCollection(
         type: 'group',
         admin: {
           description: 'Billing address',
+          condition: customerCollectionSlug ? (data: InvoiceData) => !data.customer : undefined,
         },
         fields: [
           {
@@ -109,7 +111,7 @@ export function createInvoicesCollection(
             admin: {
               description: 'Address line 1',
             },
-            required: true,
+            required: !customerCollectionSlug,
           },
           {
             name: 'line2',
@@ -121,7 +123,7 @@ export function createInvoicesCollection(
           {
             name: 'city',
             type: 'text',
-            required: true,
+            required: !customerCollectionSlug,
           },
           {
             name: 'state',
@@ -136,7 +138,7 @@ export function createInvoicesCollection(
             admin: {
               description: 'Postal or ZIP code',
             },
-            required: true,
+            required: !customerCollectionSlug,
           },
           {
             name: 'country',
@@ -145,7 +147,7 @@ export function createInvoicesCollection(
               description: 'Country code (e.g., US, GB)',
             },
             maxLength: 2,
-            required: true,
+            required: !customerCollectionSlug,
           },
         ],
       },
@@ -329,6 +331,18 @@ export function createInvoicesCollection(
       ],
       beforeValidate: [
         ({ data }: CollectionBeforeValidateHook<InvoiceData>) => {
+          if (!data) return
+
+          // Validate customer data: either relationship or embedded info must be provided
+          if (customerCollectionSlug && !data.customer && (!data.customerInfo?.name || !data.customerInfo?.email)) {
+            throw new Error('Either select a customer or provide customer information')
+          }
+
+          // If no customer collection, ensure customer info is provided
+          if (!customerCollectionSlug && (!data.customerInfo?.name || !data.customerInfo?.email)) {
+            throw new Error('Customer name and email are required')
+          }
+
           if (data && data.items && Array.isArray(data.items)) {
             // Calculate totals for each line item
             data.items = data.items.map((item: InvoiceItemData) => ({

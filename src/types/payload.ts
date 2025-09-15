@@ -97,7 +97,7 @@ export interface CustomerData {
     country?: string
     line1?: string
     line2?: string
-    postal_code?: string
+    postalCode?: string
     state?: string
   }
   email?: string
@@ -142,15 +142,15 @@ export interface InvoiceDocument extends InvoiceData {
   amount: number
   createdAt: string
   currency: string
-  customer?: string // Now optional
-  customerInfo: {
+  customer?: string // Optional relationship
+  customerInfo?: { // Optional when customer relationship exists
     company?: string
     email: string
     name: string
     phone?: string
     taxId?: string
   }
-  billingAddress: {
+  billingAddress?: { // Optional when customer relationship exists
     city: string
     country: string
     line1: string

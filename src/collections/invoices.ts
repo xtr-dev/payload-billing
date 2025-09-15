@@ -1,15 +1,12 @@
-import type { CollectionConfig } from 'payload'
-
-import type {
+import {
   AccessArgs,
   CollectionAfterChangeHook,
   CollectionBeforeChangeHook,
   CollectionBeforeValidateHook,
-  InvoiceData,
-  InvoiceDocument,
-  InvoiceItemData
-} from '../types/payload'
-import type { CustomerInfoExtractor } from '../types'
+  CollectionConfig,
+} from 'payload'
+import { CustomerInfoExtractor } from '@/plugin/config'
+import { Invoice } from '@/plugin/types'
 
 export function createInvoicesCollection(
   slug: string = 'invoices',
@@ -281,7 +278,7 @@ export function createInvoicesCollection(
         name: 'paidAt',
         type: 'date',
         admin: {
-          condition: (data: InvoiceData) => data.status === 'paid',
+          condition: (data) => data.status === 'paid',
           readOnly: true,
         },
       },
@@ -289,7 +286,7 @@ export function createInvoicesCollection(
         name: 'payment',
         type: 'relationship',
         admin: {
-          condition: (data: InvoiceData) => data.status === 'paid',
+          condition: (data) => data.status === 'paid',
           position: 'sidebar',
         },
         relationTo: 'payments',
@@ -311,14 +308,14 @@ export function createInvoicesCollection(
     ],
     hooks: {
       afterChange: [
-        ({ doc, operation, req }: CollectionAfterChangeHook<InvoiceDocument>) => {
+        ({ doc, operation, req }) => {
           if (operation === 'create') {
             req.payload.logger.info(`Invoice created: ${doc.number}`)
           }
         },
-      ],
+      ] satisfies CollectionAfterChangeHook<Invoice>[],
       beforeChange: [
-        async ({ data, operation, req, originalDoc }: CollectionBeforeChangeHook<InvoiceData>) => {
+        async ({ data, operation, req, originalDoc }) => {
           // Sync customer info from relationship if extractor is provided
           if (customerCollectionSlug && customerInfoExtractor && data.customer) {
             // Check if customer changed or this is a new invoice
@@ -329,7 +326,7 @@ export function createInvoicesCollection(
               try {
                 // Fetch the customer data
                 const customer = await req.payload.findByID({
-                  collection: customerCollectionSlug,
+                  collection: customerCollectionSlug as any,
                   id: data.customer,
                 })
 
@@ -383,9 +380,9 @@ export function createInvoicesCollection(
             data.paidAt = new Date().toISOString()
           }
         },
-      ],
+      ] satisfies CollectionBeforeChangeHook<Invoice>[],
       beforeValidate: [
-        ({ data }: CollectionBeforeValidateHook<InvoiceData>) => {
+        ({ data }) => {
           if (!data) return
 
           // If using extractor, customer relationship is required
@@ -406,14 +403,14 @@ export function createInvoicesCollection(
 
           if (data && data.items && Array.isArray(data.items)) {
             // Calculate totals for each line item
-            data.items = data.items.map((item: InvoiceItemData) => ({
+            data.items = data.items.map((item) => ({
               ...item,
               totalAmount: (item.quantity || 0) * (item.unitAmount || 0),
             }))
 
             // Calculate subtotal
             data.subtotal = data.items.reduce(
-              (sum: number, item: InvoiceItemData) => sum + (item.totalAmount || 0),
+              (sum: number, item) => sum + (item.totalAmount || 0),
               0
             )
 
@@ -421,7 +418,7 @@ export function createInvoicesCollection(
             data.amount = (data.subtotal || 0) + (data.taxAmount || 0)
           }
         },
-      ],
+      ] satisfies CollectionBeforeValidateHook<Invoice>[],
     },
     timestamps: true,
   }

@@ -1,12 +1,5 @@
-import type { CollectionConfig } from 'payload'
-
-import type { 
-  AccessArgs,
-  CollectionAfterChangeHook,
-  CollectionBeforeChangeHook,
-  PaymentData,
-  PaymentDocument
-} from '../types/payload'
+import { AccessArgs, CollectionAfterChangeHook, CollectionBeforeChangeHook, CollectionConfig } from 'payload'
+import { Payment } from '@/plugin/types'
 
 export function createPaymentsCollection(slug: string = 'payments'): CollectionConfig {
   return {
@@ -131,21 +124,14 @@ export function createPaymentsCollection(slug: string = 'payments'): CollectionC
       },
     ],
     hooks: {
-      afterChange: [
-        ({ doc, operation, req }: CollectionAfterChangeHook<PaymentDocument>) => {
-          if (operation === 'create') {
-            req.payload.logger.info(`Payment created: ${doc.id} (${doc.provider})`)
-          }
-        },
-      ],
       beforeChange: [
-        ({ data, operation }: CollectionBeforeChangeHook<PaymentData>) => {
+        ({ data, operation }) => {
           if (operation === 'create') {
             // Validate amount format
             if (data.amount && !Number.isInteger(data.amount)) {
               throw new Error('Amount must be an integer (in cents)')
             }
-            
+
             // Validate currency format
             if (data.currency) {
               data.currency = data.currency.toUpperCase()
@@ -155,7 +141,7 @@ export function createPaymentsCollection(slug: string = 'payments'): CollectionC
             }
           }
         },
-      ],
+      ] satisfies CollectionBeforeChangeHook<Payment>[],
     },
     timestamps: true,
   }

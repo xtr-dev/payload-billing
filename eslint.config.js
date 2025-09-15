@@ -44,6 +44,7 @@ export default [
       'perfectionist/sort-switch-case': 'off',
       'perfectionist/sort-union-types': 'off',
       'perfectionist/sort-variable-declarations': 'off',
+      'perfectionist/sort-intersection-types': 'off',
     },
   },
   {

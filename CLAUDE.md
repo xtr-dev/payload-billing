@@ -2,161 +2,165 @@
 
 ## Project Overview
 
-This is a PayloadCMS plugin that provides billing and payment functionality with multiple payment provider integrations (Stripe, Mollie) and a test payment provider for local development.
+This is a PayloadCMS plugin that provides billing and payment functionality with flexible customer data management and invoice generation capabilities.
 
 ## Architecture Principles
 
 ### Core Design
-- **Provider Abstraction**: All payment providers implement a common interface for consistency
 - **TypeScript First**: Full TypeScript support with strict typing throughout
 - **PayloadCMS Integration**: Deep integration with Payload collections, hooks, and admin UI
-- **Extensible**: Easy to add new payment providers through the common interface
-- **Developer Experience**: Comprehensive testing tools and local development support
-
-### Payment Provider Interface
-All payment providers must implement the `PaymentProvider` interface:
-```typescript
-interface PaymentProvider {
-  createPayment(options: CreatePaymentOptions): Promise<Payment>
-  retrievePayment(id: string): Promise<Payment>
-  cancelPayment(id: string): Promise<Payment>
-  refundPayment(id: string, amount?: number): Promise<Refund>
-  handleWebhook(request: Request, signature?: string): Promise<WebhookEvent>
-}
-```
+- **Flexible Customer Data**: Support for both relationship-based and embedded customer information
+- **Callback-based Syncing**: Use customer info extractors to keep data in sync
 
 ### Collections Structure
 - **Payments**: Core payment tracking with provider-specific data
-- **Customers**: Customer management with billing information
-- **Invoices**: Invoice generation and management
+- **Customers**: Customer management with billing information (optional)
+- **Invoices**: Invoice generation with embedded customer info and optional customer relationship
 - **Refunds**: Refund tracking and management
 
 ## Code Organization
 
 ```
 src/
-├── providers/           # Payment provider implementations
-│   ├── stripe/         # Stripe integration
-│   ├── mollie/         # Mollie integration
-│   ├── test/           # Test provider for development
-│   └── base/           # Base provider interface and utilities
 ├── collections/        # PayloadCMS collection configurations
-├── endpoints/          # API endpoints (webhooks, etc.)
-├── hooks/             # PayloadCMS lifecycle hooks
-├── admin/             # Admin UI components and extensions
 ├── types/             # TypeScript type definitions
-└── utils/             # Shared utilities and helpers
+└── index.ts           # Main plugin entry point
 ```
 
-## Development Guidelines
+## Customer Data Management
 
-### Payment Provider Development
-1. **Implement Base Interface**: All providers must implement `PaymentProvider`
-2. **Error Handling**: Use consistent error types and proper error propagation
-3. **Webhook Security**: Always verify webhook signatures and implement replay protection
-4. **Idempotency**: Support idempotent operations where possible
-5. **Logging**: Use structured logging for debugging and monitoring
+### Customer Info Extractor Pattern
 
-### Testing Strategy
-- **Unit Tests**: Test individual provider methods and utilities
-- **Integration Tests**: Test provider integrations with mock APIs
-- **E2E Tests**: Test complete payment flows using test provider
-- **Webhook Tests**: Test webhook handling with various scenarios
+The plugin uses a callback-based approach to extract customer information from customer relationships:
 
-### TypeScript Guidelines
-- Use strict TypeScript configuration
-- Define proper interfaces for all external API responses
-- Use discriminated unions for provider-specific data
-- Implement proper generic types for extensibility
-
-### PayloadCMS Integration
-- Follow PayloadCMS plugin patterns and conventions
-- Use proper collection configurations with access control
-- Implement admin UI components using PayloadCMS patterns
-- Utilize PayloadCMS hooks for business logic
-
-### Security Considerations
-- **Webhook Verification**: Always verify webhook signatures
-- **API Key Storage**: Use environment variables for sensitive data
-- **Access Control**: Implement proper PayloadCMS access control
-- **Input Validation**: Validate all inputs and sanitize data
-- **Audit Logging**: Log all payment operations for audit trails
-
-## Environment Configuration
-
-### Required Environment Variables
-```bash
-# Stripe Configuration
-STRIPE_SECRET_KEY=sk_test_...
-STRIPE_PUBLISHABLE_KEY=pk_test_...
-STRIPE_WEBHOOK_SECRET=whsec_...
-
-# Mollie Configuration  
-MOLLIE_API_KEY=test_...
-MOLLIE_WEBHOOK_URL=https://yourapp.com/api/billing/webhooks/mollie
-
-# Test Provider Configuration
-NODE_ENV=development # Enables test provider
+```typescript
+// Define how to extract customer info from your customer collection
+const customerInfoExtractor: CustomerInfoExtractor = (customer) => ({
+  name: customer.name,
+  email: customer.email,
+  phone: customer.phone,
+  company: customer.company,
+  taxId: customer.taxId,
+  billingAddress: {
+    line1: customer.address.line1,
+    line2: customer.address.line2,
+    city: customer.address.city,
+    state: customer.address.state,
+    postalCode: customer.address.postalCode,
+    country: customer.address.country,
+  }
+})
 ```
 
-### Development Setup
-1. Use test provider for local development
-2. Configure webhook forwarding tools (ngrok, etc.) for local webhook testing
-3. Use provider sandbox/test modes during development
-4. Implement comprehensive logging for debugging
+### Invoice Customer Data Options
+
+1. **With Customer Relationship + Extractor**:
+   - Customer relationship required
+   - Customer info auto-populated and read-only
+   - Syncs automatically when customer changes
+
+2. **With Customer Relationship (no extractor)**:
+   - Customer relationship optional
+   - Customer info manually editable
+   - Either relationship OR customer info required
+
+3. **No Customer Collection**:
+   - Customer info fields always required and editable
+   - No relationship field available
 
 ## Plugin Configuration
 
 ### Basic Configuration
 ```typescript
+import { billingPlugin, defaultCustomerInfoExtractor } from '@xtr-dev/payload-billing'
+
 billingPlugin({
-  providers: {
-    // Provider configurations
-  },
   collections: {
-    // Collection name overrides
+    customers: 'customers',        // Customer collection slug
+    invoices: 'invoices',         // Invoice collection slug
+    payments: 'payments',         // Payment collection slug
+    refunds: 'refunds',          // Refund collection slug
+    customerRelation: false,      // Disable customer relationship
+    // OR
+    customerRelation: 'clients',  // Use custom collection slug
   },
-  webhooks: {
-    // Webhook configuration
-  },
-  admin: {
-    // Admin UI configuration
-  }
+  customerInfoExtractor: defaultCustomerInfoExtractor, // For built-in customer collection
 })
 ```
 
-### Advanced Configuration
-- Custom collection schemas
-- Provider-specific options
-- Webhook endpoint customization
-- Admin UI customization
+### Custom Customer Info Extractor
+```typescript
+billingPlugin({
+  customerInfoExtractor: (customer) => ({
+    name: customer.fullName,
+    email: customer.contactEmail,
+    phone: customer.phoneNumber,
+    company: customer.companyName,
+    taxId: customer.vatNumber,
+    billingAddress: {
+      line1: customer.billing.street,
+      line2: customer.billing.apartment,
+      city: customer.billing.city,
+      state: customer.billing.state,
+      postalCode: customer.billing.zip,
+      country: customer.billing.countryCode,
+    }
+  })
+})
+```
 
-## Error Handling Strategy
+## Development Guidelines
 
-### Provider Errors
-- Map provider-specific errors to common error types
-- Preserve original error information for debugging
-- Implement proper retry logic for transient failures
+### TypeScript Guidelines
+- Use strict TypeScript configuration
+- All customer info extractors must implement `CustomerInfoExtractor` interface
+- Ensure consistent camelCase naming for all address fields
 
-### Webhook Errors
-- Handle duplicate webhooks gracefully
-- Implement proper error responses for webhook failures
-- Log webhook processing errors with context
+### PayloadCMS Integration
+- Follow PayloadCMS plugin patterns and conventions
+- Use proper collection configurations with access control
+- Utilize PayloadCMS hooks for data syncing and validation
+
+### Field Validation Rules
+- When using `customerInfoExtractor`: customer relationship is required, customer info auto-populated
+- When not using extractor: either customer relationship OR customer info must be provided
+- When no customer collection: customer info is always required
+
+## Collections API
+
+### Invoice Collection Features
+- Automatic invoice number generation (INV-{timestamp})
+- Currency validation (3-letter ISO codes)
+- Automatic due date setting (30 days from creation)
+- Line item total calculations
+- Customer info syncing via hooks
+
+### Customer Data Syncing
+The `beforeChange` hook automatically:
+1. Detects when customer relationship changes
+2. Fetches customer data from the related collection
+3. Extracts customer info using the provided callback
+4. Updates invoice with extracted data
+5. Maintains data consistency across updates
+
+## Error Handling
+
+### Validation Errors
+- Customer relationship required when using extractor
+- Customer info required when not using relationship
+- Proper error messages for missing required fields
+
+### Data Extraction Errors
+- Failed customer fetches are logged and throw user-friendly errors
+- Invalid customer data is handled gracefully
 
 ## Performance Considerations
-- Implement proper caching where appropriate
-- Use database indexes for payment queries
-- Optimize webhook processing for high throughput
-- Consider rate limiting for API endpoints
-
-## Monitoring and Observability
-- Log all payment operations with structured data
-- Track payment success/failure rates
-- Monitor webhook processing times
-- Implement health check endpoints
+- Customer data is only fetched when relationship changes
+- Read-only fields prevent unnecessary manual edits
+- Efficient hook execution with proper change detection
 
 ## Documentation Requirements
 - Document all public APIs with examples
-- Provide integration guides for each payment provider
-- Include troubleshooting guides for common issues
+- Provide clear customer info extractor examples
+- Include configuration guides for different use cases
 - Maintain up-to-date TypeScript documentation

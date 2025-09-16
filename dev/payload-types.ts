@@ -70,7 +70,6 @@ export interface Config {
     posts: Post;
     media: Media;
     payments: Payment;
-    customers: Customer;
     invoices: Invoice;
     refunds: Refund;
     users: User;
@@ -83,7 +82,6 @@ export interface Config {
     posts: PostsSelect<false> | PostsSelect<true>;
     media: MediaSelect<false> | MediaSelect<true>;
     payments: PaymentsSelect<false> | PaymentsSelect<true>;
-    customers: CustomersSelect<false> | CustomersSelect<true>;
     invoices: InvoicesSelect<false> | InvoicesSelect<true>;
     refunds: RefundsSelect<false> | RefundsSelect<true>;
     users: UsersSelect<false> | UsersSelect<true>;
@@ -174,7 +172,6 @@ export interface Payment {
    * Payment description
    */
   description?: string | null;
-  customer?: (number | null) | Customer;
   invoice?: (number | null) | Invoice;
   /**
    * Additional metadata for the payment
@@ -206,70 +203,6 @@ export interface Payment {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "customers".
- */
-export interface Customer {
-  id: number;
-  /**
-   * Customer email address
-   */
-  email?: string | null;
-  /**
-   * Customer full name
-   */
-  name?: string | null;
-  /**
-   * Customer phone number
-   */
-  phone?: string | null;
-  address?: {
-    line1?: string | null;
-    line2?: string | null;
-    city?: string | null;
-    state?: string | null;
-    postal_code?: string | null;
-    /**
-     * ISO 3166-1 alpha-2 country code
-     */
-    country?: string | null;
-  };
-  /**
-   * Customer IDs from payment providers
-   */
-  providerIds?:
-    | {
-        [k: string]: unknown;
-      }
-    | unknown[]
-    | string
-    | number
-    | boolean
-    | null;
-  /**
-   * Additional customer metadata
-   */
-  metadata?:
-    | {
-        [k: string]: unknown;
-      }
-    | unknown[]
-    | string
-    | number
-    | boolean
-    | null;
-  /**
-   * Customer payments
-   */
-  payments?: (number | Payment)[] | null;
-  /**
-   * Customer invoices
-   */
-  invoices?: (number | Invoice)[] | null;
-  updatedAt: string;
-  createdAt: string;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "invoices".
  */
 export interface Invoice {
@@ -278,7 +211,57 @@ export interface Invoice {
    * Invoice number (e.g., INV-001)
    */
   number: string;
-  customer: number | Customer;
+  /**
+   * Customer billing information
+   */
+  customerInfo: {
+    /**
+     * Customer name
+     */
+    name: string;
+    /**
+     * Customer email address
+     */
+    email: string;
+    /**
+     * Customer phone number
+     */
+    phone?: string | null;
+    /**
+     * Company name (optional)
+     */
+    company?: string | null;
+    /**
+     * Tax ID or VAT number
+     */
+    taxId?: string | null;
+  };
+  /**
+   * Billing address
+   */
+  billingAddress: {
+    /**
+     * Address line 1
+     */
+    line1: string;
+    /**
+     * Address line 2
+     */
+    line2?: string | null;
+    city: string;
+    /**
+     * State or province
+     */
+    state?: string | null;
+    /**
+     * Postal or ZIP code
+     */
+    postalCode: string;
+    /**
+     * Country code (e.g., US, GB)
+     */
+    country: string;
+  };
   status: 'draft' | 'open' | 'paid' | 'void' | 'uncollectible';
   /**
    * ISO 4217 currency code (e.g., USD, EUR)
@@ -423,10 +406,6 @@ export interface PayloadLockedDocument {
         value: number | Payment;
       } | null)
     | ({
-        relationTo: 'customers';
-        value: number | Customer;
-      } | null)
-    | ({
         relationTo: 'invoices';
         value: number | Invoice;
       } | null)
@@ -516,7 +495,6 @@ export interface PaymentsSelect<T extends boolean = true> {
   amount?: T;
   currency?: T;
   description?: T;
-  customer?: T;
   invoice?: T;
   metadata?: T;
   providerData?: T;
@@ -526,36 +504,29 @@ export interface PaymentsSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "customers_select".
+ * via the `definition` "invoices_select".
  */
-export interface CustomersSelect<T extends boolean = true> {
-  email?: T;
-  name?: T;
-  phone?: T;
-  address?:
+export interface InvoicesSelect<T extends boolean = true> {
+  number?: T;
+  customerInfo?:
+    | T
+    | {
+        name?: T;
+        email?: T;
+        phone?: T;
+        company?: T;
+        taxId?: T;
+      };
+  billingAddress?:
     | T
     | {
         line1?: T;
         line2?: T;
         city?: T;
         state?: T;
-        postal_code?: T;
+        postalCode?: T;
         country?: T;
       };
-  providerIds?: T;
-  metadata?: T;
-  payments?: T;
-  invoices?: T;
-  updatedAt?: T;
-  createdAt?: T;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "invoices_select".
- */
-export interface InvoicesSelect<T extends boolean = true> {
-  number?: T;
-  customer?: T;
   status?: T;
   currency?: T;
   items?:

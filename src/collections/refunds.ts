@@ -1,16 +1,12 @@
-import type { CollectionConfig } from 'payload'
+import type { AccessArgs, CollectionConfig } from 'payload'
+import { BillingPluginConfig, defaults } from '@/plugin/config'
+import { extractSlug } from '@/plugin/utils'
+import { Payment } from '@/plugin/types'
 
-import type {
-  AccessArgs,
-  CollectionAfterChangeHook,
-  CollectionBeforeChangeHook,
-  RefundData,
-  RefundDocument
-} from '../types/payload'
-
-export function createRefundsCollection(slug: string = 'refunds'): CollectionConfig {
+export function createRefundsCollection(pluginConfig: BillingPluginConfig): CollectionConfig {
+  // TODO: finish collection overrides
   return {
-    slug,
+    slug: extractSlug(pluginConfig.collections?.refunds || defaults.refundsCollection),
     access: {
       create: ({ req: { user } }: AccessArgs) => !!user,
       delete: ({ req: { user } }: AccessArgs) => !!user,
@@ -39,7 +35,7 @@ export function createRefundsCollection(slug: string = 'refunds'): CollectionCon
         admin: {
           position: 'sidebar',
         },
-        relationTo: 'payments',
+        relationTo: extractSlug(pluginConfig.collections?.payments || defaults.paymentsCollection),
         required: true,
       },
       {
@@ -113,7 +109,7 @@ export function createRefundsCollection(slug: string = 'refunds'): CollectionCon
     ],
     hooks: {
       afterChange: [
-        async ({ doc, operation, req }: CollectionAfterChangeHook<RefundDocument>) => {
+        async ({ doc, operation, req }) => {
           if (operation === 'create') {
             req.payload.logger.info(`Refund created: ${doc.id} for payment: ${doc.payment}`)
 
@@ -121,15 +117,15 @@ export function createRefundsCollection(slug: string = 'refunds'): CollectionCon
             try {
               const payment = await req.payload.findByID({
                 id: typeof doc.payment === 'string' ? doc.payment : doc.payment.id,
-                collection: 'payments',
-              })
+                collection: extractSlug(pluginConfig.collections?.payments || defaults.paymentsCollection),
+              }) as Payment
 
               const refundIds = Array.isArray(payment.refunds) ? payment.refunds : []
               await req.payload.update({
                 id: typeof doc.payment === 'string' ? doc.payment : doc.payment.id,
-                collection: 'payments',
+                collection: extractSlug(pluginConfig.collections?.payments || defaults.paymentsCollection),
                 data: {
-                  refunds: [...refundIds, doc.id as any],
+                  refunds: [...refundIds, doc.id],
                 },
               })
             } catch (error) {
@@ -139,7 +135,7 @@ export function createRefundsCollection(slug: string = 'refunds'): CollectionCon
         },
       ],
       beforeChange: [
-        ({ data, operation }: CollectionBeforeChangeHook<RefundData>) => {
+        ({ data, operation }) => {
           if (operation === 'create') {
             // Validate amount format
             if (data.amount && !Number.isInteger(data.amount)) {

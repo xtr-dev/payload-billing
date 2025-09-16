@@ -1,23 +1,303 @@
-import type { CollectionConfig } from 'payload'
-
-import type {
+import {
   AccessArgs,
   CollectionAfterChangeHook,
   CollectionBeforeChangeHook,
   CollectionBeforeValidateHook,
-  InvoiceData,
-  InvoiceDocument,
-  InvoiceItemData
-} from '../types/payload'
-import type { CustomerInfoExtractor } from '../types'
+  CollectionConfig, Field,
+} from 'payload'
+import type { BillingPluginConfig} from '@/plugin/config';
+import { defaults } from '@/plugin/config'
+import { extractSlug } from '@/plugin/utils'
+import type { Invoice } from '@/plugin/types/invoices'
 
-export function createInvoicesCollection(
-  slug: string = 'invoices',
-  customerCollectionSlug?: string,
-  customerInfoExtractor?: CustomerInfoExtractor
-): CollectionConfig {
+export function createInvoicesCollection(pluginConfig: BillingPluginConfig): CollectionConfig {
+  const {customerRelationSlug, customerInfoExtractor} = pluginConfig
+  const overrides = typeof pluginConfig.collections?.invoices === 'object' ? pluginConfig.collections?.invoices : {}
+  let fields: Field[] = [
+    {
+      name: 'number',
+      type: 'text',
+      admin: {
+        description: 'Invoice number (e.g., INV-001)',
+      },
+      index: true,
+      required: true,
+      unique: true,
+    },
+    // Optional customer relationship
+    ...(customerRelationSlug ? [{
+      name: 'customer',
+      type: 'relationship' as const,
+      admin: {
+        position: 'sidebar' as const,
+        description: 'Link to customer record (optional)',
+      },
+      relationTo: extractSlug(customerRelationSlug),
+      required: false,
+    }] : []),
+    // Basic customer info fields (embedded)
+    {
+      name: 'customerInfo',
+      type: 'group',
+      admin: {
+        description: customerRelationSlug && customerInfoExtractor
+          ? 'Customer billing information (auto-populated from customer relationship)'
+          : 'Customer billing information',
+        readOnly: !!(customerRelationSlug && customerInfoExtractor),
+      },
+      fields: [
+        {
+          name: 'name',
+          type: 'text',
+          admin: {
+            description: 'Customer name',
+            readOnly: !!(customerRelationSlug && customerInfoExtractor),
+          },
+          required: !customerRelationSlug || !customerInfoExtractor,
+        },
+        {
+          name: 'email',
+          type: 'email',
+          admin: {
+            description: 'Customer email address',
+            readOnly: !!(customerRelationSlug && customerInfoExtractor),
+          },
+          required: !customerRelationSlug || !customerInfoExtractor,
+        },
+        {
+          name: 'phone',
+          type: 'text',
+          admin: {
+            description: 'Customer phone number',
+            readOnly: !!(customerRelationSlug && customerInfoExtractor),
+          },
+        },
+        {
+          name: 'company',
+          type: 'text',
+          admin: {
+            description: 'Company name (optional)',
+            readOnly: !!(customerRelationSlug && customerInfoExtractor),
+          },
+        },
+        {
+          name: 'taxId',
+          type: 'text',
+          admin: {
+            description: 'Tax ID or VAT number',
+            readOnly: !!(customerRelationSlug && customerInfoExtractor),
+          },
+        },
+      ],
+    },
+    {
+      name: 'billingAddress',
+      type: 'group',
+      admin: {
+        description: customerRelationSlug && customerInfoExtractor
+          ? 'Billing address (auto-populated from customer relationship)'
+          : 'Billing address',
+        readOnly: !!(customerRelationSlug && customerInfoExtractor),
+      },
+      fields: [
+        {
+          name: 'line1',
+          type: 'text',
+          admin: {
+            description: 'Address line 1',
+            readOnly: !!(customerRelationSlug && customerInfoExtractor),
+          },
+          required: !customerRelationSlug || !customerInfoExtractor,
+        },
+        {
+          name: 'line2',
+          type: 'text',
+          admin: {
+            description: 'Address line 2',
+            readOnly: !!(customerRelationSlug && customerInfoExtractor),
+          },
+        },
+        {
+          name: 'city',
+          type: 'text',
+          admin: {
+            readOnly: !!(customerRelationSlug && customerInfoExtractor),
+          },
+          required: !customerRelationSlug || !customerInfoExtractor,
+        },
+        {
+          name: 'state',
+          type: 'text',
+          admin: {
+            description: 'State or province',
+            readOnly: !!(customerRelationSlug && customerInfoExtractor),
+          },
+        },
+        {
+          name: 'postalCode',
+          type: 'text',
+          admin: {
+            description: 'Postal or ZIP code',
+            readOnly: !!(customerRelationSlug && customerInfoExtractor),
+          },
+          required: !customerRelationSlug || !customerInfoExtractor,
+        },
+        {
+          name: 'country',
+          type: 'text',
+          admin: {
+            description: 'Country code (e.g., US, GB)',
+            readOnly: !!(customerRelationSlug && customerInfoExtractor),
+          },
+          maxLength: 2,
+          required: !customerRelationSlug || !customerInfoExtractor,
+        },
+      ],
+    },
+    {
+      name: 'status',
+      type: 'select',
+      admin: {
+        position: 'sidebar',
+      },
+      defaultValue: 'draft',
+      options: [
+        { label: 'Draft', value: 'draft' },
+        { label: 'Open', value: 'open' },
+        { label: 'Paid', value: 'paid' },
+        { label: 'Void', value: 'void' },
+        { label: 'Uncollectible', value: 'uncollectible' },
+      ],
+      required: true,
+    },
+    {
+      name: 'currency',
+      type: 'text',
+      admin: {
+        description: 'ISO 4217 currency code (e.g., USD, EUR)',
+      },
+      defaultValue: 'USD',
+      maxLength: 3,
+      required: true,
+    },
+    {
+      name: 'items',
+      type: 'array',
+      admin: {
+        // Custom row labeling can be added here when needed
+      },
+      fields: [
+        {
+          name: 'description',
+          type: 'text',
+          admin: {
+            width: '40%',
+          },
+          required: true,
+        },
+        {
+          name: 'quantity',
+          type: 'number',
+          admin: {
+            width: '15%',
+          },
+          defaultValue: 1,
+          min: 1,
+          required: true,
+        },
+        {
+          name: 'unitAmount',
+          type: 'number',
+          admin: {
+            description: 'Amount in cents',
+            width: '20%',
+          },
+          min: 0,
+          required: true,
+        },
+        {
+          name: 'totalAmount',
+          type: 'number',
+          admin: {
+            description: 'Calculated: quantity × unitAmount',
+            readOnly: true,
+            width: '20%',
+          },
+        },
+      ],
+      minRows: 1,
+      required: true,
+    },
+    {
+      name: 'subtotal',
+      type: 'number',
+      admin: {
+        description: 'Sum of all line items',
+        readOnly: true,
+      },
+    },
+    {
+      name: 'taxAmount',
+      type: 'number',
+      admin: {
+        description: 'Tax amount in cents',
+      },
+      defaultValue: 0,
+    },
+    {
+      name: 'amount',
+      type: 'number',
+      admin: {
+        description: 'Total amount (subtotal + tax)',
+        readOnly: true,
+      },
+    },
+    {
+      name: 'dueDate',
+      type: 'date',
+      admin: {
+        date: {
+          pickerAppearance: 'dayOnly',
+        },
+      },
+    },
+    {
+      name: 'paidAt',
+      type: 'date',
+      admin: {
+        condition: (data) => data.status === 'paid',
+        readOnly: true,
+      },
+    },
+    {
+      name: 'payment',
+      type: 'relationship',
+      admin: {
+        condition: (data) => data.status === 'paid',
+        position: 'sidebar',
+      },
+      relationTo: extractSlug(pluginConfig.collections?.payments || defaults.paymentsCollection),
+    },
+    {
+      name: 'notes',
+      type: 'textarea',
+      admin: {
+        description: 'Internal notes',
+      },
+    },
+    {
+      name: 'metadata',
+      type: 'json',
+      admin: {
+        description: 'Additional invoice metadata',
+      },
+    },
+  ]
+  if (overrides?.fields) {
+    fields = overrides.fields({defaultFields: fields})
+  }
   return {
-    slug,
+    slug: extractSlug(pluginConfig.collections?.invoices || defaults.invoicesCollection),
     access: {
       create: ({ req: { user } }: AccessArgs) => !!user,
       delete: ({ req: { user } }: AccessArgs) => !!user,
@@ -29,298 +309,19 @@ export function createInvoicesCollection(
       group: 'Billing',
       useAsTitle: 'number',
     },
-    fields: [
-      {
-        name: 'number',
-        type: 'text',
-        admin: {
-          description: 'Invoice number (e.g., INV-001)',
-        },
-        index: true,
-        required: true,
-        unique: true,
-      },
-      // Optional customer relationship
-      ...(customerCollectionSlug ? [{
-        name: 'customer',
-        type: 'relationship' as const,
-        admin: {
-          position: 'sidebar' as const,
-          description: 'Link to customer record (optional)',
-        },
-        relationTo: customerCollectionSlug as any,
-        required: false,
-      }] : []),
-      // Basic customer info fields (embedded)
-      {
-        name: 'customerInfo',
-        type: 'group',
-        admin: {
-          description: customerCollectionSlug && customerInfoExtractor
-            ? 'Customer billing information (auto-populated from customer relationship)'
-            : 'Customer billing information',
-          readOnly: customerCollectionSlug && customerInfoExtractor ? true : false,
-        },
-        fields: [
-          {
-            name: 'name',
-            type: 'text',
-            admin: {
-              description: 'Customer name',
-              readOnly: customerCollectionSlug && customerInfoExtractor ? true : false,
-            },
-            required: !customerCollectionSlug || !customerInfoExtractor,
-          },
-          {
-            name: 'email',
-            type: 'email',
-            admin: {
-              description: 'Customer email address',
-              readOnly: customerCollectionSlug && customerInfoExtractor ? true : false,
-            },
-            required: !customerCollectionSlug || !customerInfoExtractor,
-          },
-          {
-            name: 'phone',
-            type: 'text',
-            admin: {
-              description: 'Customer phone number',
-              readOnly: customerCollectionSlug && customerInfoExtractor ? true : false,
-            },
-          },
-          {
-            name: 'company',
-            type: 'text',
-            admin: {
-              description: 'Company name (optional)',
-              readOnly: customerCollectionSlug && customerInfoExtractor ? true : false,
-            },
-          },
-          {
-            name: 'taxId',
-            type: 'text',
-            admin: {
-              description: 'Tax ID or VAT number',
-              readOnly: customerCollectionSlug && customerInfoExtractor ? true : false,
-            },
-          },
-        ],
-      },
-      {
-        name: 'billingAddress',
-        type: 'group',
-        admin: {
-          description: customerCollectionSlug && customerInfoExtractor
-            ? 'Billing address (auto-populated from customer relationship)'
-            : 'Billing address',
-          readOnly: customerCollectionSlug && customerInfoExtractor ? true : false,
-        },
-        fields: [
-          {
-            name: 'line1',
-            type: 'text',
-            admin: {
-              description: 'Address line 1',
-              readOnly: customerCollectionSlug && customerInfoExtractor ? true : false,
-            },
-            required: !customerCollectionSlug || !customerInfoExtractor,
-          },
-          {
-            name: 'line2',
-            type: 'text',
-            admin: {
-              description: 'Address line 2',
-              readOnly: customerCollectionSlug && customerInfoExtractor ? true : false,
-            },
-          },
-          {
-            name: 'city',
-            type: 'text',
-            admin: {
-              readOnly: customerCollectionSlug && customerInfoExtractor ? true : false,
-            },
-            required: !customerCollectionSlug || !customerInfoExtractor,
-          },
-          {
-            name: 'state',
-            type: 'text',
-            admin: {
-              description: 'State or province',
-              readOnly: customerCollectionSlug && customerInfoExtractor ? true : false,
-            },
-          },
-          {
-            name: 'postalCode',
-            type: 'text',
-            admin: {
-              description: 'Postal or ZIP code',
-              readOnly: customerCollectionSlug && customerInfoExtractor ? true : false,
-            },
-            required: !customerCollectionSlug || !customerInfoExtractor,
-          },
-          {
-            name: 'country',
-            type: 'text',
-            admin: {
-              description: 'Country code (e.g., US, GB)',
-              readOnly: customerCollectionSlug && customerInfoExtractor ? true : false,
-            },
-            maxLength: 2,
-            required: !customerCollectionSlug || !customerInfoExtractor,
-          },
-        ],
-      },
-      {
-        name: 'status',
-        type: 'select',
-        admin: {
-          position: 'sidebar',
-        },
-        defaultValue: 'draft',
-        options: [
-          { label: 'Draft', value: 'draft' },
-          { label: 'Open', value: 'open' },
-          { label: 'Paid', value: 'paid' },
-          { label: 'Void', value: 'void' },
-          { label: 'Uncollectible', value: 'uncollectible' },
-        ],
-        required: true,
-      },
-      {
-        name: 'currency',
-        type: 'text',
-        admin: {
-          description: 'ISO 4217 currency code (e.g., USD, EUR)',
-        },
-        defaultValue: 'USD',
-        maxLength: 3,
-        required: true,
-      },
-      {
-        name: 'items',
-        type: 'array',
-        admin: {
-          // Custom row labeling can be added here when needed
-        },
-        fields: [
-          {
-            name: 'description',
-            type: 'text',
-            admin: {
-              width: '40%',
-            },
-            required: true,
-          },
-          {
-            name: 'quantity',
-            type: 'number',
-            admin: {
-              width: '15%',
-            },
-            defaultValue: 1,
-            min: 1,
-            required: true,
-          },
-          {
-            name: 'unitAmount',
-            type: 'number',
-            admin: {
-              description: 'Amount in cents',
-              width: '20%',
-            },
-            min: 0,
-            required: true,
-          },
-          {
-            name: 'totalAmount',
-            type: 'number',
-            admin: {
-              description: 'Calculated: quantity × unitAmount',
-              readOnly: true,
-              width: '20%',
-            },
-          },
-        ],
-        minRows: 1,
-        required: true,
-      },
-      {
-        name: 'subtotal',
-        type: 'number',
-        admin: {
-          description: 'Sum of all line items',
-          readOnly: true,
-        },
-      },
-      {
-        name: 'taxAmount',
-        type: 'number',
-        admin: {
-          description: 'Tax amount in cents',
-        },
-        defaultValue: 0,
-      },
-      {
-        name: 'amount',
-        type: 'number',
-        admin: {
-          description: 'Total amount (subtotal + tax)',
-          readOnly: true,
-        },
-      },
-      {
-        name: 'dueDate',
-        type: 'date',
-        admin: {
-          date: {
-            pickerAppearance: 'dayOnly',
-          },
-        },
-      },
-      {
-        name: 'paidAt',
-        type: 'date',
-        admin: {
-          condition: (data: InvoiceData) => data.status === 'paid',
-          readOnly: true,
-        },
-      },
-      {
-        name: 'payment',
-        type: 'relationship',
-        admin: {
-          condition: (data: InvoiceData) => data.status === 'paid',
-          position: 'sidebar',
-        },
-        relationTo: 'payments',
-      },
-      {
-        name: 'notes',
-        type: 'textarea',
-        admin: {
-          description: 'Internal notes',
-        },
-      },
-      {
-        name: 'metadata',
-        type: 'json',
-        admin: {
-          description: 'Additional invoice metadata',
-        },
-      },
-    ],
+    fields,
     hooks: {
       afterChange: [
-        ({ doc, operation, req }: CollectionAfterChangeHook<InvoiceDocument>) => {
+        ({ doc, operation, req }) => {
           if (operation === 'create') {
             req.payload.logger.info(`Invoice created: ${doc.number}`)
           }
         },
-      ],
+      ] satisfies CollectionAfterChangeHook<Invoice>[],
       beforeChange: [
-        async ({ data, operation, req, originalDoc }: CollectionBeforeChangeHook<InvoiceData>) => {
+        async ({ data, operation, req, originalDoc }) => {
           // Sync customer info from relationship if extractor is provided
-          if (customerCollectionSlug && customerInfoExtractor && data.customer) {
+          if (customerRelationSlug && customerInfoExtractor && data.customer) {
             // Check if customer changed or this is a new invoice
             const customerChanged = operation === 'create' ||
               (originalDoc && originalDoc.customer !== data.customer)
@@ -329,8 +330,8 @@ export function createInvoicesCollection(
               try {
                 // Fetch the customer data
                 const customer = await req.payload.findByID({
-                  collection: customerCollectionSlug,
-                  id: data.customer,
+                  collection: customerRelationSlug as never,
+                  id: data.customer as never,
                 })
 
                 // Extract customer info using the provided callback
@@ -383,37 +384,37 @@ export function createInvoicesCollection(
             data.paidAt = new Date().toISOString()
           }
         },
-      ],
+      ] satisfies CollectionBeforeChangeHook<Invoice>[],
       beforeValidate: [
-        ({ data }: CollectionBeforeValidateHook<InvoiceData>) => {
+        ({ data }) => {
           if (!data) return
 
           // If using extractor, customer relationship is required
-          if (customerCollectionSlug && customerInfoExtractor && !data.customer) {
+          if (customerRelationSlug && customerInfoExtractor && !data.customer) {
             throw new Error('Please select a customer')
           }
 
           // If not using extractor but have customer collection, either relationship or info is required
-          if (customerCollectionSlug && !customerInfoExtractor &&
+          if (customerRelationSlug && !customerInfoExtractor &&
               !data.customer && (!data.customerInfo?.name || !data.customerInfo?.email)) {
             throw new Error('Either select a customer or provide customer information')
           }
 
           // If no customer collection, ensure customer info is provided
-          if (!customerCollectionSlug && (!data.customerInfo?.name || !data.customerInfo?.email)) {
+          if (!customerRelationSlug && (!data.customerInfo?.name || !data.customerInfo?.email)) {
             throw new Error('Customer name and email are required')
           }
 
           if (data && data.items && Array.isArray(data.items)) {
             // Calculate totals for each line item
-            data.items = data.items.map((item: InvoiceItemData) => ({
+            data.items = data.items.map((item) => ({
               ...item,
               totalAmount: (item.quantity || 0) * (item.unitAmount || 0),
             }))
 
             // Calculate subtotal
             data.subtotal = data.items.reduce(
-              (sum: number, item: InvoiceItemData) => sum + (item.totalAmount || 0),
+              (sum: number, item) => sum + (item.totalAmount || 0),
               0
             )
 
@@ -421,7 +422,7 @@ export function createInvoicesCollection(
             data.amount = (data.subtotal || 0) + (data.taxAmount || 0)
           }
         },
-      ],
+      ] satisfies CollectionBeforeValidateHook<Invoice>[],
     },
     timestamps: true,
   }

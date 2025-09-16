@@ -2,12 +2,13 @@ import { sqliteAdapter } from '@payloadcms/db-sqlite'
 import { lexicalEditor } from '@payloadcms/richtext-lexical'
 import path from 'path'
 import { buildConfig } from 'payload'
-import { billingPlugin, defaultCustomerInfoExtractor } from '../dist/index.js'
 import sharp from 'sharp'
 import { fileURLToPath } from 'url'
 
 import { testEmailAdapter } from './helpers/testEmailAdapter'
 import { seed } from './seed'
+import billingPlugin from '../src/plugin'
+import { mollieProvider } from '../src/providers'
 
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
@@ -48,36 +49,16 @@ const buildConfigWithSQLite = () => {
     },
     plugins: [
       billingPlugin({
-        providers: {
-          test: {
-            enabled: true,
-            autoComplete: true,
-          }
-        },
+        providers: [
+          mollieProvider({
+            apiKey: process.env.MOLLIE_KEY!
+          })
+        ],
         collections: {
           payments: 'payments',
-          customers: 'customers',
           invoices: 'invoices',
           refunds: 'refunds',
-          // customerRelation: false, // Set to false to disable customer relationship in invoices
-          // customerRelation: 'clients', // Or set to a custom collection slug
         },
-        // Use the default extractor for the built-in customer collection
-        customerInfoExtractor: defaultCustomerInfoExtractor,
-        // Or provide a custom extractor for your own customer collection structure:
-        // customerInfoExtractor: (customer) => ({
-        //   name: customer.fullName,
-        //   email: customer.contactEmail,
-        //   phone: customer.phoneNumber,
-        //   company: customer.companyName,
-        //   taxId: customer.vatNumber,
-        //   billingAddress: {
-        //     line1: customer.billing.street,
-        //     city: customer.billing.city,
-        //     postalCode: customer.billing.zip,
-        //     country: customer.billing.countryCode,
-        //   }
-        // })
       }),
     ],
     secret: process.env.PAYLOAD_SECRET || 'test-secret_key',

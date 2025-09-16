@@ -1,9 +1,9 @@
 import type { AccessArgs, CollectionConfig } from 'payload'
 import { BillingPluginConfig, defaults } from '@/plugin/config'
 import { extractSlug } from '@/plugin/utils'
+import { Payment } from '@/plugin/types'
 
 export function createRefundsCollection(pluginConfig: BillingPluginConfig): CollectionConfig {
-  const overrides = typeof pluginConfig.collections?.invoices === 'object' ? pluginConfig.collections?.invoices : {}
   // TODO: finish collection overrides
   return {
     slug: extractSlug(pluginConfig.collections?.refunds || defaults.refundsCollection),
@@ -35,7 +35,7 @@ export function createRefundsCollection(pluginConfig: BillingPluginConfig): Coll
         admin: {
           position: 'sidebar',
         },
-        relationTo: 'payments',
+        relationTo: extractSlug(pluginConfig.collections?.payments || defaults.paymentsCollection),
         required: true,
       },
       {
@@ -117,13 +117,13 @@ export function createRefundsCollection(pluginConfig: BillingPluginConfig): Coll
             try {
               const payment = await req.payload.findByID({
                 id: typeof doc.payment === 'string' ? doc.payment : doc.payment.id,
-                collection: 'payments',
-              })
+                collection: extractSlug(pluginConfig.collections?.payments || defaults.paymentsCollection),
+              }) as Payment
 
               const refundIds = Array.isArray(payment.refunds) ? payment.refunds : []
               await req.payload.update({
                 id: typeof doc.payment === 'string' ? doc.payment : doc.payment.id,
-                collection: 'payments',
+                collection: extractSlug(pluginConfig.collections?.payments || defaults.paymentsCollection),
                 data: {
                   refunds: [...refundIds, doc.id],
                 },

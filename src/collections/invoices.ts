@@ -5,9 +5,10 @@ import {
   CollectionBeforeValidateHook,
   CollectionConfig, Field,
 } from 'payload'
-import { BillingPluginConfig, CustomerInfoExtractor, defaults } from '@/plugin/config'
-import { Invoice } from '@/plugin/types'
+import type { BillingPluginConfig} from '@/plugin/config';
+import { defaults } from '@/plugin/config'
 import { extractSlug } from '@/plugin/utils'
+import type { Invoice } from '@/plugin/types/invoices'
 
 export function createInvoicesCollection(pluginConfig: BillingPluginConfig): CollectionConfig {
   const {customerRelationSlug, customerInfoExtractor} = pluginConfig
@@ -31,7 +32,7 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
         position: 'sidebar' as const,
         description: 'Link to customer record (optional)',
       },
-      relationTo: pluginConfig.customerRelationSlug as never,
+      relationTo: extractSlug(customerRelationSlug),
       required: false,
     }] : []),
     // Basic customer info fields (embedded)
@@ -275,7 +276,7 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
         condition: (data) => data.status === 'paid',
         position: 'sidebar',
       },
-      relationTo: 'payments',
+      relationTo: extractSlug(pluginConfig.collections?.payments || defaults.paymentsCollection),
     },
     {
       name: 'notes',

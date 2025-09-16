@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url'
 import { testEmailAdapter } from './helpers/testEmailAdapter'
 import { seed } from './seed'
 import billingPlugin from '../src/plugin'
+import { mollieProvider } from '../src/providers'
 
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
@@ -48,38 +49,16 @@ const buildConfigWithSQLite = () => {
     },
     plugins: [
       billingPlugin({
-        providers: {
-          test: {
-            enabled: true,
-            autoComplete: true,
-          }
-        },
+        providers: [
+          mollieProvider({
+            apiKey: process.env.MOLLIE_KEY!
+          })
+        ],
         collections: {
           payments: 'payments',
           invoices: 'invoices',
           refunds: 'refunds',
         },
-        // // Customer relationship configuration
-        // customerRelationSlug: 'customers', // Use 'customers' collection for relationship
-        // // customerRelationSlug: false,     // Or set to false to disable customer relationship
-        // // customerRelationSlug: 'clients', // Or use a custom collection slug
-        //
-        // // Provide an extractor for your customer collection structure:
-        // customerInfoExtractor: (customer) => ({
-        //   name: customer.name || '',
-        //   email: customer.email || '',
-        //   phone: customer.phone,
-        //   company: customer.company,
-        //   taxId: customer.taxId,
-        //   billingAddress: customer.address ? {
-        //     line1: customer.address.line1 || '',
-        //     line2: customer.address.line2,
-        //     city: customer.address.city || '',
-        //     state: customer.address.state,
-        //     postalCode: customer.address.postalCode || '',
-        //     country: customer.address.country || '',
-        //   } : undefined,
-        // })
       }),
     ],
     secret: process.env.PAYLOAD_SECRET || 'test-secret_key',

@@ -1,5 +1,6 @@
 import { CollectionConfig } from 'payload'
 import { FieldsOverride } from '@/plugin/utils'
+import { PaymentProvider } from '@/plugin/types'
 
 export const defaults = {
   paymentsCollection: 'payments',
@@ -63,11 +64,7 @@ export interface BillingPluginConfig {
   customerInfoExtractor?: CustomerInfoExtractor // Callback to extract customer info from relationship
   customerRelationSlug?: string // Customer collection slug for relationship
   disabled?: boolean
-  providers?: {
-    mollie?: MollieConfig
-    stripe?: StripeConfig
-    test?: TestProviderConfig
-  }
+  providers?: PaymentProvider[]
   webhooks?: {
     basePath?: string
     cors?: boolean

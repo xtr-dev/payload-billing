@@ -1,8 +1,9 @@
-import type { AccessArgs, CollectionBeforeChangeHook, CollectionConfig, Field } from 'payload'
-import type { Payment } from '@/plugin/types'
+import type { AccessArgs, CollectionBeforeChangeHook, CollectionConfig, CollectionSlug, Field } from 'payload'
 import type { BillingPluginConfig} from '@/plugin/config';
 import { defaults } from '@/plugin/config'
 import { extractSlug } from '@/plugin/utils'
+import { Payment } from '@/plugin/types/payments'
+import { initProviderPayment } from '@/collections/hooks'
 
 export function createPaymentsCollection(pluginConfig: BillingPluginConfig): CollectionConfig {
   const overrides = typeof pluginConfig.collections?.payments === 'object' ? pluginConfig.collections?.payments : {}
@@ -27,7 +28,6 @@ export function createPaymentsCollection(pluginConfig: BillingPluginConfig): Col
         description: 'The payment ID from the payment provider',
       },
       label: 'Provider Payment ID',
-      required: true,
       unique: true,
     },
     {
@@ -78,7 +78,7 @@ export function createPaymentsCollection(pluginConfig: BillingPluginConfig): Col
       admin: {
         position: 'sidebar',
       },
-      relationTo: 'invoices',
+      relationTo: extractSlug(pluginConfig.collections?.invoices || defaults.invoicesCollection) as CollectionSlug,
     },
     {
       name: 'metadata',
@@ -103,7 +103,7 @@ export function createPaymentsCollection(pluginConfig: BillingPluginConfig): Col
         readOnly: true,
       },
       hasMany: true,
-      relationTo: 'refunds',
+      relationTo: extractSlug(pluginConfig.collections?.refunds || defaults.refundsCollection) as CollectionSlug,
     },
   ]
   if (overrides?.fields) {
@@ -126,7 +126,7 @@ export function createPaymentsCollection(pluginConfig: BillingPluginConfig): Col
     fields,
     hooks: {
       beforeChange: [
-        ({ data, operation }) => {
+        async ({ data, operation, req }) => {
           if (operation === 'create') {
             // Validate amount format
             if (data.amount && !Number.isInteger(data.amount)) {
@@ -140,6 +140,8 @@ export function createPaymentsCollection(pluginConfig: BillingPluginConfig): Col
                 throw new Error('Currency must be a 3-letter ISO code')
               }
             }
+
+            await initProviderPayment(req.payload, data)
           }
         },
       ] satisfies CollectionBeforeChangeHook<Payment>[],

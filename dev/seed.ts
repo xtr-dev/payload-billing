@@ -21,9 +21,9 @@ export const seed = async (payload: Payload) => {
   }
 
   // Seed billing sample data
-  await seedBillingData(payload)
+  // await seedBillingData(payload)
 }
 
-async function seedBillingData(payload: Payload): Promise<void> {
-  payload.logger.info('Seeding billing sample data...')
-}
+// async function seedBillingData(payload: Payload): Promise<void> {
+//   payload.logger.info('Seeding billing sample data...')
+// }

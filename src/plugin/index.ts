@@ -25,7 +25,11 @@ export const billingPlugin = (pluginConfig: BillingPluginConfig = {}) => (config
     createPaymentsCollection(pluginConfig),
     createInvoicesCollection(pluginConfig),
     createRefundsCollection(pluginConfig),
-  ]
+  ];
+
+  (pluginConfig.providers || [])
+    .filter(provider => provider.onConfig)
+    .forEach(provider => provider.onConfig!(config, pluginConfig))
 
   const incomingOnInit = config.onInit
   config.onInit = async (payload) => {
@@ -35,15 +39,16 @@ export const billingPlugin = (pluginConfig: BillingPluginConfig = {}) => (config
     singleton.set(payload, {
       config: pluginConfig,
       providerConfig: (pluginConfig.providers || []).reduce(
-        (acc, val) => {
-          acc[val.key] = val
-          return acc
+        (record, provider) => {
+          record[provider.key] = provider
+          return record
         },
         {} as Record<string, PaymentProvider>
       )
     } satisfies BillingPlugin)
-    console.log('Billing plugin initialized', singleton.get(payload))
-    await Promise.all((pluginConfig.providers || []).map(p => p.onInit(payload)))
+    await Promise.all((pluginConfig.providers || [])
+      .filter(provider => provider.onInit)
+      .map(provider => provider.onInit!(payload)))
   }
 
   return config

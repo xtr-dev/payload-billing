@@ -10,18 +10,6 @@ export const defaults = {
 }
 
 // Provider configurations
-export interface StripeConfig {
-  apiVersion?: string
-  publishableKey: string
-  secretKey: string
-  webhookEndpointSecret: string
-}
-
-export interface MollieConfig {
-  apiKey: string
-  testMode?: boolean
-  webhookUrl: string
-}
 
 export interface TestProviderConfig {
   autoComplete?: boolean
@@ -65,13 +53,5 @@ export interface BillingPluginConfig {
   customerRelationSlug?: string // Customer collection slug for relationship
   disabled?: boolean
   providers?: PaymentProvider[]
-  webhooks?: {
-    basePath?: string
-    cors?: boolean
-  }
 }
 
-// Plugin type
-export interface BillingPluginOptions extends BillingPluginConfig {
-  disabled?: boolean
-}

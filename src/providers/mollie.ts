@@ -1,6 +1,6 @@
 import type { Payment } from '@/plugin/types/payments'
 import type { InitPayment, PaymentProvider } from '@/plugin/types'
-import type { Payload } from 'payload'
+import type { Config, Payload } from 'payload'
 import { createSingleton } from '@/plugin/singleton'
 import type { createMollieClient, MollieClient } from '@mollie/api-client'
 
@@ -11,10 +11,29 @@ export const mollieProvider = (config: MollieProviderConfig) => {
   const singleton = createSingleton<MollieClient>(symbol)
   return {
     key: 'mollie',
+    onConfig: config => {
+      config.endpoints = [
+        ...(config.endpoints || []),
+        {
+          path: '/payload-billing/mollie/webhook',
+          method: 'post',
+          handler: async (req) => {
+            const payload = req.payload
+            const mollieClient = singleton.get(payload)
+            if (!req.text) {
+              throw new Error('No text body')
+            }
+            const molliePaymentId = (await req.text()).slice(3)
+
+          }
+        }
+      ]
+    },
     onInit: async (payload: Payload) => {
       const createMollieClient = (await import('@mollie/api-client')).default
       const mollieClient = createMollieClient(config)
       singleton.set(payload, mollieClient)
+
     },
     initPayment: async (payload, payment) => {
       if (!payment.amount) {

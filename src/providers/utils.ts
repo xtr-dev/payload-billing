@@ -1,0 +1,190 @@
+import type { Payload } from 'payload'
+import type { Payment } from '@/plugin/types/payments'
+import type { BillingPluginConfig } from '@/plugin/config'
+import { defaults } from '@/plugin/config'
+import { extractSlug } from '@/plugin/utils'
+
+/**
+ * Common webhook response utilities
+ * Note: Always return 200 for webhook acknowledgment to prevent information disclosure
+ */
+export const webhookResponses = {
+  success: () => Response.json({ received: true }, { status: 200 }),
+  error: (message: string, status = 400) => {
+    // Log error internally but don't expose details
+    console.error('[Webhook] Error:', message)
+    return Response.json({ error: 'Invalid request' }, { status })
+  },
+  missingBody: () => Response.json({ received: true }, { status: 200 }),
+  paymentNotFound: () => Response.json({ received: true }, { status: 200 }),
+  invalidPayload: () => Response.json({ received: true }, { status: 200 }),
+}
+
+/**
+ * Find a payment by provider ID
+ */
+export async function findPaymentByProviderId(
+  payload: Payload,
+  providerId: string,
+  pluginConfig: BillingPluginConfig
+): Promise<Payment | null> {
+  const paymentsCollection = extractSlug(pluginConfig.collections?.payments || defaults.paymentsCollection)
+
+  const payments = await payload.find({
+    collection: paymentsCollection,
+    where: {
+      providerId: {
+        equals: providerId
+      }
+    }
+  })
+
+  return payments.docs.length > 0 ? payments.docs[0] as Payment : null
+}
+
+/**
+ * Update payment status and provider data with proper optimistic locking
+ */
+export async function updatePaymentStatus(
+  payload: Payload,
+  paymentId: string | number,
+  status: Payment['status'],
+  providerData: any,
+  pluginConfig: BillingPluginConfig
+): Promise<boolean> {
+  const paymentsCollection = extractSlug(pluginConfig.collections?.payments || defaults.paymentsCollection)
+
+  // Get current payment to check for concurrent modifications
+  const currentPayment = await payload.findByID({
+    collection: paymentsCollection,
+    id: paymentId as any // Cast to avoid type mismatch between Id and PayloadCMS types
+  }) as Payment
+
+  const now = new Date().toISOString()
+
+  // First, try to find payments that match both ID and current updatedAt
+  const conflictCheck = await payload.find({
+    collection: paymentsCollection,
+    where: {
+      id: { equals: paymentId },
+      updatedAt: { equals: currentPayment.updatedAt }
+    }
+  })
+
+  // If no matching payment found, it means it was modified concurrently
+  if (conflictCheck.docs.length === 0) {
+    console.warn(`[Payment Update] Concurrent modification detected for payment ${paymentId}, skipping update`)
+    return false
+  }
+
+  try {
+    const result = await payload.update({
+      collection: paymentsCollection,
+      id: paymentId as any, // Cast to avoid type mismatch between Id and PayloadCMS types
+      data: {
+        status,
+        providerData: {
+          ...providerData,
+          webhookProcessedAt: now,
+          previousStatus: currentPayment.status
+        }
+      }
+    })
+
+    // Verify the update actually happened by checking if updatedAt changed
+    if (result.updatedAt === currentPayment.updatedAt) {
+      console.warn(`[Payment Update] Update may have failed for payment ${paymentId} - updatedAt unchanged`)
+      return false
+    }
+
+    return true
+  } catch (error) {
+    console.error(`[Payment Update] Failed to update payment ${paymentId}:`, error)
+    return false
+  }
+}
+
+/**
+ * Update invoice status when payment succeeds
+ */
+export async function updateInvoiceOnPaymentSuccess(
+  payload: Payload,
+  payment: Payment,
+  pluginConfig: BillingPluginConfig
+): Promise<void> {
+  if (!payment.invoice) return
+
+  const invoicesCollection = extractSlug(pluginConfig.collections?.invoices || defaults.invoicesCollection)
+  const invoiceId = typeof payment.invoice === 'object'
+    ? payment.invoice.id
+    : payment.invoice
+
+  await payload.update({
+    collection: invoicesCollection,
+    id: invoiceId as any, // Cast to avoid type mismatch between Id and PayloadCMS types
+    data: {
+      status: 'paid',
+      payment: payment.id
+    }
+  })
+}
+
+/**
+ * Handle webhook errors with consistent logging
+ */
+export function handleWebhookError(
+  provider: string,
+  error: unknown,
+  context?: string
+): Response {
+  const message = error instanceof Error ? error.message : 'Unknown error'
+  const fullContext = context ? `[${provider} Webhook - ${context}]` : `[${provider} Webhook]`
+
+  // Log detailed error internally for debugging
+  console.error(`${fullContext} Error:`, error)
+
+  // Return generic response to avoid information disclosure
+  return Response.json({
+    received: false,
+    error: 'Processing error'
+  }, { status: 200 })
+}
+
+/**
+ * Log webhook events
+ */
+export function logWebhookEvent(
+  provider: string,
+  event: string,
+  details?: any
+): void {
+  console.log(`[${provider} Webhook] ${event}`, details ? JSON.stringify(details) : '')
+}
+
+/**
+ * Validate URL for production use
+ */
+export function validateProductionUrl(url: string | undefined, urlType: string): void {
+  const isProduction = process.env.NODE_ENV === 'production'
+
+  if (!isProduction) return
+
+  if (!url) {
+    throw new Error(`${urlType} URL is required for production`)
+  }
+
+  if (url.includes('localhost') || url.includes('127.0.0.1')) {
+    throw new Error(`${urlType} URL cannot use localhost in production`)
+  }
+
+  if (!url.startsWith('https://')) {
+    throw new Error(`${urlType} URL must use HTTPS in production`)
+  }
+
+  // Basic URL validation
+  try {
+    new URL(url)
+  } catch {
+    throw new Error(`${urlType} URL is not a valid URL`)
+  }
+}

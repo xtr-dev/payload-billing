@@ -29,6 +29,7 @@ export function createPaymentsCollection(pluginConfig: BillingPluginConfig): Col
       },
       label: 'Provider Payment ID',
       unique: true,
+      index: true, // Ensure this field is indexed for webhook lookups
     },
     {
       name: 'status',

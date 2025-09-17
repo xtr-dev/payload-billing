@@ -24,30 +24,46 @@ pnpm add @xtr-dev/payload-billing
 yarn add @xtr-dev/payload-billing
 ```
 
+### Provider Dependencies
+
+Payment providers are peer dependencies and must be installed separately based on which providers you plan to use:
+
+```bash
+# For Stripe support
+npm install stripe
+# or
+pnpm add stripe
+
+# For Mollie support
+npm install @mollie/api-client
+# or
+pnpm add @mollie/api-client
+```
+
 ## Quick Start
 
 ```typescript
 import { buildConfig } from 'payload'
-import { billingPlugin } from '@xtr-dev/payload-billing'
+import { billingPlugin, stripeProvider, mollieProvider } from '@xtr-dev/payload-billing'
 
 export default buildConfig({
   // ... your config
   plugins: [
     billingPlugin({
-      providers: {
-        stripe: {
+      providers: [
+        stripeProvider({
           secretKey: process.env.STRIPE_SECRET_KEY!,
-          publishableKey: process.env.STRIPE_PUBLISHABLE_KEY!,
-          webhookEndpointSecret: process.env.STRIPE_WEBHOOK_SECRET!,
-        },
-        mollie: {
+          webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
+        }),
+        mollieProvider({
           apiKey: process.env.MOLLIE_API_KEY!,
-          webhookUrl: process.env.MOLLIE_WEBHOOK_URL!,
-        },
-        test: {
-          enabled: process.env.NODE_ENV === 'development',
-          autoComplete: true,
-        }
+          webhookUrl: process.env.MOLLIE_WEBHOOK_URL,
+        }),
+      ],
+      collections: {
+        payments: 'payments',
+        invoices: 'invoices',
+        refunds: 'refunds',
       }
     })
   ]
@@ -60,11 +76,11 @@ export default buildConfig({
 // Main plugin
 import { billingPlugin } from '@xtr-dev/payload-billing'
 
-// Provider utilities
-import { getPaymentProvider } from '@xtr-dev/payload-billing'
+// Payment providers
+import { stripeProvider, mollieProvider } from '@xtr-dev/payload-billing'
 
 // Types
-import type { PaymentProvider, CreatePaymentOptions, Payment } from '@xtr-dev/payload-billing'
+import type { PaymentProvider, Payment, Invoice, Refund } from '@xtr-dev/payload-billing'
 ```
 
 ## Provider Types
@@ -83,16 +99,14 @@ Local development testing with configurable scenarios, automatic completion, deb
 The plugin adds these collections:
 
 - **payments** - Payment transactions with status and provider data
-- **customers** - Customer profiles with billing information
 - **invoices** - Invoice generation with line items and PDF support
 - **refunds** - Refund tracking and management
 
 ## Webhook Endpoints
 
-Automatic webhook endpoints are created:
-- `/api/billing/webhooks/stripe`
-- `/api/billing/webhooks/mollie`
-- `/api/billing/webhooks/test`
+Automatic webhook endpoints are created for configured providers:
+- `/api/payload-billing/stripe/webhook` - Stripe payment notifications
+- `/api/payload-billing/mollie/webhook` - Mollie payment notifications
 
 ## Requirements
 

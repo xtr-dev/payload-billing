@@ -38,10 +38,17 @@ export const mollieProvider = (mollieConfig: MollieProviderConfig & {
   webhookUrl?: string
   redirectUrl?: string
 }) => {
+  // Validate required configuration at initialization
+  if (!mollieConfig.apiKey) {
+    throw new Error('Mollie API key is required')
+  }
+
   const singleton = createSingleton<MollieClient>(symbol)
   return {
     key: 'mollie',
     onConfig: (config, pluginConfig) => {
+      // Always register Mollie webhook since it doesn't require a separate webhook secret
+      // Mollie validates webhooks through payment ID verification
       config.endpoints = [
         ...(config.endpoints || []),
         {
@@ -77,7 +84,7 @@ export const mollieProvider = (mollieConfig: MollieProviderConfig & {
               const status = mapMollieStatusToPaymentStatus(molliePayment.status)
 
               // Update the payment status and provider data
-              await updatePaymentStatus(
+              const updateSuccess = await updatePaymentStatus(
                 payload,
                 payment.id,
                 status,
@@ -85,9 +92,11 @@ export const mollieProvider = (mollieConfig: MollieProviderConfig & {
                 pluginConfig
               )
 
-              // If payment is successful and linked to an invoice, update the invoice
-              if (status === 'succeeded') {
+              // If payment is successful and update succeeded, update the invoice
+              if (status === 'succeeded' && updateSuccess) {
                 await updateInvoiceOnPaymentSuccess(payload, payment, pluginConfig)
+              } else if (!updateSuccess) {
+                console.warn(`[Mollie Webhook] Failed to update payment ${payment.id}, skipping invoice update`)
               }
 
               return webhookResponses.success()

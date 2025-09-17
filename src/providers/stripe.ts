@@ -27,17 +27,24 @@ export interface StripeProviderConfig {
 const DEFAULT_API_VERSION: Stripe.StripeConfig['apiVersion'] = '2025-08-27.basil'
 
 export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
+  // Validate required configuration at initialization
+  if (!stripeConfig.secretKey) {
+    throw new Error('Stripe secret key is required')
+  }
+
   const singleton = createSingleton<Stripe>(symbol)
 
   return {
     key: 'stripe',
     onConfig: (config, pluginConfig) => {
-      config.endpoints = [
-        ...(config.endpoints || []),
-        {
-          path: '/payload-billing/stripe/webhook',
-          method: 'post',
-          handler: async (req) => {
+      // Only register webhook endpoint if webhook secret is configured
+      if (stripeConfig.webhookSecret) {
+        config.endpoints = [
+          ...(config.endpoints || []),
+          {
+            path: '/payload-billing/stripe/webhook',
+            method: 'post',
+            handler: async (req) => {
             try {
               const payload = req.payload
               const stripe = singleton.get(payload)
@@ -62,9 +69,7 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
                 return webhookResponses.error('Missing webhook signature', 400)
               }
 
-              if (!stripeConfig.webhookSecret) {
-                throw new Error('Stripe webhook secret is required for webhook processing')
-              }
+              // webhookSecret is guaranteed to exist since we only register this endpoint when it's configured
 
               // Verify webhook signature and construct event
               let event: Stripe.Event
@@ -112,7 +117,7 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
                     timestamp: new Date().toISOString(),
                     provider: 'stripe'
                   }
-                  await updatePaymentStatus(
+                  const updateSuccess = await updatePaymentStatus(
                     payload,
                     payment.id,
                     status,
@@ -120,9 +125,11 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
                     pluginConfig
                   )
 
-                  // If payment is successful and linked to an invoice, update the invoice
-                  if (status === 'succeeded') {
+                  // If payment is successful and update succeeded, update the invoice
+                  if (status === 'succeeded' && updateSuccess) {
                     await updateInvoiceOnPaymentSuccess(payload, payment, pluginConfig)
+                  } else if (!updateSuccess) {
+                    console.warn(`[Stripe Webhook] Failed to update payment ${payment.id}, skipping invoice update`)
                   }
                   break
                 }
@@ -156,13 +163,17 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
                       timestamp: new Date().toISOString(),
                       provider: 'stripe'
                     }
-                    await updatePaymentStatus(
+                    const updateSuccess = await updatePaymentStatus(
                       payload,
                       payment.id,
                       isFullyRefunded ? 'refunded' : 'partially_refunded',
                       providerData,
                       pluginConfig
                     )
+
+                    if (!updateSuccess) {
+                      console.warn(`[Stripe Webhook] Failed to update refund status for payment ${payment.id}`)
+                    }
                   }
                   break
                 }
@@ -176,9 +187,13 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
             } catch (error) {
               return handleWebhookError('Stripe', error)
             }
+            }
           }
-        }
-      ]
+        ]
+      } else {
+        // Log that webhook endpoint is not registered
+        console.warn('[Stripe Provider] Webhook endpoint not registered - webhookSecret not configured')
+      }
     },
     onInit: async (payload: Payload) => {
       const { default: Stripe } = await import('stripe')

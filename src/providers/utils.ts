@@ -43,7 +43,7 @@ export async function findPaymentByProviderId(
 }
 
 /**
- * Update payment status and provider data with optimistic locking
+ * Update payment status and provider data with proper optimistic locking
  */
 export async function updatePaymentStatus(
   payload: Payload,
@@ -51,10 +51,10 @@ export async function updatePaymentStatus(
   status: Payment['status'],
   providerData: any,
   pluginConfig: BillingPluginConfig
-): Promise<void> {
+): Promise<boolean> {
   const paymentsCollection = extractSlug(pluginConfig.collections?.payments || defaults.paymentsCollection)
 
-  // Get current payment to check updatedAt for optimistic locking
+  // Get current payment to check for concurrent modifications
   const currentPayment = await payload.findByID({
     collection: paymentsCollection,
     id: paymentId
@@ -62,8 +62,23 @@ export async function updatePaymentStatus(
 
   const now = new Date().toISOString()
 
+  // First, try to find payments that match both ID and current updatedAt
+  const conflictCheck = await payload.find({
+    collection: paymentsCollection,
+    where: {
+      id: { equals: paymentId },
+      updatedAt: { equals: currentPayment.updatedAt }
+    }
+  })
+
+  // If no matching payment found, it means it was modified concurrently
+  if (conflictCheck.docs.length === 0) {
+    console.warn(`[Payment Update] Concurrent modification detected for payment ${paymentId}, skipping update`)
+    return false
+  }
+
   try {
-    await payload.update({
+    const result = await payload.update({
       collection: paymentsCollection,
       id: paymentId,
       data: {
@@ -73,18 +88,19 @@ export async function updatePaymentStatus(
           webhookProcessedAt: now,
           previousStatus: currentPayment.status
         }
-      },
-      // Only update if the payment hasn't been modified since we read it
-      where: {
-        updatedAt: {
-          equals: currentPayment.updatedAt
-        }
       }
     })
+
+    // Verify the update actually happened by checking if updatedAt changed
+    if (result.updatedAt === currentPayment.updatedAt) {
+      console.warn(`[Payment Update] Update may have failed for payment ${paymentId} - updatedAt unchanged`)
+      return false
+    }
+
+    return true
   } catch (error) {
-    // If update failed due to concurrent modification, log and continue
-    // The webhook will be retried by the provider if needed
-    console.warn(`[Payment Update] Potential race condition detected for payment ${paymentId}:`, error)
+    console.error(`[Payment Update] Failed to update payment ${paymentId}:`, error)
+    return false
   }
 }
 

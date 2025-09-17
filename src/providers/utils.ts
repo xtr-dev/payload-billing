@@ -68,7 +68,7 @@ export async function updatePaymentFromWebhook(
 }
 
 /**
- * Update payment status and provider data with atomic optimistic locking
+ * Update payment status and provider data
  */
 export async function updatePaymentStatus(
   payload: Payload,
@@ -79,45 +79,21 @@ export async function updatePaymentStatus(
 ): Promise<boolean> {
   const paymentsCollection = extractSlug(pluginConfig.collections?.payments || defaults.paymentsCollection)
 
-  // Get current payment to check version for atomic locking
-  const currentPayment = await payload.findByID({
-    collection: paymentsCollection,
-    id: toPayloadId(paymentId)
-  }) as Payment
-
-  const now = new Date().toISOString()
-  const nextVersion = (currentPayment.version || 1) + 1
-
   try {
-    // Use update with version check for atomic optimistic locking
-    const updatedPayment = await payload.update({
+    await payload.update({
       collection: paymentsCollection,
       id: toPayloadId(paymentId),
       data: {
         status,
-        version: nextVersion,
         providerData: {
           ...providerData,
-          webhookProcessedAt: now,
-          previousStatus: currentPayment.status
+          webhookProcessedAt: new Date().toISOString()
         }
-      },
-      where: {
-        version: { equals: currentPayment.version || 1 }
       }
     })
 
-    // If we get here without error, the update succeeded
     return true
-  } catch (error: any) {
-    // Check if this is a version mismatch (no documents found to update)
-    if (error?.message?.includes('No documents found') ||
-        error?.name === 'ValidationError' ||
-        error?.status === 404) {
-      console.warn(`[Payment Update] Optimistic lock failed for payment ${paymentId} - version mismatch (expected: ${currentPayment.version}, may have been updated by another process)`)
-      return false
-    }
-
+  } catch (error) {
     console.error(`[Payment Update] Failed to update payment ${paymentId}:`, error)
     return false
   }
@@ -143,7 +119,7 @@ export async function updateInvoiceOnPaymentSuccess(
     id: toPayloadId(invoiceId),
     data: {
       status: 'paid',
-      payment: payment.id
+      payment: toPayloadId(payment.id)
     }
   })
 }

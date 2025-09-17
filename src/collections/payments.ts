@@ -2,7 +2,6 @@ import type { AccessArgs, CollectionBeforeChangeHook, CollectionConfig, Field } 
 import type { BillingPluginConfig} from '@/plugin/config';
 import { defaults } from '@/plugin/config'
 import { extractSlug } from '@/plugin/utils'
-import { isWebhookRequest } from '@/providers/context'
 import type { Payment } from '@/plugin/types/payments'
 import { initProviderPayment } from '@/collections/hooks'
 
@@ -107,16 +106,6 @@ export function createPaymentsCollection(pluginConfig: BillingPluginConfig): Col
       hasMany: true,
       relationTo: extractSlug(pluginConfig.collections?.refunds || defaults.refundsCollection),
     },
-    {
-      name: 'version',
-      type: 'number',
-      admin: {
-        hidden: true, // Hide from admin UI
-      },
-      defaultValue: 1,
-      required: true,
-      index: true, // Index for faster optimistic lock queries
-    },
   ]
   if (overrides?.fields) {
     fields = overrides?.fields({defaultFields: fields})
@@ -138,11 +127,8 @@ export function createPaymentsCollection(pluginConfig: BillingPluginConfig): Col
     fields,
     hooks: {
       beforeChange: [
-        async ({ data, operation, req, originalDoc }) => {
+        async ({ data, operation, req }) => {
           if (operation === 'create') {
-            // Initialize version for new payments
-            data.version = 1
-
             // Validate amount format
             if (data.amount && !Number.isInteger(data.amount)) {
               throw new Error('Amount must be an integer (in cents)')
@@ -157,17 +143,6 @@ export function createPaymentsCollection(pluginConfig: BillingPluginConfig): Col
             }
 
             await initProviderPayment(req.payload, data)
-          } else if (operation === 'update') {
-            // Handle version incrementing for manual updates
-            // Webhook updates from providers should already set the version via optimistic locking
-            if (!data.version && originalDoc?.id) {
-              // Check if this is a webhook update using explicit context tracking
-              if (!isWebhookRequest(req)) {
-                // This is a manual admin update, safely increment version
-                data.version = (originalDoc.version || 1) + 1
-              }
-              // If it's a webhook update without a version, let it proceed (optimistic locking already handled it)
-            }
           }
         },
       ] satisfies CollectionBeforeChangeHook<Payment>[],

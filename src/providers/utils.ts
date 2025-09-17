@@ -1,8 +1,9 @@
 import type { Payload } from 'payload'
 import type { Payment } from '@/plugin/types/payments'
 import type { BillingPluginConfig } from '@/plugin/config'
+import type { ProviderData } from './types'
 import { defaults } from '@/plugin/config'
-import { extractSlug } from '@/plugin/utils'
+import { extractSlug, toPayloadId } from '@/plugin/utils'
 
 /**
  * Common webhook response utilities
@@ -57,7 +58,7 @@ export async function updatePaymentStatus(
   // Get current payment to check version for atomic locking
   const currentPayment = await payload.findByID({
     collection: paymentsCollection,
-    id: paymentId as any // Cast to avoid type mismatch between Id and PayloadCMS types
+    id: toPayloadId(paymentId)
   }) as Payment
 
   const now = new Date().toISOString()
@@ -68,7 +69,7 @@ export async function updatePaymentStatus(
     const result = await payload.updateMany({
       collection: paymentsCollection,
       where: {
-        id: { equals: paymentId as any }, // Cast to avoid type mismatch
+        id: { equals: toPayloadId(paymentId) },
         version: { equals: currentPayment.version || 1 }
       },
       data: {
@@ -112,7 +113,7 @@ export async function updateInvoiceOnPaymentSuccess(
 
   await payload.update({
     collection: invoicesCollection,
-    id: invoiceId as any, // Cast to avoid type mismatch between Id and PayloadCMS types
+    id: toPayloadId(invoiceId),
     data: {
       status: 'paid',
       payment: payment.id

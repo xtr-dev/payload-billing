@@ -1,10 +1,15 @@
 import type { Payment } from '@/plugin/types/payments'
-import type { InitPayment, PaymentProvider } from '@/plugin/types'
-import type { Config, Payload } from 'payload'
+import type { PaymentProvider } from '@/plugin/types'
+import type { Payload } from 'payload'
 import { createSingleton } from '@/plugin/singleton'
 import type { createMollieClient, MollieClient } from '@mollie/api-client'
-import { defaults } from '@/plugin/config'
-import { extractSlug } from '@/plugin/utils'
+import {
+  webhookResponses,
+  findPaymentByProviderId,
+  updatePaymentStatus,
+  updateInvoiceOnPaymentSuccess,
+  handleWebhookError
+} from './utils'
 
 const symbol = Symbol('mollie')
 export type MollieProviderConfig = Parameters<typeof createMollieClient>[0]
@@ -29,11 +34,11 @@ export const mollieProvider = (mollieConfig: MollieProviderConfig & {
 
               // Parse the webhook body to get the Mollie payment ID
               if (!req.text) {
-                return Response.json({ error: 'Missing request body' }, { status: 400 })
+                return webhookResponses.missingBody()
               }
               const body = await req.text()
               if (!body || !body.startsWith('id=')) {
-                return Response.json({ error: 'Invalid webhook payload' }, { status: 400 })
+                return webhookResponses.invalidPayload()
               }
 
               const molliePaymentId = body.slice(3) // Remove 'id=' prefix
@@ -42,21 +47,11 @@ export const mollieProvider = (mollieConfig: MollieProviderConfig & {
               const molliePayment = await mollieClient.payments.get(molliePaymentId)
 
               // Find the corresponding payment in our database
-              const paymentsCollection = extractSlug(pluginConfig.collections?.payments || defaults.paymentsCollection)
-              const payments = await payload.find({
-                collection: paymentsCollection,
-                where: {
-                  providerId: {
-                    equals: molliePaymentId
-                  }
-                }
-              })
+              const payment = await findPaymentByProviderId(payload, molliePaymentId, pluginConfig)
 
-              if (payments.docs.length === 0) {
-                return Response.json({ error: 'Payment not found' }, { status: 404 })
+              if (!payment) {
+                return webhookResponses.paymentNotFound()
               }
-
-              const paymentDoc = payments.docs[0]
 
               // Map Mollie status to our status
               let status: Payment['status'] = 'pending'
@@ -83,41 +78,22 @@ export const mollieProvider = (mollieConfig: MollieProviderConfig & {
               }
 
               // Update the payment status and provider data
-              await payload.update({
-                collection: paymentsCollection,
-                id: paymentDoc.id,
-                data: {
-                  status,
-                  providerData: molliePayment.toPlainObject()
-                }
-              })
+              await updatePaymentStatus(
+                payload,
+                payment.id,
+                status,
+                molliePayment.toPlainObject(),
+                pluginConfig
+              )
 
               // If payment is successful and linked to an invoice, update the invoice
-              const invoicesCollection = extractSlug(pluginConfig.collections?.invoices || defaults.invoicesCollection)
-              const payment = paymentDoc as Payment
-
-              if (status === 'succeeded' && payment.invoice) {
-                const invoiceId = typeof payment.invoice === 'object'
-                  ? payment.invoice.id
-                  : payment.invoice
-
-                await payload.update({
-                  collection: invoicesCollection,
-                  id: invoiceId,
-                  data: {
-                    status: 'paid',
-                    payment: paymentDoc.id
-                  }
-                })
+              if (status === 'succeeded') {
+                await updateInvoiceOnPaymentSuccess(payload, payment, pluginConfig)
               }
 
-              return Response.json({ received: true }, { status: 200 })
+              return webhookResponses.success()
             } catch (error) {
-              console.error('[Mollie Webhook] Error processing webhook:', error)
-              return Response.json({
-                error: 'Webhook processing failed',
-                details: error instanceof Error ? error.message : 'Unknown error'
-              }, { status: 500 })
+              return handleWebhookError('Mollie', error)
             }
           }
         }

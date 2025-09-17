@@ -1,10 +1,16 @@
 import type { Payment } from '@/plugin/types/payments'
 import type { PaymentProvider } from '@/plugin/types'
-import type { Config, Payload } from 'payload'
+import type { Payload } from 'payload'
 import { createSingleton } from '@/plugin/singleton'
 import type Stripe from 'stripe'
-import { defaults } from '@/plugin/config'
-import { extractSlug } from '@/plugin/utils'
+import {
+  webhookResponses,
+  findPaymentByProviderId,
+  updatePaymentStatus,
+  updateInvoiceOnPaymentSuccess,
+  handleWebhookError,
+  logWebhookEvent
+} from './utils'
 
 const symbol = Symbol('stripe')
 
@@ -34,14 +40,14 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
 
               // Get the raw body for signature verification
               if (!req.text) {
-                return Response.json({ error: 'Missing request body' }, { status: 400 })
+                return webhookResponses.missingBody()
               }
 
               const body = await req.text()
               const signature = req.headers.get('stripe-signature')
 
               if (!signature || !stripeConfig.webhookSecret) {
-                return Response.json({ error: 'Missing webhook signature or secret' }, { status: 400 })
+                return webhookResponses.error('Missing webhook signature or secret')
               }
 
               // Verify webhook signature and construct event
@@ -49,35 +55,23 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
               try {
                 event = stripe.webhooks.constructEvent(body, signature, stripeConfig.webhookSecret)
               } catch (err) {
-                console.error('[Stripe Webhook] Signature verification failed:', err)
-                return Response.json({ error: 'Invalid signature' }, { status: 400 })
+                return handleWebhookError('Stripe', err, 'Signature verification failed')
               }
 
               // Handle different event types
-              const paymentsCollection = extractSlug(pluginConfig.collections?.payments || defaults.paymentsCollection)
-
               switch (event.type) {
                 case 'payment_intent.succeeded':
                 case 'payment_intent.payment_failed':
                 case 'payment_intent.canceled': {
-                  const paymentIntent = event.data.object as Stripe.PaymentIntent
+                  const paymentIntent = event.data.object
 
                   // Find the corresponding payment in our database
-                  const payments = await payload.find({
-                    collection: paymentsCollection,
-                    where: {
-                      providerId: {
-                        equals: paymentIntent.id
-                      }
-                    }
-                  })
+                  const payment = await findPaymentByProviderId(payload, paymentIntent.id, pluginConfig)
 
-                  if (payments.docs.length === 0) {
-                    console.error(`[Stripe Webhook] Payment not found for intent: ${paymentIntent.id}`)
-                    return Response.json({ received: true }, { status: 200 }) // Still return 200 to acknowledge receipt
+                  if (!payment) {
+                    logWebhookEvent('Stripe', `Payment not found for intent: ${paymentIntent.id}`)
+                    return webhookResponses.success() // Still return 200 to acknowledge receipt
                   }
-
-                  const paymentDoc = payments.docs[0]
 
                   // Map Stripe status to our status
                   let status: Payment['status'] = 'pending'
@@ -97,88 +91,64 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
                   }
 
                   // Update the payment status and provider data
-                  await payload.update({
-                    collection: paymentsCollection,
-                    id: paymentDoc.id,
-                    data: {
-                      status,
-                      providerData: paymentIntent as any
-                    }
-                  })
+                  await updatePaymentStatus(
+                    payload,
+                    payment.id,
+                    status,
+                    paymentIntent as any,
+                    pluginConfig
+                  )
 
                   // If payment is successful and linked to an invoice, update the invoice
-                  const invoicesCollection = extractSlug(pluginConfig.collections?.invoices || defaults.invoicesCollection)
-                  const payment = paymentDoc as Payment
-
-                  if (status === 'succeeded' && payment.invoice) {
-                    const invoiceId = typeof payment.invoice === 'object'
-                      ? payment.invoice.id
-                      : payment.invoice
-
-                    await payload.update({
-                      collection: invoicesCollection,
-                      id: invoiceId,
-                      data: {
-                        status: 'paid',
-                        payment: paymentDoc.id
-                      }
-                    })
+                  if (status === 'succeeded') {
+                    await updateInvoiceOnPaymentSuccess(payload, payment, pluginConfig)
                   }
                   break
                 }
 
                 case 'charge.refunded': {
-                  const charge = event.data.object as Stripe.Charge
+                  const charge = event.data.object
 
-                  // Find the payment by charge ID (which might be stored in providerData)
-                  const payments = await payload.find({
-                    collection: paymentsCollection,
-                    where: {
-                      or: [
-                        {
-                          providerId: {
-                            equals: charge.payment_intent as string
-                          }
-                        },
-                        {
-                          providerId: {
-                            equals: charge.id
-                          }
-                        }
-                      ]
-                    }
-                  })
+                  // Find the payment by charge ID or payment intent
+                  let payment: Payment | null = null
 
-                  if (payments.docs.length > 0) {
-                    const paymentDoc = payments.docs[0]
+                  // First try to find by payment intent ID
+                  if (charge.payment_intent) {
+                    payment = await findPaymentByProviderId(
+                      payload,
+                      charge.payment_intent as string,
+                      pluginConfig
+                    )
+                  }
 
+                  // If not found, try charge ID
+                  if (!payment) {
+                    payment = await findPaymentByProviderId(payload, charge.id, pluginConfig)
+                  }
+
+                  if (payment) {
                     // Determine if fully or partially refunded
                     const isFullyRefunded = charge.amount_refunded === charge.amount
 
-                    await payload.update({
-                      collection: paymentsCollection,
-                      id: paymentDoc.id,
-                      data: {
-                        status: isFullyRefunded ? 'refunded' : 'partially_refunded',
-                        providerData: charge as any
-                      }
-                    })
+                    await updatePaymentStatus(
+                      payload,
+                      payment.id,
+                      isFullyRefunded ? 'refunded' : 'partially_refunded',
+                      charge as any,
+                      pluginConfig
+                    )
                   }
                   break
                 }
 
                 default:
                   // Unhandled event type
-                  console.log(`[Stripe Webhook] Unhandled event type: ${event.type}`)
+                  logWebhookEvent('Stripe', `Unhandled event type: ${event.type}`)
               }
 
-              return Response.json({ received: true }, { status: 200 })
+              return webhookResponses.success()
             } catch (error) {
-              console.error('[Stripe Webhook] Error processing webhook:', error)
-              return Response.json({
-                error: 'Webhook processing failed',
-                details: error instanceof Error ? error.message : 'Unknown error'
-              }, { status: 500 })
+              return handleWebhookError('Stripe', error)
             }
           }
         }
@@ -187,7 +157,7 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
     onInit: async (payload: Payload) => {
       const { default: Stripe } = await import('stripe')
       const stripe = new Stripe(stripeConfig.secretKey, {
-        apiVersion: stripeConfig.apiVersion || '2024-11-20.acacia',
+        apiVersion: stripeConfig.apiVersion,
       })
       singleton.set(payload, stripe)
     },
@@ -208,8 +178,12 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
         description: payment.description || undefined,
         metadata: {
           payloadPaymentId: payment.id?.toString() || '',
-          ...(typeof payment.metadata === 'object' && payment.metadata !== null ? payment.metadata : {})
-        },
+          ...(typeof payment.metadata === 'object' &&
+              payment.metadata !== null &&
+              !Array.isArray(payment.metadata)
+              ? payment.metadata
+              : {})
+        } as Stripe.MetadataParam,
         automatic_payment_methods: {
           enabled: true,
         },

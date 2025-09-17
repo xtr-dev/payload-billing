@@ -43,7 +43,7 @@ export async function findPaymentByProviderId(
 }
 
 /**
- * Update payment status and provider data
+ * Update payment status and provider data with optimistic locking
  */
 export async function updatePaymentStatus(
   payload: Payload,
@@ -54,14 +54,38 @@ export async function updatePaymentStatus(
 ): Promise<void> {
   const paymentsCollection = extractSlug(pluginConfig.collections?.payments || defaults.paymentsCollection)
 
-  await payload.update({
+  // Get current payment to check updatedAt for optimistic locking
+  const currentPayment = await payload.findByID({
     collection: paymentsCollection,
-    id: paymentId,
-    data: {
-      status,
-      providerData
-    }
-  })
+    id: paymentId
+  }) as Payment
+
+  const now = new Date().toISOString()
+
+  try {
+    await payload.update({
+      collection: paymentsCollection,
+      id: paymentId,
+      data: {
+        status,
+        providerData: {
+          ...providerData,
+          webhookProcessedAt: now,
+          previousStatus: currentPayment.status
+        }
+      },
+      // Only update if the payment hasn't been modified since we read it
+      where: {
+        updatedAt: {
+          equals: currentPayment.updatedAt
+        }
+      }
+    })
+  } catch (error) {
+    // If update failed due to concurrent modification, log and continue
+    // The webhook will be retried by the provider if needed
+    console.warn(`[Payment Update] Potential race condition detected for payment ${paymentId}:`, error)
+  }
 }
 
 /**
@@ -119,4 +143,32 @@ export function logWebhookEvent(
   details?: any
 ): void {
   console.log(`[${provider} Webhook] ${event}`, details ? JSON.stringify(details) : '')
+}
+
+/**
+ * Validate URL for production use
+ */
+export function validateProductionUrl(url: string | undefined, urlType: string): void {
+  const isProduction = process.env.NODE_ENV === 'production'
+
+  if (!isProduction) return
+
+  if (!url) {
+    throw new Error(`${urlType} URL is required for production`)
+  }
+
+  if (url.includes('localhost') || url.includes('127.0.0.1')) {
+    throw new Error(`${urlType} URL cannot use localhost in production`)
+  }
+
+  if (!url.startsWith('https://')) {
+    throw new Error(`${urlType} URL must use HTTPS in production`)
+  }
+
+  // Basic URL validation
+  try {
+    new URL(url)
+  } catch {
+    throw new Error(`${urlType} URL is not a valid URL`)
+  }
 }

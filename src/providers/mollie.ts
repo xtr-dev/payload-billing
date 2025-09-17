@@ -8,12 +8,31 @@ import {
   findPaymentByProviderId,
   updatePaymentStatus,
   updateInvoiceOnPaymentSuccess,
-  handleWebhookError
+  handleWebhookError,
+  validateProductionUrl
 } from './utils'
 import { formatAmountForProvider, isValidAmount, isValidCurrencyCode } from './currency'
 
 const symbol = Symbol('mollie')
 export type MollieProviderConfig = Parameters<typeof createMollieClient>[0]
+
+/**
+ * Type-safe mapping of Mollie payment status to internal status
+ */
+function mapMollieStatusToPaymentStatus(mollieStatus: string): Payment['status'] {
+  // Define known Mollie statuses for type safety
+  const mollieStatusMap: Record<string, Payment['status']> = {
+    'paid': 'succeeded',
+    'failed': 'failed',
+    'canceled': 'canceled',
+    'expired': 'canceled',
+    'pending': 'pending',
+    'open': 'pending',
+    'authorized': 'pending',
+  }
+
+  return mollieStatusMap[mollieStatus] || 'processing'
+}
 
 export const mollieProvider = (mollieConfig: MollieProviderConfig & {
   webhookUrl?: string
@@ -54,29 +73,8 @@ export const mollieProvider = (mollieConfig: MollieProviderConfig & {
                 return webhookResponses.paymentNotFound()
               }
 
-              // Map Mollie status to our status
-              let status: Payment['status'] = 'pending'
-              // Cast to string to avoid ESLint enum comparison warning
-              const mollieStatus = molliePayment.status as string
-              switch (mollieStatus) {
-                case 'paid':
-                  status = 'succeeded'
-                  break
-                case 'failed':
-                  status = 'failed'
-                  break
-                case 'canceled':
-                case 'expired':
-                  status = 'canceled'
-                  break
-                case 'pending':
-                case 'open':
-                case 'authorized':
-                  status = 'pending'
-                  break
-                default:
-                  status = 'processing'
-              }
+              // Map Mollie status to our status using proper type-safe mapping
+              const status = mapMollieStatusToPaymentStatus(molliePayment.status)
 
               // Update the payment status and provider data
               await updatePaymentStatus(
@@ -124,21 +122,16 @@ export const mollieProvider = (mollieConfig: MollieProviderConfig & {
         throw new Error('Invalid currency: must be a 3-letter ISO code')
       }
 
-      // Validate URLs in production
+      // Setup URLs with development defaults
       const isProduction = process.env.NODE_ENV === 'production'
       const redirectUrl = mollieConfig.redirectUrl ||
         (!isProduction ? 'https://localhost:3000/payment/success' : undefined)
       const webhookUrl = mollieConfig.webhookUrl ||
         `${process.env.PAYLOAD_PUBLIC_SERVER_URL || (!isProduction ? 'https://localhost:3000' : '')}/api/payload-billing/mollie/webhook`
 
-      if (isProduction) {
-        if (!redirectUrl || redirectUrl.includes('localhost')) {
-          throw new Error('Valid redirect URL is required for production')
-        }
-        if (!webhookUrl || webhookUrl.includes('localhost')) {
-          throw new Error('Valid webhook URL is required for production')
-        }
-      }
+      // Validate URLs for production
+      validateProductionUrl(redirectUrl, 'Redirect')
+      validateProductionUrl(webhookUrl, 'Webhook')
 
       const molliePayment = await singleton.get(payload).payments.create({
         amount: {

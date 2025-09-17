@@ -43,11 +43,19 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
               const stripe = singleton.get(payload)
 
               // Get the raw body for signature verification
-              if (!req.text) {
-                return webhookResponses.missingBody()
+              let body: string
+              try {
+                if (!req.text) {
+                  return webhookResponses.missingBody()
+                }
+                body = await req.text()
+                if (!body) {
+                  return webhookResponses.missingBody()
+                }
+              } catch (error) {
+                return handleWebhookError('Stripe', error, 'Failed to read request body')
               }
 
-              const body = await req.text()
               const signature = req.headers.get('stripe-signature')
 
               if (!signature) {

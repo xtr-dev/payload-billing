@@ -57,7 +57,7 @@ export async function updatePaymentStatus(
   // Get current payment to check for concurrent modifications
   const currentPayment = await payload.findByID({
     collection: paymentsCollection,
-    id: paymentId
+    id: paymentId as any // Cast to avoid type mismatch between Id and PayloadCMS types
   }) as Payment
 
   const now = new Date().toISOString()
@@ -80,7 +80,7 @@ export async function updatePaymentStatus(
   try {
     const result = await payload.update({
       collection: paymentsCollection,
-      id: paymentId,
+      id: paymentId as any, // Cast to avoid type mismatch between Id and PayloadCMS types
       data: {
         status,
         providerData: {
@@ -121,7 +121,7 @@ export async function updateInvoiceOnPaymentSuccess(
 
   await payload.update({
     collection: invoicesCollection,
-    id: invoiceId,
+    id: invoiceId as any, // Cast to avoid type mismatch between Id and PayloadCMS types
     data: {
       status: 'paid',
       payment: payment.id

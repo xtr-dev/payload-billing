@@ -68,10 +68,8 @@ export async function updatePaymentStatus(
     const result = await payload.updateMany({
       collection: paymentsCollection,
       where: {
-        and: [
-          { id: { equals: paymentId } },
-          { version: { equals: currentPayment.version || 1 } }
-        ]
+        id: { equals: paymentId },
+        version: { equals: currentPayment.version || 1 }
       },
       data: {
         status,

@@ -1,9 +1,9 @@
-import type { AccessArgs, CollectionBeforeChangeHook, CollectionConfig, CollectionSlug, Field } from 'payload'
+import type { AccessArgs, CollectionBeforeChangeHook, CollectionConfig, Field } from 'payload'
 import type { BillingPluginConfig} from '@/plugin/config';
 import { defaults } from '@/plugin/config'
-import { extractSlug, toPayloadId } from '@/plugin/utils'
+import { extractSlug } from '@/plugin/utils'
 import { isWebhookRequest } from '@/providers/context'
-import { Payment } from '@/plugin/types/payments'
+import type { Payment } from '@/plugin/types/payments'
 import { initProviderPayment } from '@/collections/hooks'
 
 export function createPaymentsCollection(pluginConfig: BillingPluginConfig): CollectionConfig {
@@ -80,7 +80,7 @@ export function createPaymentsCollection(pluginConfig: BillingPluginConfig): Col
       admin: {
         position: 'sidebar',
       },
-      relationTo: extractSlug(pluginConfig.collections?.invoices || defaults.invoicesCollection) as CollectionSlug,
+      relationTo: extractSlug(pluginConfig.collections?.invoices || defaults.invoicesCollection),
     },
     {
       name: 'metadata',
@@ -105,7 +105,7 @@ export function createPaymentsCollection(pluginConfig: BillingPluginConfig): Col
         readOnly: true,
       },
       hasMany: true,
-      relationTo: extractSlug(pluginConfig.collections?.refunds || defaults.refundsCollection) as CollectionSlug,
+      relationTo: extractSlug(pluginConfig.collections?.refunds || defaults.refundsCollection),
     },
     {
       name: 'version',

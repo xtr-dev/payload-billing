@@ -43,46 +43,39 @@ export async function findPaymentByProviderId(
 }
 
 /**
- * Update payment status and provider data with proper optimistic locking
+ * Update payment status and provider data with atomic optimistic locking
  */
 export async function updatePaymentStatus(
   payload: Payload,
   paymentId: string | number,
   status: Payment['status'],
-  providerData: any,
+  providerData: ProviderData<any>,
   pluginConfig: BillingPluginConfig
 ): Promise<boolean> {
   const paymentsCollection = extractSlug(pluginConfig.collections?.payments || defaults.paymentsCollection)
 
-  // Get current payment to check for concurrent modifications
+  // Get current payment to check version for atomic locking
   const currentPayment = await payload.findByID({
     collection: paymentsCollection,
     id: paymentId as any // Cast to avoid type mismatch between Id and PayloadCMS types
   }) as Payment
 
   const now = new Date().toISOString()
-
-  // First, try to find payments that match both ID and current updatedAt
-  const conflictCheck = await payload.find({
-    collection: paymentsCollection,
-    where: {
-      id: { equals: paymentId },
-      updatedAt: { equals: currentPayment.updatedAt }
-    }
-  })
-
-  // If no matching payment found, it means it was modified concurrently
-  if (conflictCheck.docs.length === 0) {
-    console.warn(`[Payment Update] Concurrent modification detected for payment ${paymentId}, skipping update`)
-    return false
-  }
+  const nextVersion = (currentPayment.version || 1) + 1
 
   try {
-    const result = await payload.update({
+    // Use updateMany for atomic version-based optimistic locking
+    const result = await payload.updateMany({
       collection: paymentsCollection,
-      id: paymentId as any, // Cast to avoid type mismatch between Id and PayloadCMS types
+      where: {
+        and: [
+          { id: { equals: paymentId } },
+          { version: { equals: currentPayment.version || 1 } }
+        ]
+      },
       data: {
         status,
+        version: nextVersion,
         providerData: {
           ...providerData,
           webhookProcessedAt: now,
@@ -91,13 +84,13 @@ export async function updatePaymentStatus(
       }
     })
 
-    // Verify the update actually happened by checking if updatedAt changed
-    if (result.updatedAt === currentPayment.updatedAt) {
-      console.warn(`[Payment Update] Update may have failed for payment ${paymentId} - updatedAt unchanged`)
+    // Check if the update was successful (affected documents > 0)
+    if (result.docs && result.docs.length > 0) {
+      return true
+    } else {
+      console.warn(`[Payment Update] Optimistic lock failed for payment ${paymentId} - version mismatch (expected: ${currentPayment.version}, may have been updated by another process)`)
       return false
     }
-
-    return true
   } catch (error) {
     console.error(`[Payment Update] Failed to update payment ${paymentId}:`, error)
     return false

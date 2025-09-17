@@ -48,6 +48,7 @@ export interface Payment {
     | boolean
     | null;
   refunds?: (number | Refund)[] | null;
+  version: number;
   updatedAt: string;
   createdAt: string;
 }

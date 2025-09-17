@@ -106,6 +106,15 @@ export function createPaymentsCollection(pluginConfig: BillingPluginConfig): Col
       hasMany: true,
       relationTo: extractSlug(pluginConfig.collections?.refunds || defaults.refundsCollection) as CollectionSlug,
     },
+    {
+      name: 'version',
+      type: 'number',
+      admin: {
+        hidden: true, // Hide from admin UI
+      },
+      defaultValue: 1,
+      required: true,
+    },
   ]
   if (overrides?.fields) {
     fields = overrides?.fields({defaultFields: fields})
@@ -129,6 +138,9 @@ export function createPaymentsCollection(pluginConfig: BillingPluginConfig): Col
       beforeChange: [
         async ({ data, operation, req }) => {
           if (operation === 'create') {
+            // Initialize version for new payments
+            data.version = 1
+
             // Validate amount format
             if (data.amount && !Number.isInteger(data.amount)) {
               throw new Error('Amount must be an integer (in cents)')
@@ -143,6 +155,15 @@ export function createPaymentsCollection(pluginConfig: BillingPluginConfig): Col
             }
 
             await initProviderPayment(req.payload, data)
+          } else if (operation === 'update') {
+            // Auto-increment version for updates (if not already set by optimistic locking)
+            if (!data.version) {
+              const currentDoc = await req.payload.findByID({
+                collection: extractSlug(pluginConfig.collections?.payments || defaults.paymentsCollection),
+                id: req.id as any
+              })
+              data.version = (currentDoc.version || 1) + 1
+            }
           }
         },
       ] satisfies CollectionBeforeChangeHook<Payment>[],

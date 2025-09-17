@@ -68,7 +68,7 @@ export async function updatePaymentStatus(
     const result = await payload.updateMany({
       collection: paymentsCollection,
       where: {
-        id: { equals: paymentId },
+        id: { equals: paymentId as any }, // Cast to avoid type mismatch
         version: { equals: currentPayment.version || 1 }
       },
       data: {

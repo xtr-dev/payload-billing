@@ -10,6 +10,7 @@ import {
   updateInvoiceOnPaymentSuccess,
   handleWebhookError
 } from './utils'
+import { formatAmountForProvider, isValidAmount, isValidCurrencyCode } from './currency'
 
 const symbol = Symbol('mollie')
 export type MollieProviderConfig = Parameters<typeof createMollieClient>[0]
@@ -105,20 +106,48 @@ export const mollieProvider = (mollieConfig: MollieProviderConfig & {
       singleton.set(payload, mollieClient)
     },
     initPayment: async (payload, payment) => {
+      // Validate required fields
       if (!payment.amount) {
         throw new Error('Amount is required')
       }
       if (!payment.currency) {
         throw new Error('Currency is required')
       }
+
+      // Validate amount
+      if (!isValidAmount(payment.amount)) {
+        throw new Error('Invalid amount: must be a positive integer within reasonable limits')
+      }
+
+      // Validate currency code
+      if (!isValidCurrencyCode(payment.currency)) {
+        throw new Error('Invalid currency: must be a 3-letter ISO code')
+      }
+
+      // Validate URLs in production
+      const isProduction = process.env.NODE_ENV === 'production'
+      const redirectUrl = mollieConfig.redirectUrl ||
+        (!isProduction ? 'https://localhost:3000/payment/success' : undefined)
+      const webhookUrl = mollieConfig.webhookUrl ||
+        `${process.env.PAYLOAD_PUBLIC_SERVER_URL || (!isProduction ? 'https://localhost:3000' : '')}/api/payload-billing/mollie/webhook`
+
+      if (isProduction) {
+        if (!redirectUrl || redirectUrl.includes('localhost')) {
+          throw new Error('Valid redirect URL is required for production')
+        }
+        if (!webhookUrl || webhookUrl.includes('localhost')) {
+          throw new Error('Valid webhook URL is required for production')
+        }
+      }
+
       const molliePayment = await singleton.get(payload).payments.create({
         amount: {
-          value: (payment.amount / 100).toFixed(2),
-          currency: payment.currency
+          value: formatAmountForProvider(payment.amount, payment.currency),
+          currency: payment.currency.toUpperCase()
         },
         description: payment.description || '',
-        redirectUrl: mollieConfig.redirectUrl || 'https://localhost:3000/payment/success',
-        webhookUrl: mollieConfig.webhookUrl || `${process.env.PAYLOAD_PUBLIC_SERVER_URL || 'https://localhost:3000'}/api/payload-billing/mollie/webhook`,
+        redirectUrl,
+        webhookUrl,
       });
       payment.providerId = molliePayment.id
       payment.providerData = molliePayment.toPlainObject()

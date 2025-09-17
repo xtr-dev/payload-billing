@@ -6,13 +6,18 @@ import { extractSlug } from '@/plugin/utils'
 
 /**
  * Common webhook response utilities
+ * Note: Always return 200 for webhook acknowledgment to prevent information disclosure
  */
 export const webhookResponses = {
   success: () => Response.json({ received: true }, { status: 200 }),
-  error: (message: string, status = 400) => Response.json({ error: message }, { status }),
-  missingBody: () => Response.json({ error: 'Missing request body' }, { status: 400 }),
-  paymentNotFound: () => Response.json({ error: 'Payment not found' }, { status: 404 }),
-  invalidPayload: () => Response.json({ error: 'Invalid webhook payload' }, { status: 400 }),
+  error: (message: string, status = 400) => {
+    // Log error internally but don't expose details
+    console.error('[Webhook] Error:', message)
+    return Response.json({ error: 'Invalid request' }, { status })
+  },
+  missingBody: () => Response.json({ received: true }, { status: 200 }),
+  paymentNotFound: () => Response.json({ received: true }, { status: 200 }),
+  invalidPayload: () => Response.json({ received: true }, { status: 200 }),
 }
 
 /**
@@ -95,12 +100,14 @@ export function handleWebhookError(
   const message = error instanceof Error ? error.message : 'Unknown error'
   const fullContext = context ? `[${provider} Webhook - ${context}]` : `[${provider} Webhook]`
 
+  // Log detailed error internally for debugging
   console.error(`${fullContext} Error:`, error)
 
+  // Return generic response to avoid information disclosure
   return Response.json({
-    error: 'Webhook processing failed',
-    details: message
-  }, { status: 500 })
+    received: false,
+    error: 'Processing error'
+  }, { status: 200 })
 }
 
 /**

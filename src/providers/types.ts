@@ -10,3 +10,12 @@ export type PaymentProvider = {
   onInit?: (payload: Payload) => Promise<void> | void
   initPayment: InitPayment
 }
+
+/**
+ * Type-safe provider data wrapper
+ */
+export type ProviderData<T = unknown> = {
+  raw: T
+  timestamp: string
+  provider: string
+}

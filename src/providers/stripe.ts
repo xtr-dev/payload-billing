@@ -1,5 +1,5 @@
 import type { Payment } from '@/plugin/types/payments'
-import type { PaymentProvider } from '@/plugin/types'
+import type { PaymentProvider, ProviderData } from '@/plugin/types'
 import type { Payload } from 'payload'
 import { createSingleton } from '@/plugin/singleton'
 import type Stripe from 'stripe'
@@ -11,6 +11,7 @@ import {
   handleWebhookError,
   logWebhookEvent
 } from './utils'
+import { isValidAmount, isValidCurrencyCode } from './currency'
 
 const symbol = Symbol('stripe')
 
@@ -21,6 +22,9 @@ export interface StripeProviderConfig {
   returnUrl?: string
   webhookUrl?: string
 }
+
+// Default API version for consistency
+const DEFAULT_API_VERSION: Stripe.StripeConfig['apiVersion'] = '2025-08-27.basil'
 
 export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
   const singleton = createSingleton<Stripe>(symbol)
@@ -46,8 +50,12 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
               const body = await req.text()
               const signature = req.headers.get('stripe-signature')
 
-              if (!signature || !stripeConfig.webhookSecret) {
-                return webhookResponses.error('Missing webhook signature or secret')
+              if (!signature) {
+                return webhookResponses.error('Missing webhook signature', 400)
+              }
+
+              if (!stripeConfig.webhookSecret) {
+                throw new Error('Stripe webhook secret is required for webhook processing')
               }
 
               // Verify webhook signature and construct event
@@ -91,11 +99,16 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
                   }
 
                   // Update the payment status and provider data
+                  const providerData: ProviderData<Stripe.PaymentIntent> = {
+                    raw: paymentIntent,
+                    timestamp: new Date().toISOString(),
+                    provider: 'stripe'
+                  }
                   await updatePaymentStatus(
                     payload,
                     payment.id,
                     status,
-                    paymentIntent as any,
+                    providerData,
                     pluginConfig
                   )
 
@@ -130,11 +143,16 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
                     // Determine if fully or partially refunded
                     const isFullyRefunded = charge.amount_refunded === charge.amount
 
+                    const providerData: ProviderData<Stripe.Charge> = {
+                      raw: charge,
+                      timestamp: new Date().toISOString(),
+                      provider: 'stripe'
+                    }
                     await updatePaymentStatus(
                       payload,
                       payment.id,
                       isFullyRefunded ? 'refunded' : 'partially_refunded',
-                      charge as any,
+                      providerData,
                       pluginConfig
                     )
                   }
@@ -157,11 +175,12 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
     onInit: async (payload: Payload) => {
       const { default: Stripe } = await import('stripe')
       const stripe = new Stripe(stripeConfig.secretKey, {
-        apiVersion: stripeConfig.apiVersion,
+        apiVersion: stripeConfig.apiVersion || DEFAULT_API_VERSION,
       })
       singleton.set(payload, stripe)
     },
     initPayment: async (payload, payment) => {
+      // Validate required fields
       if (!payment.amount) {
         throw new Error('Amount is required')
       }
@@ -169,11 +188,26 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
         throw new Error('Currency is required')
       }
 
+      // Validate amount
+      if (!isValidAmount(payment.amount)) {
+        throw new Error('Invalid amount: must be a positive integer within reasonable limits')
+      }
+
+      // Validate currency code
+      if (!isValidCurrencyCode(payment.currency)) {
+        throw new Error('Invalid currency: must be a 3-letter ISO code')
+      }
+
+      // Validate description length if provided
+      if (payment.description && payment.description.length > 1000) {
+        throw new Error('Description must be 1000 characters or less')
+      }
+
       const stripe = singleton.get(payload)
 
       // Create a payment intent
       const paymentIntent = await stripe.paymentIntents.create({
-        amount: payment.amount,
+        amount: payment.amount, // Stripe handles currency conversion internally
         currency: payment.currency.toLowerCase(),
         description: payment.description || undefined,
         metadata: {
@@ -190,10 +224,12 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
       })
 
       payment.providerId = paymentIntent.id
-      payment.providerData = {
-        ...paymentIntent,
-        clientSecret: paymentIntent.client_secret,
+      const providerData: ProviderData<Stripe.PaymentIntent> = {
+        raw: { ...paymentIntent, client_secret: paymentIntent.client_secret },
+        timestamp: new Date().toISOString(),
+        provider: 'stripe'
       }
+      payment.providerData = providerData
 
       return payment
     },

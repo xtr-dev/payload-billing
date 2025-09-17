@@ -4,6 +4,7 @@ import type { BillingPluginConfig } from '@/plugin/config'
 import type { ProviderData } from './types'
 import { defaults } from '@/plugin/config'
 import { extractSlug, toPayloadId } from '@/plugin/utils'
+import { markRequestAsWebhook } from './context'
 
 /**
  * Common webhook response utilities
@@ -44,6 +45,29 @@ export async function findPaymentByProviderId(
 }
 
 /**
+ * Update payment status from webhook with proper context tracking
+ */
+export async function updatePaymentFromWebhook(
+  payload: Payload,
+  paymentId: string | number,
+  status: Payment['status'],
+  providerData: ProviderData<any>,
+  pluginConfig: BillingPluginConfig,
+  provider: string,
+  eventType?: string
+): Promise<boolean> {
+  // Mark the request context as webhook before updating with metadata
+  markRequestAsWebhook((payload as any).req, provider, 'payment_status_update', {
+    paymentId: paymentId.toString(),
+    newStatus: status,
+    eventType,
+    timestamp: new Date().toISOString()
+  })
+
+  return updatePaymentStatus(payload, paymentId, status, providerData, pluginConfig)
+}
+
+/**
  * Update payment status and provider data with atomic optimistic locking
  */
 export async function updatePaymentStatus(
@@ -65,13 +89,10 @@ export async function updatePaymentStatus(
   const nextVersion = (currentPayment.version || 1) + 1
 
   try {
-    // Use updateMany for atomic version-based optimistic locking
-    const result = await payload.updateMany({
+    // Use update with version check for atomic optimistic locking
+    const updatedPayment = await payload.update({
       collection: paymentsCollection,
-      where: {
-        id: { equals: toPayloadId(paymentId) },
-        version: { equals: currentPayment.version || 1 }
-      },
+      id: toPayloadId(paymentId),
       data: {
         status,
         version: nextVersion,
@@ -80,17 +101,23 @@ export async function updatePaymentStatus(
           webhookProcessedAt: now,
           previousStatus: currentPayment.status
         }
+      },
+      where: {
+        version: { equals: currentPayment.version || 1 }
       }
     })
 
-    // Check if the update was successful (affected documents > 0)
-    if (result.docs && result.docs.length > 0) {
-      return true
-    } else {
+    // If we get here without error, the update succeeded
+    return true
+  } catch (error: any) {
+    // Check if this is a version mismatch (no documents found to update)
+    if (error?.message?.includes('No documents found') ||
+        error?.name === 'ValidationError' ||
+        error?.status === 404) {
       console.warn(`[Payment Update] Optimistic lock failed for payment ${paymentId} - version mismatch (expected: ${currentPayment.version}, may have been updated by another process)`)
       return false
     }
-  } catch (error) {
+
     console.error(`[Payment Update] Failed to update payment ${paymentId}:`, error)
     return false
   }

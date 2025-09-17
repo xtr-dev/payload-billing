@@ -6,7 +6,7 @@ import type { createMollieClient, MollieClient } from '@mollie/api-client'
 import {
   webhookResponses,
   findPaymentByProviderId,
-  updatePaymentStatus,
+  updatePaymentFromWebhook,
   updateInvoiceOnPaymentSuccess,
   handleWebhookError,
   validateProductionUrl
@@ -83,13 +83,15 @@ export const mollieProvider = (mollieConfig: MollieProviderConfig & {
               // Map Mollie status to our status using proper type-safe mapping
               const status = mapMollieStatusToPaymentStatus(molliePayment.status)
 
-              // Update the payment status and provider data
-              const updateSuccess = await updatePaymentStatus(
+              // Update the payment status and provider data with webhook context
+              const updateSuccess = await updatePaymentFromWebhook(
                 payload,
                 payment.id,
                 status,
                 molliePayment.toPlainObject(),
-                pluginConfig
+                pluginConfig,
+                'mollie',
+                `payment.${molliePayment.status}`
               )
 
               // If payment is successful and update succeeded, update the invoice

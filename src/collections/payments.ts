@@ -2,6 +2,7 @@ import type { AccessArgs, CollectionBeforeChangeHook, CollectionConfig, Collecti
 import type { BillingPluginConfig} from '@/plugin/config';
 import { defaults } from '@/plugin/config'
 import { extractSlug, toPayloadId } from '@/plugin/utils'
+import { isWebhookRequest } from '@/providers/context'
 import { Payment } from '@/plugin/types/payments'
 import { initProviderPayment } from '@/collections/hooks'
 
@@ -114,6 +115,7 @@ export function createPaymentsCollection(pluginConfig: BillingPluginConfig): Col
       },
       defaultValue: 1,
       required: true,
+      index: true, // Index for faster optimistic lock queries
     },
   ]
   if (overrides?.fields) {
@@ -136,7 +138,7 @@ export function createPaymentsCollection(pluginConfig: BillingPluginConfig): Col
     fields,
     hooks: {
       beforeChange: [
-        async ({ data, operation, req }) => {
+        async ({ data, operation, req, originalDoc }) => {
           if (operation === 'create') {
             // Initialize version for new payments
             data.version = 1
@@ -158,25 +160,11 @@ export function createPaymentsCollection(pluginConfig: BillingPluginConfig): Col
           } else if (operation === 'update') {
             // Handle version incrementing for manual updates
             // Webhook updates from providers should already set the version via optimistic locking
-            if (!data.version && req.id) {
-              // Check if this is a webhook update by looking for webhook-specific fields
-              const isWebhookUpdate = data.providerData &&
-                (data.providerData.webhookProcessedAt ||
-                 (typeof data.providerData === 'object' && 'webhookProcessedAt' in data.providerData))
-
-              if (!isWebhookUpdate) {
+            if (!data.version && originalDoc?.id) {
+              // Check if this is a webhook update using explicit context tracking
+              if (!isWebhookRequest(req)) {
                 // This is a manual admin update, safely increment version
-                try {
-                  const currentDoc = await req.payload.findByID({
-                    collection: extractSlug(pluginConfig.collections?.payments || defaults.paymentsCollection),
-                    id: toPayloadId(req.id)
-                  })
-                  data.version = (currentDoc?.version || 1) + 1
-                } catch (error) {
-                  // If we can't find the current document, start with version 1
-                  console.warn(`[Payment Hook] Could not fetch current version for payment ${req.id}, defaulting to version 1:`, error)
-                  data.version = 1
-                }
+                data.version = (originalDoc.version || 1) + 1
               }
               // If it's a webhook update without a version, let it proceed (optimistic locking already handled it)
             }

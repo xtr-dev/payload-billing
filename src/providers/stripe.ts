@@ -6,7 +6,7 @@ import type Stripe from 'stripe'
 import {
   webhookResponses,
   findPaymentByProviderId,
-  updatePaymentStatus,
+  updatePaymentFromWebhook,
   updateInvoiceOnPaymentSuccess,
   handleWebhookError,
   logWebhookEvent
@@ -74,7 +74,7 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
               // Verify webhook signature and construct event
               let event: Stripe.Event
               try {
-                event = stripe.webhooks.constructEvent(body, signature, stripeConfig.webhookSecret)
+                event = stripe.webhooks.constructEvent(body, signature, stripeConfig.webhookSecret!)
               } catch (err) {
                 return handleWebhookError('Stripe', err, 'Signature verification failed')
               }
@@ -117,12 +117,14 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
                     timestamp: new Date().toISOString(),
                     provider: 'stripe'
                   }
-                  const updateSuccess = await updatePaymentStatus(
+                  const updateSuccess = await updatePaymentFromWebhook(
                     payload,
                     payment.id,
                     status,
                     providerData,
-                    pluginConfig
+                    pluginConfig,
+                    'stripe',
+                    event.type
                   )
 
                   // If payment is successful and update succeeded, update the invoice
@@ -163,12 +165,14 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
                       timestamp: new Date().toISOString(),
                       provider: 'stripe'
                     }
-                    const updateSuccess = await updatePaymentStatus(
+                    const updateSuccess = await updatePaymentFromWebhook(
                       payload,
                       payment.id,
                       isFullyRefunded ? 'refunded' : 'partially_refunded',
                       providerData,
-                      pluginConfig
+                      pluginConfig,
+                      'stripe',
+                      event.type
                     )
 
                     if (!updateSuccess) {

@@ -12,11 +12,8 @@ on:
 
 jobs:
   claude-review:
-    # Permission filter: Only allow specific users or admins to trigger reviews
-    if: |
-      contains(fromJSON('["bastiaan", "xtr-dev-team"]'), github.event.pull_request.user.login) ||
-      github.event.pull_request.author_association == 'OWNER' ||
-      github.event.pull_request.author_association == 'MEMBER'
+    # Permission filter: Only allow bvdaakster to trigger reviews
+    if: github.event.pull_request.user.login == 'bvdaakster'
 
     # Alternative filters (comment out the above and use one of these):
     # Only for external contributors:

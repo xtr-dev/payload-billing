@@ -1,16 +1,15 @@
 {
   "privilegedUsers": [
-    "bastiaan",
-    "xtr-dev-team"
+    "bvdaakster"
   ],
   "permissions": {
     "issueImplementation": {
-      "strategy": "adminOrPrivileged",
-      "description": "Allow admins and privileged users to request Claude implementations"
+      "strategy": "privilegedUsers",
+      "description": "Only bvdaakster can request Claude implementations"
     },
     "codeReview": {
       "strategy": "privilegedUsers",
-      "description": "Only run Claude reviews for privileged users"
+      "description": "Only bvdaakster can trigger Claude reviews"
     }
   },
   "strategies": {

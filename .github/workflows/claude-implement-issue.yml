@@ -30,9 +30,7 @@ jobs:
 
             // Method 1: Specific privileged users list
             const privilegedUsers = [
-              'bastiaan',           // Repository owner
-              'xtr-dev-team',       // Core team members
-              // Add more usernames here
+              'bvdaakster'          // Only this user can use Claude
             ];
 
             // Method 2: Check repository permission level
@@ -74,7 +72,7 @@ jobs:
             const allowedByOrgAndWrite = isOrgMember && hasWriteAccess;
 
             // Set your chosen strategy here:
-            const isAllowed = allowedByAdminOrPrivileged; // Change this line to use your preferred strategy
+            const isAllowed = isPrivilegedUser; // Only bvdaakster can use Claude
 
             if (!isAllowed) {
               const errorMessage = `❌ **Access Denied**: Claude implementation is restricted to privileged users only.

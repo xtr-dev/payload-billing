@@ -77,7 +77,24 @@ export default buildConfig({
 ### With Customer Management
 
 ```typescript
-import { billingPlugin, defaultCustomerInfoExtractor } from '@xtr-dev/payload-billing'
+import { billingPlugin, CustomerInfoExtractor } from '@xtr-dev/payload-billing'
+
+// Define how to extract customer info from your customer collection
+const customerExtractor: CustomerInfoExtractor = (customer) => ({
+  name: customer.name,
+  email: customer.email,
+  phone: customer.phone,
+  company: customer.company,
+  taxId: customer.taxId,
+  billingAddress: {
+    line1: customer.address.line1,
+    line2: customer.address.line2,
+    city: customer.address.city,
+    state: customer.address.state,
+    postalCode: customer.address.postalCode,
+    country: customer.address.country,
+  }
+})
 
 billingPlugin({
   // ... providers
@@ -87,7 +104,7 @@ billingPlugin({
     refunds: 'refunds',
   },
   customerRelationSlug: 'customers', // Enable customer relationships
-  customerInfoExtractor: defaultCustomerInfoExtractor, // Auto-sync customer data
+  customerInfoExtractor: customerExtractor, // Auto-sync customer data
 })
 ```
 

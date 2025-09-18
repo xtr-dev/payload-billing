@@ -26,74 +26,15 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const username = context.actor;
-
-            // Method 1: Specific privileged users list
-            const privilegedUsers = [
-              'bvdaakster'          // Only this user can use Claude
-            ];
-
-            // Method 2: Check repository permission level
-            const { data: collaborator } = await github.rest.repos.getCollaboratorPermissionLevel({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              username: username
-            });
-
-            // Method 3: Check organization membership (if applicable)
-            let isOrgMember = false;
-            try {
-              await github.rest.orgs.getMembershipForUser({
-                org: context.repo.owner,
-                username: username
-              });
-              isOrgMember = true;
-            } catch (error) {
-              // User is not an org member or org doesn't exist
-              isOrgMember = false;
-            }
-
-            // Combined permission check
-            const isPrivilegedUser = privilegedUsers.includes(username);
-            const hasAdminAccess = collaborator.permission === 'admin';
-            const hasWriteAccess = ['admin', 'write'].includes(collaborator.permission);
-
-            // Choose your permission strategy:
-            // Option A: Only specific users
-            const allowedByUserList = isPrivilegedUser;
-
-            // Option B: Only admins
-            const allowedByAdminAccess = hasAdminAccess;
-
-            // Option C: Admin + specific users
-            const allowedByAdminOrPrivileged = hasAdminAccess || isPrivilegedUser;
-
-            // Option D: Organization members with write access
-            const allowedByOrgAndWrite = isOrgMember && hasWriteAccess;
-
-            // Set your chosen strategy here:
-            const isAllowed = isPrivilegedUser; // Only bvdaakster can use Claude
-
-            if (!isAllowed) {
-              const errorMessage = `❌ **Access Denied**: Claude implementation is restricted to privileged users only.
-
-              **Your access level**: ${collaborator.permission}
-              **Privileged user**: ${isPrivilegedUser ? 'Yes' : 'No'}
-              **Organization member**: ${isOrgMember ? 'Yes' : 'No'}
-
-              Contact a repository administrator for access.`;
-
+            if (context.actor !== 'bvdaakster') {
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: context.issue.number,
-                body: errorMessage
+                body: '❌ **Access Denied**: Only bvdaakster can use Claude implementation.'
               });
-              throw new Error('Insufficient permissions for Claude implementation');
+              throw new Error('Unauthorized user');
             }
-
-            // Log successful access
-            console.log(`✅ Access granted to ${username} (${collaborator.permission})`);
 
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -110,18 +51,15 @@ jobs:
       - name: Install pnpm
         run: npm install -g pnpm@10.12.4
 
-      - name: Create Claude implementation branch
+      - name: Create branch
         id: create-branch
         run: |
-          # Create a unique branch name based on issue number and timestamp
           BRANCH_NAME="claude/issue-${{ github.event.issue.number }}-$(date +%Y%m%d-%H%M%S)"
           echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
-
-          # Create and switch to the new branch
           git checkout -b "$BRANCH_NAME"
           git push origin "$BRANCH_NAME"
 
-      - name: Add comment with implementation start
+      - name: Notify start
         uses: actions/github-script@v7
         with:
           script: |
@@ -129,26 +67,13 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
-              body: `🤖 **Claude Implementation Started**
-
-              I'm now working on implementing this issue. Here's what I'm doing:
-
-              📋 **Issue**: #${{ github.event.issue.number }} - ${{ github.event.issue.title }}
-              🌿 **Branch**: \`${{ steps.create-branch.outputs.branch_name }}\`
-              ⏱️ **Started**: ${new Date().toISOString()}
-
-              I'll analyze the requirements and create a pull request with the implementation. This may take a few minutes...
-
-              You can track the progress in the [Actions tab](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}).`
+              body: `🤖 **Claude Implementation Started**\n\n📋 **Issue**: #${{ github.event.issue.number }}\n🌿 **Branch**: \`${{ steps.create-branch.outputs.branch_name }}\`\n\nImplementing your request...`
             });
 
       - name: Implement with Claude
-        id: implementation
         uses: anthropics/claude-code-action@beta
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-
-          # Direct prompt with issue context
           direct_prompt: |
             Please implement the feature or fix described in this GitHub issue:
 
@@ -157,232 +82,93 @@ jobs:
             **Issue Description**:
             ${{ github.event.issue.body }}
 
-            **Implementation Request**:
+            **User Request**:
             ${{ github.event.comment.body }}
 
             **Instructions**:
             1. Analyze the issue requirements carefully
-            2. Follow the existing code patterns and conventions in this PayloadCMS plugin
-            3. Add appropriate tests if needed (check for existing test patterns)
-            4. Update documentation if necessary
-            5. Ensure the implementation is complete and working
-            6. Use TypeScript with proper typing
-            7. Follow the project's ESM module structure with .js extensions
+            2. Follow existing code patterns and conventions
+            3. Use TypeScript with proper typing
+            4. Follow ESM module structure with .js extensions
+            5. Add tests if needed
+            6. Update documentation if necessary
 
-            The implementation should be production-ready and follow best practices for a PayloadCMS plugin.
-
-            **Repository Context**: This is the @xtr-dev/payload-billing plugin for PayloadCMS.
-            **Branch**: ${{ steps.create-branch.outputs.branch_name }}
-
-          # Allow Claude to run necessary commands
+            This is the @xtr-dev/payload-billing plugin for PayloadCMS.
           allowed_tools: "Bash(pnpm build),Bash(pnpm typecheck),Bash(pnpm lint),Bash(npm run test)"
 
       - name: Check for changes
         id: changes
         run: |
-          # Check both staged and unstaged changes
           if git diff --quiet && git diff --cached --quiet; then
             echo "has_changes=false" >> $GITHUB_OUTPUT
-            echo "No changes were made during implementation"
           else
             echo "has_changes=true" >> $GITHUB_OUTPUT
-            echo "Changes detected, preparing commit"
-
-            # Show what changed for debugging
-            echo "=== Changed files ==="
-            git diff --name-only
-            git diff --cached --name-only
-            echo "===================="
           fi
 
-      - name: Commit changes
+      - name: Commit and push
         if: steps.changes.outputs.has_changes == 'true'
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "Claude Implementation Bot"
-
           git add .
-          git commit -m "$(cat <<'EOF'
-          feat: implement issue #${{ github.event.issue.number }} - ${{ github.event.issue.title }}
+          git commit -m "feat: implement issue #${{ github.event.issue.number }}
 
-          Implemented via Claude automation based on issue requirements.
+          Implemented via Claude automation.
 
           Issue: #${{ github.event.issue.number }}
           Requested by: @${{ github.event.comment.user.login }}
 
-          🤖 Generated with Claude Automation
+          🤖 Generated with Claude Code
 
-          Co-Authored-By: Claude <noreply@anthropic.com>
-          EOF
-          )"
-
+          Co-Authored-By: Claude <noreply@anthropic.com>"
           git push origin ${{ steps.create-branch.outputs.branch_name }}
 
-      - name: Create Pull Request
+      - name: Create PR
         if: steps.changes.outputs.has_changes == 'true'
         uses: actions/github-script@v7
         id: create-pr
         with:
           script: |
-            try {
-              // Get the list of changed files for the PR description
-              const { data: comparison } = await github.rest.repos.compareCommits({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                base: 'dev',
-                head: '${{ steps.create-branch.outputs.branch_name }}'
-              });
+            const { data: pr } = await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🤖 Implement: ${{ github.event.issue.title }}`,
+              head: '${{ steps.create-branch.outputs.branch_name }}',
+              base: 'dev',
+              body: `## 🤖 Claude Implementation
 
-              const changedFiles = comparison.files || [];
-              const filesList = changedFiles.map(file => `- \`${file.filename}\``).join('\n');
+            This PR implements issue #${{ github.event.issue.number }}.
 
-              const { data: pr } = await github.rest.pulls.create({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                title: `🤖 Implement: ${{ github.event.issue.title }}`,
-                head: '${{ steps.create-branch.outputs.branch_name }}',
-                base: 'dev',
-                body: `## 🤖 Claude Implementation
+            **Issue**: #${{ github.event.issue.number }}
+            **Requested by**: @${{ github.event.comment.user.login }}
+            **Branch**: \`${{ steps.create-branch.outputs.branch_name }}\`
 
-This PR was automatically created by Claude to implement the feature/fix requested in issue #${{ github.event.issue.number }}.
+            ### Review Checklist
+            - [ ] Code follows project conventions
+            - [ ] Build passes
+            - [ ] Tests pass
+            - [ ] Implementation matches requirements
 
-### 📋 Issue Details
-- **Issue**: #${{ github.event.issue.number }}
-- **Title**: ${{ github.event.issue.title }}
-- **Requested by**: @${{ github.event.comment.user.login }}
-- **Branch**: \`${{ steps.create-branch.outputs.branch_name }}\`
-- **Implementation Date**: ${new Date().toISOString()}
+            Closes #${{ github.event.issue.number }}
 
-### 📁 Files Changed
-${filesList || 'No files were changed'}
+            🤖 Generated with Claude Code`
+            });
+            return pr.number;
 
-### 🔍 Implementation
-Claude analyzed the issue requirements and implemented the requested changes following the project's coding standards and best practices.
-
-### ✅ Review Checklist
-- [ ] Code follows project conventions
-- [ ] Tests are included (if applicable)
-- [ ] Documentation is updated (if needed)
-- [ ] Implementation matches issue requirements
-- [ ] No breaking changes (unless intended)
-- [ ] Build passes (\`pnpm build\`)
-- [ ] Type checking passes (\`pnpm typecheck\`)
-- [ ] Linting passes (\`pnpm lint\`)
-
-### 🔗 Related
-Closes #${{ github.event.issue.number }}
-
-### 🚀 Deployment
-After merging this PR:
-1. Version will be automatically bumped
-2. Package will be built and published
-3. Changes will be available in the next release
-
----
-
-**Note**: This implementation was generated automatically by Claude. Please review carefully before merging.
-
-🤖 *Generated with [Claude Code](https://claude.ai/code)*
-🔧 *Triggered by @${{ github.event.comment.user.login }}*`
-              });
-
-              console.log(`✅ PR created successfully: #${pr.number}`);
-              return pr.number;
-            } catch (error) {
-              console.error('Failed to create PR:', error);
-              throw error;
-            }
-
-      - name: Fallback PR Creation
-        if: steps.changes.outputs.has_changes == 'true' && failure() && steps.create-pr.conclusion == 'failure'
-        uses: actions/github-script@v7
-        id: fallback-pr
-        with:
-          script: |
-            console.log('Primary PR creation failed, attempting fallback...');
-            try {
-              const { data: pr } = await github.rest.pulls.create({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                title: `🤖 Implement: ${{ github.event.issue.title }}`,
-                head: '${{ steps.create-branch.outputs.branch_name }}',
-                base: 'dev',
-                body: `## 🤖 Claude Implementation (Fallback)
-
-This PR was automatically created by Claude to implement issue #${{ github.event.issue.number }}.
-
-**Issue**: #${{ github.event.issue.number }} - ${{ github.event.issue.title }}
-**Requested by**: @${{ github.event.comment.user.login }}
-**Branch**: \`${{ steps.create-branch.outputs.branch_name }}\`
-
-⚠️ *This PR was created via fallback method due to an error in the primary creation process.*
-
-### 🔍 Implementation
-Claude has implemented the requested changes. Please review the code changes in this PR.
-
-### ✅ Review Required
-- [ ] Verify implementation meets issue requirements
-- [ ] Check code quality and conventions
-- [ ] Test the changes
-- [ ] Ensure no breaking changes
-
-Closes #${{ github.event.issue.number }}
-
-🤖 *Generated with Claude Automation*`
-              });
-
-              console.log(`✅ Fallback PR created successfully: #${pr.number}`);
-              return pr.number;
-            } catch (error) {
-              console.error('Fallback PR creation also failed:', error);
-              return null;
-            }
-
-      - name: Update issue with success
+      - name: Notify success
         if: steps.changes.outputs.has_changes == 'true'
         uses: actions/github-script@v7
         with:
           script: |
-            const prNumber = '${{ steps.create-pr.outputs.result }}' || '${{ steps.fallback-pr.outputs.result }}';
-            const prLink = prNumber ? `#${prNumber}` : 'Could not determine PR number';
-
+            const prNumber = '${{ steps.create-pr.outputs.result }}';
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
-              body: `✅ **Implementation Complete!**
-
-I've successfully implemented the requested changes and created a pull request:
-
-🎯 **Pull Request**: ${prLink}
-🌿 **Branch**: \`${{ steps.create-branch.outputs.branch_name }}\`
-⏱️ **Completed**: ${new Date().toISOString()}
-🔧 **Triggered by**: @${{ github.event.comment.user.login }}
-
-## 📋 What Was Done
-- ✅ Analyzed issue requirements
-- ✅ Implemented requested features/fixes
-- ✅ Followed project coding standards
-- ✅ Created pull request for review
-- ✅ Applied proper branch naming (\`claude/issue-${{ github.event.issue.number }}-*\`)
-
-## 🔍 Next Steps
-1. **Review** the implementation in the pull request
-2. **Test** the changes locally if needed
-3. **Check** that build/typecheck/lint passes
-4. **Merge** the PR if everything looks good
-
-## 🛠️ Quality Checks
-The implementation includes:
-- TypeScript with proper typing
-- ESM module structure with .js extensions
-- Following existing code patterns
-- Appropriate documentation updates
-
-**Ready for review!** 🚀`
+              body: `✅ **Implementation Complete!**\n\n🎯 **Pull Request**: #${prNumber}\n🌿 **Branch**: \`${{ steps.create-branch.outputs.branch_name }}\`\n\nReady for review! 🚀`
             });
 
-      - name: Update issue with no changes
+      - name: Handle no changes
         if: steps.changes.outputs.has_changes == 'false'
         uses: actions/github-script@v7
         with:
@@ -391,26 +177,14 @@ The implementation includes:
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
-              body: `⚠️ **Implementation Completed - No Changes**
-
-              I analyzed the issue but determined that no code changes are needed. This might be because:
-
-              - The feature is already implemented
-              - The issue requires clarification
-              - The request is not actionable as a code change
-              - Additional information is needed
-
-              🌿 **Branch**: \`${{ steps.create-branch.outputs.branch_name }}\` (will be cleaned up)
-
-              Please review the issue requirements and provide additional details if needed.`
+              body: `ℹ️ **No Changes Needed**\n\nI analyzed the issue but no code changes are required.`
             });
 
-      - name: Clean up branch if no changes
+      - name: Clean up on no changes
         if: steps.changes.outputs.has_changes == 'false'
-        run: |
-          git push origin --delete ${{ steps.create-branch.outputs.branch_name }} || true
+        run: git push origin --delete ${{ steps.create-branch.outputs.branch_name }} || true
 
-      - name: Handle implementation failure
+      - name: Handle failure
         if: failure()
         uses: actions/github-script@v7
         with:
@@ -419,14 +193,5 @@ The implementation includes:
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
-              body: `❌ **Implementation Failed**
-
-              I encountered an error while trying to implement this issue. Please check the [workflow logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.
-
-              Common reasons for failure:
-              - Issue requirements are unclear or incomplete
-              - Technical constraints prevent implementation
-              - Repository permissions or configuration issues
-
-              You can try again by commenting \`@claude implement\` or provide more specific requirements.`
+              body: `❌ **Implementation Failed**\n\nCheck the [workflow logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.`
             });

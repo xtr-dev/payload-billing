@@ -12,7 +12,6 @@ permissions:
 
 jobs:
   claude-pr-assist:
-    # Only run on PR comments (not issue comments)
     if: |
       github.event.issue.pull_request &&
       github.event.issue_comment.issue.state == 'open' &&
@@ -31,33 +30,15 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const username = context.actor;
-
-            // Only allow bvdaakster to use Claude PR assistance
-            const privilegedUsers = [
-              'bvdaakster'          // Only this user can use Claude
-            ];
-
-            const isPrivilegedUser = privilegedUsers.includes(username);
-
-            if (!isPrivilegedUser) {
-              const errorMessage = `❌ **Access Denied**: Claude PR assistance is restricted to privileged users only.
-
-              **User**: ${username}
-              **Privileged user**: No
-
-              Contact a repository administrator for access.`;
-
+            if (context.actor !== 'bvdaakster') {
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: context.issue.number,
-                body: errorMessage
+                body: '❌ **Access Denied**: Only bvdaakster can use Claude PR assistance.'
               });
-              throw new Error('Insufficient permissions for Claude PR assistance');
+              throw new Error('Unauthorized user');
             }
-
-            console.log(`✅ Access granted to ${username}`);
 
       - name: Get PR details
         id: pr-details
@@ -69,14 +50,10 @@ jobs:
               repo: context.repo.repo,
               pull_number: context.issue.number
             });
-
             return {
               head_ref: pr.head.ref,
-              head_sha: pr.head.sha,
-              base_ref: pr.base.ref,
               title: pr.title,
-              body: pr.body,
-              user: pr.user.login
+              body: pr.body
             };
 
       - name: Checkout PR branch
@@ -95,7 +72,7 @@ jobs:
       - name: Install pnpm
         run: npm install -g pnpm@10.12.4
 
-      - name: Add comment with start notification
+      - name: Notify start
         uses: actions/github-script@v7
         with:
           script: |
@@ -103,32 +80,15 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
-              body: `🤖 **Claude PR Assistant Started**
-
-              I'm now working on your request in this pull request:
-
-              📋 **PR**: #${{ github.event.issue.number }} - ${{ fromJson(steps.pr-details.outputs.result).title }}
-              🌿 **Branch**: \`${{ fromJson(steps.pr-details.outputs.result).head_ref }}\`
-              💬 **Request**:
-              \`\`\`
-              ${{ github.event.comment.body }}
-              \`\`\`
-              ⏱️ **Started**: ${new Date().toISOString()}
-
-              I'll analyze the current PR and implement your requested changes. This may take a few minutes...
-
-              You can track the progress in the [Actions tab](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}).`
+              body: `🤖 **Claude PR Assistant Started**\n\n💬 **Request**: ${{ github.event.comment.body }}\n🌿 **Branch**: \`${{ fromJson(steps.pr-details.outputs.result).head_ref }}\`\n\nWorking on your request...`
             });
 
       - name: Assist with Claude
-        id: assistance
         uses: anthropics/claude-code-action@beta
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-
-          # Direct prompt with PR context
           direct_prompt: |
-            You are assisting with a GitHub Pull Request. Please help with the following request:
+            You are assisting with a GitHub Pull Request. Please help with this request:
 
             **Pull Request #${{ github.event.issue.number }}**: ${{ fromJson(steps.pr-details.outputs.result).title }}
 
@@ -138,78 +98,44 @@ jobs:
             **User Request**:
             ${{ github.event.comment.body }}
 
-            **Context**:
-            - Repository: @xtr-dev/payload-billing (PayloadCMS plugin)
-            - Branch: ${{ fromJson(steps.pr-details.outputs.result).head_ref }}
-            - Base branch: ${{ fromJson(steps.pr-details.outputs.result).base_ref }}
-            - Requested by: @${{ github.event.comment.user.login }}
-
             **Instructions**:
             1. Analyze the current PR changes and the user's request
             2. Implement the requested improvements, fixes, or changes
             3. Follow existing code patterns and conventions
-            4. Ensure TypeScript typing is correct
-            5. Use ESM module structure with .js extensions
-            6. Run quality checks (build, typecheck, lint)
-            7. If the request is unclear, make reasonable assumptions based on context
+            4. Use TypeScript with proper typing
+            5. Follow ESM module structure with .js extensions
+            6. Run quality checks if needed
 
-            **Types of requests to handle**:
-            - Code improvements and refactoring
-            - Bug fixes within the PR
-            - Adding missing features or functionality
-            - Updating documentation
-            - Fixing type errors or lint issues
-            - Performance optimizations
-            - Adding tests
-
-            Please implement the requested changes directly in the current branch.
-
-          # Allow Claude to run necessary commands
+            This is the @xtr-dev/payload-billing plugin for PayloadCMS.
+            Please implement the requested changes directly on this PR branch.
           allowed_tools: "Bash(pnpm build),Bash(pnpm typecheck),Bash(pnpm lint),Bash(npm run test)"
 
       - name: Check for changes
         id: changes
         run: |
-          # Check both staged and unstaged changes
           if git diff --quiet && git diff --cached --quiet; then
             echo "has_changes=false" >> $GITHUB_OUTPUT
-            echo "No changes were made during assistance"
           else
             echo "has_changes=true" >> $GITHUB_OUTPUT
-            echo "Changes detected, preparing commit"
-
-            # Show what changed for debugging
-            echo "=== Changed files ==="
-            git diff --name-only
-            git diff --cached --name-only
-            echo "===================="
           fi
 
-      - name: Commit changes
+      - name: Commit and push
         if: steps.changes.outputs.has_changes == 'true'
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "Claude PR Assistant"
-
           git add .
-          git commit -m "$(cat <<'EOF'
-          feat: Claude PR assistance - ${{ github.event.comment.user.login }} request
+          git commit -m "feat: Claude PR assistance - ${{ github.event.comment.user.login }} request
 
-          Implemented requested changes via Claude PR Assistant.
-
-          PR: #${{ github.event.issue.number }}
           Request: ${{ github.event.comment.body }}
-          Requested by: @${{ github.event.comment.user.login }}
+          PR: #${{ github.event.issue.number }}
 
           🤖 Generated with Claude PR Assistant
 
-          Co-Authored-By: Claude <noreply@anthropic.com>
-          EOF
-          )"
-
+          Co-Authored-By: Claude <noreply@anthropic.com>"
           git push origin ${{ fromJson(steps.pr-details.outputs.result).head_ref }}
 
-      - name: Update PR with success
+      - name: Notify success
         if: steps.changes.outputs.has_changes == 'true'
         uses: actions/github-script@v7
         with:
@@ -218,43 +144,10 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
-              body: `✅ **PR Assistance Complete!**
-
-I've successfully implemented your requested changes:
-
-💬 **Your Request**:
-\`\`\`
-${{ github.event.comment.body }}
-\`\`\`
-
-🔧 **Changes Made**:
-- ✅ Analyzed PR context and requirements
-- ✅ Implemented requested improvements/fixes
-- ✅ Followed project coding standards
-- ✅ Updated the current PR branch
-- ✅ Committed changes with descriptive message
-
-🌿 **Branch**: \`${{ fromJson(steps.pr-details.outputs.result).head_ref }}\`
-⏱️ **Completed**: ${new Date().toISOString()}
-
-## 🔍 What's Next
-The changes have been pushed to this PR branch. You can:
-1. **Review** the new changes in the Files Changed tab
-2. **Test** the implementation locally
-3. **Verify** the changes meet your requirements
-4. **Request** additional changes if needed
-
-## 🛠️ Quality Assurance
-The implementation includes:
-- TypeScript with proper typing
-- ESM module structure with .js extensions
-- Following existing code patterns
-- Quality checks passed (build/typecheck/lint)
-
-**Changes are ready for review!** 🚀`
+              body: `✅ **PR Assistance Complete!**\n\n🔧 **Changes Made**: Implemented your requested improvements\n🌿 **Branch**: \`${{ fromJson(steps.pr-details.outputs.result).head_ref }}\`\n\nChanges are ready for review! 🚀`
             });
 
-      - name: Update PR with no changes
+      - name: Handle no changes
         if: steps.changes.outputs.has_changes == 'false'
         uses: actions/github-script@v7
         with:
@@ -263,35 +156,10 @@ The implementation includes:
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
-              body: `ℹ️ **PR Assistance Complete - No Changes**
-
-I analyzed your request but determined that no code changes are needed:
-
-💬 **Your Request**:
-\`\`\`
-${{ github.event.comment.body }}
-\`\`\`
-
-## 🔍 Analysis Result
-This might be because:
-- The requested feature is already implemented
-- The issue mentioned is already fixed
-- The request requires clarification
-- The change is not actionable as code modification
-
-🌿 **Branch**: \`${{ fromJson(steps.pr-details.outputs.result).head_ref }}\` (unchanged)
-
-## 💡 Suggestions
-If you need specific changes:
-1. Provide more detailed requirements
-2. Point to specific files or functions
-3. Include code examples of desired changes
-4. Try a different @claude command
-
-Feel free to comment again with more specific instructions!`
+              body: `ℹ️ **No Changes Needed**\n\nI analyzed your request but no code changes are required.`
             });
 
-      - name: Handle assistance failure
+      - name: Handle failure
         if: failure()
         uses: actions/github-script@v7
         with:
@@ -300,29 +168,5 @@ Feel free to comment again with more specific instructions!`
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
-              body: `❌ **PR Assistance Failed**
-
-I encountered an error while trying to assist with this PR.
-
-💬 **Your Request**:
-\`\`\`
-${{ github.event.comment.body }}
-\`\`\`
-
-## 🔍 Troubleshooting
-Please check the [workflow logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.
-
-Common reasons for failure:
-- Request is unclear or too complex
-- Technical constraints prevent implementation
-- Permission or configuration issues
-- Conflicting changes in the PR
-
-## 🔄 Try Again
-You can try again by:
-- Providing more specific instructions
-- Breaking down complex requests into smaller parts
-- Commenting with a different @claude command
-
-**Available commands**: \`@claude implement\`, \`@claude fix\`, \`@claude improve\`, \`@claude update\`, \`@claude refactor\`, \`@claude help\``
+              body: `❌ **PR Assistance Failed**\n\nCheck the [workflow logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.`
             });

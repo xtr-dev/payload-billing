@@ -1,5 +1,5 @@
 import type { CollectionConfig, CollectionSlug, Field } from 'payload'
-import type { Id } from '@/plugin/types'
+import type { Id } from './types/index.js'
 
 export type FieldsOverride = (args: { defaultFields: Field[] }) => Field[]
 

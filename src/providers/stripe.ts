@@ -1,7 +1,7 @@
-import type { Payment } from '@/plugin/types/payments'
-import type { PaymentProvider, ProviderData } from '@/plugin/types'
+import type { Payment } from '../plugin/types/payments.js'
+import type { PaymentProvider, ProviderData } from '../plugin/types/index.js'
 import type { Payload } from 'payload'
-import { createSingleton } from '@/plugin/singleton'
+import { createSingleton } from '../plugin/singleton.js'
 import type Stripe from 'stripe'
 import {
   webhookResponses,
@@ -10,8 +10,8 @@ import {
   updateInvoiceOnPaymentSuccess,
   handleWebhookError,
   logWebhookEvent
-} from './utils'
-import { isValidAmount, isValidCurrencyCode } from './currency'
+} from './utils.js'
+import { isValidAmount, isValidCurrencyCode } from './currency.js'
 
 const symbol = Symbol('stripe')
 

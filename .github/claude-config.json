@@ -1,0 +1,23 @@
+{
+  "privilegedUsers": [
+    "bastiaan",
+    "xtr-dev-team"
+  ],
+  "permissions": {
+    "issueImplementation": {
+      "strategy": "adminOrPrivileged",
+      "description": "Allow admins and privileged users to request Claude implementations"
+    },
+    "codeReview": {
+      "strategy": "privilegedUsers",
+      "description": "Only run Claude reviews for privileged users"
+    }
+  },
+  "strategies": {
+    "privilegedUsers": "Only users in the privilegedUsers list",
+    "adminsOnly": "Only repository admins",
+    "adminOrPrivileged": "Repository admins OR users in privilegedUsers list",
+    "orgMembersWithWrite": "Organization members with write access",
+    "everyone": "All users with repository access"
+  }
+}

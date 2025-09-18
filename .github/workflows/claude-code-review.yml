@@ -12,11 +12,23 @@ on:
 
 jobs:
   claude-review:
-    # Optional: Filter by PR author
+    # Permission filter: Only allow specific users or admins to trigger reviews
+    if: |
+      contains(fromJSON('["bastiaan", "xtr-dev-team"]'), github.event.pull_request.user.login) ||
+      github.event.pull_request.author_association == 'OWNER' ||
+      github.event.pull_request.author_association == 'MEMBER'
+
+    # Alternative filters (comment out the above and use one of these):
+    # Only for external contributors:
+    # if: github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR'
+
+    # Only for specific users:
+    # if: contains(fromJSON('["username1", "username2"]'), github.event.pull_request.user.login)
+
+    # Only for non-admins (let admins skip review):
     # if: |
-    #   github.event.pull_request.user.login == 'external-contributor' ||
-    #   github.event.pull_request.user.login == 'new-developer' ||
-    #   github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR'
+    #   github.event.pull_request.author_association != 'OWNER' &&
+    #   github.event.pull_request.author_association != 'MEMBER'
     
     runs-on: ubuntu-latest
     permissions:

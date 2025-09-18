@@ -1,8 +1,8 @@
-import type { AccessArgs, CollectionBeforeChangeHook, CollectionConfig, CollectionSlug, Field } from 'payload'
+import type { AccessArgs, CollectionBeforeChangeHook, CollectionConfig, Field } from 'payload'
 import type { BillingPluginConfig} from '@/plugin/config';
 import { defaults } from '@/plugin/config'
 import { extractSlug } from '@/plugin/utils'
-import { Payment } from '@/plugin/types/payments'
+import type { Payment } from '@/plugin/types/payments'
 import { initProviderPayment } from '@/collections/hooks'
 
 export function createPaymentsCollection(pluginConfig: BillingPluginConfig): CollectionConfig {
@@ -79,7 +79,7 @@ export function createPaymentsCollection(pluginConfig: BillingPluginConfig): Col
       admin: {
         position: 'sidebar',
       },
-      relationTo: extractSlug(pluginConfig.collections?.invoices || defaults.invoicesCollection) as CollectionSlug,
+      relationTo: extractSlug(pluginConfig.collections?.invoices || defaults.invoicesCollection),
     },
     {
       name: 'metadata',
@@ -104,7 +104,16 @@ export function createPaymentsCollection(pluginConfig: BillingPluginConfig): Col
         readOnly: true,
       },
       hasMany: true,
-      relationTo: extractSlug(pluginConfig.collections?.refunds || defaults.refundsCollection) as CollectionSlug,
+      relationTo: extractSlug(pluginConfig.collections?.refunds || defaults.refundsCollection),
+    },
+    {
+      name: 'version',
+      type: 'number',
+      defaultValue: 1,
+      admin: {
+        hidden: true, // Hide from admin UI to prevent manual tampering
+      },
+      index: true, // Index for optimistic locking performance
     },
   ]
   if (overrides?.fields) {
@@ -127,7 +136,7 @@ export function createPaymentsCollection(pluginConfig: BillingPluginConfig): Col
     fields,
     hooks: {
       beforeChange: [
-        async ({ data, operation, req }) => {
+        async ({ data, operation, req, originalDoc }) => {
           if (operation === 'create') {
             // Validate amount format
             if (data.amount && !Number.isInteger(data.amount)) {
@@ -143,6 +152,15 @@ export function createPaymentsCollection(pluginConfig: BillingPluginConfig): Col
             }
 
             await initProviderPayment(req.payload, data)
+          }
+
+          // Auto-increment version for manual updates (not webhook updates)
+          // Webhook updates handle their own versioning in updatePaymentStatus
+          if (operation === 'update' && !data.version) {
+            // If version is not being explicitly set (i.e., manual admin update),
+            // increment it automatically
+            const currentVersion = (originalDoc as Payment)?.version || 1
+            data.version = currentVersion + 1
           }
         },
       ] satisfies CollectionBeforeChangeHook<Payment>[],

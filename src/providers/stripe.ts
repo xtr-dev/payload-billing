@@ -74,7 +74,7 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
               // Verify webhook signature and construct event
               let event: Stripe.Event
               try {
-                event = stripe.webhooks.constructEvent(body, signature, stripeConfig.webhookSecret)
+                event = stripe.webhooks.constructEvent(body, signature, stripeConfig.webhookSecret!)
               } catch (err) {
                 return handleWebhookError('Stripe', err, 'Signature verification failed')
               }

@@ -1,8 +1,9 @@
 import type { Payload } from 'payload'
 import type { Payment } from '@/plugin/types/payments'
 import type { BillingPluginConfig } from '@/plugin/config'
+import type { ProviderData } from './types'
 import { defaults } from '@/plugin/config'
-import { extractSlug } from '@/plugin/utils'
+import { extractSlug, toPayloadId } from '@/plugin/utils'
 
 /**
  * Common webhook response utilities
@@ -43,61 +44,77 @@ export async function findPaymentByProviderId(
 }
 
 /**
- * Update payment status and provider data with proper optimistic locking
+ * Update payment status and provider data with optimistic locking
  */
 export async function updatePaymentStatus(
   payload: Payload,
   paymentId: string | number,
   status: Payment['status'],
-  providerData: any,
+  providerData: ProviderData<any>,
   pluginConfig: BillingPluginConfig
 ): Promise<boolean> {
   const paymentsCollection = extractSlug(pluginConfig.collections?.payments || defaults.paymentsCollection)
 
-  // Get current payment to check for concurrent modifications
-  const currentPayment = await payload.findByID({
-    collection: paymentsCollection,
-    id: paymentId as any // Cast to avoid type mismatch between Id and PayloadCMS types
-  }) as Payment
-
-  const now = new Date().toISOString()
-
-  // First, try to find payments that match both ID and current updatedAt
-  const conflictCheck = await payload.find({
-    collection: paymentsCollection,
-    where: {
-      id: { equals: paymentId },
-      updatedAt: { equals: currentPayment.updatedAt }
-    }
-  })
-
-  // If no matching payment found, it means it was modified concurrently
-  if (conflictCheck.docs.length === 0) {
-    console.warn(`[Payment Update] Concurrent modification detected for payment ${paymentId}, skipping update`)
-    return false
-  }
-
   try {
-    const result = await payload.update({
+    // First, fetch the current payment to get the current version
+    const currentPayment = await payload.findByID({
       collection: paymentsCollection,
-      id: paymentId as any, // Cast to avoid type mismatch between Id and PayloadCMS types
-      data: {
-        status,
-        providerData: {
-          ...providerData,
-          webhookProcessedAt: now,
-          previousStatus: currentPayment.status
-        }
-      }
-    })
+      id: toPayloadId(paymentId),
+    }) as Payment
 
-    // Verify the update actually happened by checking if updatedAt changed
-    if (result.updatedAt === currentPayment.updatedAt) {
-      console.warn(`[Payment Update] Update may have failed for payment ${paymentId} - updatedAt unchanged`)
+    if (!currentPayment) {
+      console.error(`[Payment Update] Payment ${paymentId} not found`)
       return false
     }
 
-    return true
+    const currentVersion = currentPayment.version || 1
+
+    // Attempt to update with optimistic locking
+    // We'll use a transaction to ensure atomicity
+    const transactionID = await payload.db.beginTransaction()
+
+    if (!transactionID) {
+      console.error(`[Payment Update] Failed to begin transaction`)
+      return false
+    }
+
+    try {
+      // Re-fetch within transaction to ensure consistency
+      const paymentInTransaction = await payload.findByID({
+        collection: paymentsCollection,
+        id: toPayloadId(paymentId),
+        req: { transactionID: transactionID }
+      }) as Payment
+
+      // Check if version still matches
+      if ((paymentInTransaction.version || 1) !== currentVersion) {
+        // Version conflict detected - payment was modified by another process
+        console.warn(`[Payment Update] Version conflict for payment ${paymentId} (expected version: ${currentVersion}, got: ${paymentInTransaction.version})`)
+        await payload.db.rollbackTransaction(transactionID)
+        return false
+      }
+
+      // Update with new version
+      await payload.update({
+        collection: paymentsCollection,
+        id: toPayloadId(paymentId),
+        data: {
+          status,
+          providerData: {
+            ...providerData,
+            webhookProcessedAt: new Date().toISOString()
+          },
+          version: currentVersion + 1
+        },
+        req: { transactionID: transactionID }
+      })
+
+      await payload.db.commitTransaction(transactionID)
+      return true
+    } catch (error) {
+      await payload.db.rollbackTransaction(transactionID)
+      throw error
+    }
   } catch (error) {
     console.error(`[Payment Update] Failed to update payment ${paymentId}:`, error)
     return false
@@ -121,10 +138,10 @@ export async function updateInvoiceOnPaymentSuccess(
 
   await payload.update({
     collection: invoicesCollection,
-    id: invoiceId as any, // Cast to avoid type mismatch between Id and PayloadCMS types
+    id: toPayloadId(invoiceId),
     data: {
       status: 'paid',
-      payment: payment.id
+      payment: toPayloadId(payment.id)
     }
   })
 }

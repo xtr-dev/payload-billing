@@ -57,41 +57,64 @@ export async function updatePaymentStatus(
 
   try {
     // First, fetch the current payment to get the current version
-    const currentPayment = await findPaymentByProviderId(payload, paymentId.toString(), pluginConfig)
+    const currentPayment = await payload.findByID({
+      collection: paymentsCollection,
+      id: toPayloadId(paymentId),
+    }) as Payment
+
     if (!currentPayment) {
-      console.error(`[Payment Update] Payment not found: ${paymentId}`)
+      console.error(`[Payment Update] Payment ${paymentId} not found`)
       return false
     }
 
     const currentVersion = currentPayment.version || 1
-    const nextVersion = currentVersion + 1
 
-    // Atomic update using updateMany with version check
-    const result = await payload.updateMany({
-      collection: paymentsCollection,
-      where: {
-        id: { equals: toPayloadId(currentPayment.id) },
-        version: { equals: currentVersion }
-      },
-      data: {
-        status,
-        version: nextVersion,
-        providerData: {
-          ...providerData,
-          webhookProcessedAt: new Date().toISOString(),
-          previousStatus: currentPayment.status
-        }
-      }
-    })
+    // Attempt to update with optimistic locking
+    // We'll use a transaction to ensure atomicity
+    const transactionID = await payload.db.beginTransaction()
 
-    // Success means exactly 1 document was updated (version matched)
-    const success = result.docs.length === 1
-    
-    if (!success) {
-      console.warn(`[Payment Update] Optimistic lock failed for payment ${paymentId} - version conflict detected`)
+    if (!transactionID) {
+      console.error(`[Payment Update] Failed to begin transaction`)
+      return false
     }
 
-    return success
+    try {
+      // Re-fetch within transaction to ensure consistency
+      const paymentInTransaction = await payload.findByID({
+        collection: paymentsCollection,
+        id: toPayloadId(paymentId),
+        req: { transactionID: transactionID }
+      }) as Payment
+
+      // Check if version still matches
+      if ((paymentInTransaction.version || 1) !== currentVersion) {
+        // Version conflict detected - payment was modified by another process
+        console.warn(`[Payment Update] Version conflict for payment ${paymentId} (expected version: ${currentVersion}, got: ${paymentInTransaction.version})`)
+        await payload.db.rollbackTransaction(transactionID)
+        return false
+      }
+
+      // Update with new version
+      await payload.update({
+        collection: paymentsCollection,
+        id: toPayloadId(paymentId),
+        data: {
+          status,
+          providerData: {
+            ...providerData,
+            webhookProcessedAt: new Date().toISOString()
+          },
+          version: currentVersion + 1
+        },
+        req: { transactionID: transactionID }
+      })
+
+      await payload.db.commitTransaction(transactionID)
+      return true
+    } catch (error) {
+      await payload.db.rollbackTransaction(transactionID)
+      throw error
+    }
   } catch (error) {
     console.error(`[Payment Update] Failed to update payment ${paymentId}:`, error)
     return false

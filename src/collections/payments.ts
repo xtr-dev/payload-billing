@@ -136,7 +136,7 @@ export function createPaymentsCollection(pluginConfig: BillingPluginConfig): Col
     fields,
     hooks: {
       beforeChange: [
-        async ({ data, operation, req }) => {
+        async ({ data, operation, req, originalDoc }) => {
           if (operation === 'create') {
             // Validate amount format
             if (data.amount && !Number.isInteger(data.amount)) {
@@ -154,20 +154,13 @@ export function createPaymentsCollection(pluginConfig: BillingPluginConfig): Col
             await initProviderPayment(req.payload, data)
           }
 
-          if (operation === 'update') {
-            // Auto-increment version for manual admin updates (webhooks handle their own versioning)
-            if (!data.version && req.id) {
-              try {
-                const currentDoc = await req.payload.findByID({
-                  collection: extractSlug(pluginConfig.collections?.payments || defaults.paymentsCollection),
-                  id: req.id as any
-                })
-                data.version = (currentDoc.version || 1) + 1
-              } catch (error) {
-                console.warn(`[Payment Hook] Could not fetch current version for payment ${req.id}, defaulting to version 1:`, error)
-                data.version = 1
-              }
-            }
+          // Auto-increment version for manual updates (not webhook updates)
+          // Webhook updates handle their own versioning in updatePaymentStatus
+          if (operation === 'update' && !data.version) {
+            // If version is not being explicitly set (i.e., manual admin update),
+            // increment it automatically
+            const currentVersion = (originalDoc as Payment)?.version || 1
+            data.version = currentVersion + 1
           }
         },
       ] satisfies CollectionBeforeChangeHook<Payment>[],

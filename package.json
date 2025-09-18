@@ -1,6 +1,6 @@
 {
   "name": "@xtr-dev/payload-billing",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "PayloadCMS plugin for billing and payment provider integrations with tracking and local testing",
   "license": "MIT",
   "type": "module",
@@ -106,7 +106,7 @@
     "vitest": "^3.1.2"
   },
   "peerDependencies": {
-    "@mollie/api-client": "^3.7.0",
+    "@mollie/api-client": "^3.7.0 || ^4.0.0",
     "payload": "^3.37.0",
     "stripe": "^18.5.0"
   },

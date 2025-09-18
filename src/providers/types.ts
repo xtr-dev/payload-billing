@@ -1,6 +1,6 @@
-import type { Payment } from '@/plugin/types/payments'
+import type { Payment } from '../plugin/types/payments.js'
 import type { Config, Payload } from 'payload'
-import type { BillingPluginConfig } from '@/plugin/config'
+import type { BillingPluginConfig } from '../plugin/config.js'
 
 export type InitPayment = (payload: Payload, payment: Partial<Payment>) => Promise<Partial<Payment>>
 

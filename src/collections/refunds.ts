@@ -1,7 +1,7 @@
 import type { AccessArgs, CollectionConfig } from 'payload'
-import { BillingPluginConfig, defaults } from '@/plugin/config'
-import { extractSlug } from '@/plugin/utils'
-import { Payment } from '@/plugin/types'
+import { BillingPluginConfig, defaults } from '../plugin/config.js'
+import { extractSlug } from '../plugin/utils.js'
+import { Payment } from '../plugin/types/index.js'
 
 export function createRefundsCollection(pluginConfig: BillingPluginConfig): CollectionConfig {
   // TODO: finish collection overrides

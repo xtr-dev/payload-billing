@@ -1,4 +1,4 @@
-import { Payment } from '@/plugin/types/payments'
+import { Payment } from './payments.js'
 
 export interface Refund {
   id: number;

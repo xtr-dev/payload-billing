@@ -1,6 +1,6 @@
 import { CollectionConfig } from 'payload'
-import { FieldsOverride } from '@/plugin/utils'
-import { PaymentProvider } from '@/plugin/types'
+import { FieldsOverride } from './utils.js'
+import { PaymentProvider } from './types/index.js'
 
 export const defaults = {
   paymentsCollection: 'payments',

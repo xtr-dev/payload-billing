@@ -1,6 +1,6 @@
-import type { Payment } from '@/plugin/types'
+import type { Payment } from '../plugin/types/index.js'
 import type { Payload } from 'payload'
-import { useBillingPlugin } from '@/plugin'
+import { useBillingPlugin } from '../plugin/index.js'
 
 export const initProviderPayment = (payload: Payload, payment: Partial<Payment>) => {
   const billing = useBillingPlugin(payload)

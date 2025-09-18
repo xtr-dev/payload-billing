@@ -1,6 +1,5 @@
-import { Payment } from '@/plugin/types/payments'
-
-import { Id } from '@/plugin/types/id'
+import { Payment } from './payments.js'
+import { Id } from './id.js'
 
 export interface Invoice<TCustomer = unknown> {
   id: Id;

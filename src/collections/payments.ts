@@ -106,6 +106,15 @@ export function createPaymentsCollection(pluginConfig: BillingPluginConfig): Col
       hasMany: true,
       relationTo: extractSlug(pluginConfig.collections?.refunds || defaults.refundsCollection),
     },
+    {
+      name: 'version',
+      type: 'number',
+      defaultValue: 1,
+      admin: {
+        hidden: true, // Hide from admin UI to prevent manual tampering
+      },
+      index: true, // Index for optimistic locking performance
+    },
   ]
   if (overrides?.fields) {
     fields = overrides?.fields({defaultFields: fields})
@@ -143,6 +152,22 @@ export function createPaymentsCollection(pluginConfig: BillingPluginConfig): Col
             }
 
             await initProviderPayment(req.payload, data)
+          }
+
+          if (operation === 'update') {
+            // Auto-increment version for manual admin updates (webhooks handle their own versioning)
+            if (!data.version && req.id) {
+              try {
+                const currentDoc = await req.payload.findByID({
+                  collection: extractSlug(pluginConfig.collections?.payments || defaults.paymentsCollection),
+                  id: req.id as any
+                })
+                data.version = (currentDoc.version || 1) + 1
+              } catch (error) {
+                console.warn(`[Payment Hook] Could not fetch current version for payment ${req.id}, defaulting to version 1:`, error)
+                data.version = 1
+              }
+            }
           }
         },
       ] satisfies CollectionBeforeChangeHook<Payment>[],

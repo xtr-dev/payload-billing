@@ -44,7 +44,7 @@ export async function findPaymentByProviderId(
 }
 
 /**
- * Update payment status and provider data
+ * Update payment status and provider data with optimistic locking
  */
 export async function updatePaymentStatus(
   payload: Payload,
@@ -56,19 +56,42 @@ export async function updatePaymentStatus(
   const paymentsCollection = extractSlug(pluginConfig.collections?.payments || defaults.paymentsCollection)
 
   try {
-    await payload.update({
+    // First, fetch the current payment to get the current version
+    const currentPayment = await findPaymentByProviderId(payload, paymentId.toString(), pluginConfig)
+    if (!currentPayment) {
+      console.error(`[Payment Update] Payment not found: ${paymentId}`)
+      return false
+    }
+
+    const currentVersion = currentPayment.version || 1
+    const nextVersion = currentVersion + 1
+
+    // Atomic update using updateMany with version check
+    const result = await payload.updateMany({
       collection: paymentsCollection,
-      id: toPayloadId(paymentId),
+      where: {
+        id: { equals: toPayloadId(currentPayment.id) },
+        version: { equals: currentVersion }
+      },
       data: {
         status,
+        version: nextVersion,
         providerData: {
           ...providerData,
-          webhookProcessedAt: new Date().toISOString()
+          webhookProcessedAt: new Date().toISOString(),
+          previousStatus: currentPayment.status
         }
       }
     })
 
-    return true
+    // Success means exactly 1 document was updated (version matched)
+    const success = result.docs.length === 1
+    
+    if (!success) {
+      console.warn(`[Payment Update] Optimistic lock failed for payment ${paymentId} - version conflict detected`)
+    }
+
+    return success
   } catch (error) {
     console.error(`[Payment Update] Failed to update payment ${paymentId}:`, error)
     return false

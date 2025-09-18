@@ -48,6 +48,10 @@ export interface Payment {
     | boolean
     | null;
   refunds?: (number | Refund)[] | null;
+  /**
+   * Version number for optimistic locking (auto-incremented on updates)
+   */
+  version?: number;
   updatedAt: string;
   createdAt: string;
 }

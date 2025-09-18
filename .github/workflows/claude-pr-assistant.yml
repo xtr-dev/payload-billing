@@ -1,0 +1,172 @@
+name: Claude PR Assistant
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  id-token: write
+
+jobs:
+  claude-pr-assist:
+    if: |
+      github.event.issue.pull_request &&
+      github.event.issue_comment.issue.state == 'open' &&
+      (
+        contains(github.event.comment.body, '@claude implement') ||
+        contains(github.event.comment.body, '@claude fix') ||
+        contains(github.event.comment.body, '@claude improve') ||
+        contains(github.event.comment.body, '@claude update') ||
+        contains(github.event.comment.body, '@claude refactor') ||
+        contains(github.event.comment.body, '@claude help')
+      )
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check user permissions
+        uses: actions/github-script@v7
+        with:
+          script: |
+            if (context.actor !== 'bvdaakster') {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: '❌ **Access Denied**: Only bvdaakster can use Claude PR assistance.'
+              });
+              throw new Error('Unauthorized user');
+            }
+
+      - name: Get PR details
+        id: pr-details
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number
+            });
+            return {
+              head_ref: pr.head.ref,
+              title: pr.title,
+              body: pr.body
+            };
+
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ fromJson(steps.pr-details.outputs.result).head_ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install pnpm
+        run: npm install -g pnpm@10.12.4
+
+      - name: Notify start
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `🤖 **Claude PR Assistant Started**\n\n💬 **Request**: ${{ github.event.comment.body }}\n🌿 **Branch**: \`${{ fromJson(steps.pr-details.outputs.result).head_ref }}\`\n\nWorking on your request...`
+            });
+
+      - name: Assist with Claude
+        uses: anthropics/claude-code-action@beta
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          direct_prompt: |
+            You are assisting with a GitHub Pull Request. Please help with this request:
+
+            **Pull Request #${{ github.event.issue.number }}**: ${{ fromJson(steps.pr-details.outputs.result).title }}
+
+            **PR Description**:
+            ${{ fromJson(steps.pr-details.outputs.result).body }}
+
+            **User Request**:
+            ${{ github.event.comment.body }}
+
+            **Instructions**:
+            1. Analyze the current PR changes and the user's request
+            2. Implement the requested improvements, fixes, or changes
+            3. Follow existing code patterns and conventions
+            4. Use TypeScript with proper typing
+            5. Follow ESM module structure with .js extensions
+            6. Run quality checks if needed
+
+            This is the @xtr-dev/payload-billing plugin for PayloadCMS.
+            Please implement the requested changes directly on this PR branch.
+          allowed_tools: "Bash(pnpm build),Bash(pnpm typecheck),Bash(pnpm lint),Bash(npm run test)"
+
+      - name: Check for changes
+        id: changes
+        run: |
+          if git diff --quiet && git diff --cached --quiet; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit and push
+        if: steps.changes.outputs.has_changes == 'true'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "Claude PR Assistant"
+          git add .
+          git commit -m "feat: Claude PR assistance - ${{ github.event.comment.user.login }} request
+
+          Request: ${{ github.event.comment.body }}
+          PR: #${{ github.event.issue.number }}
+
+          🤖 Generated with Claude PR Assistant
+
+          Co-Authored-By: Claude <noreply@anthropic.com>"
+          git push origin ${{ fromJson(steps.pr-details.outputs.result).head_ref }}
+
+      - name: Notify success
+        if: steps.changes.outputs.has_changes == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `✅ **PR Assistance Complete!**\n\n🔧 **Changes Made**: Implemented your requested improvements\n🌿 **Branch**: \`${{ fromJson(steps.pr-details.outputs.result).head_ref }}\`\n\nChanges are ready for review! 🚀`
+            });
+
+      - name: Handle no changes
+        if: steps.changes.outputs.has_changes == 'false'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `ℹ️ **No Changes Needed**\n\nI analyzed your request but no code changes are required.`
+            });
+
+      - name: Handle failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `❌ **PR Assistance Failed**\n\nCheck the [workflow logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.`
+            });

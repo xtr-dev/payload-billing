@@ -158,7 +158,7 @@ export interface Payment {
   /**
    * The payment ID from the payment provider
    */
-  providerId: string;
+  providerId?: string | null;
   status: 'pending' | 'processing' | 'succeeded' | 'failed' | 'canceled' | 'refunded' | 'partially_refunded';
   /**
    * Amount in cents (e.g., 2000 = $20.00)
@@ -198,6 +198,7 @@ export interface Payment {
     | boolean
     | null;
   refunds?: (number | Refund)[] | null;
+  version?: number | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -499,6 +500,7 @@ export interface PaymentsSelect<T extends boolean = true> {
   metadata?: T;
   providerData?: T;
   refunds?: T;
+  version?: T;
   updatedAt?: T;
   createdAt?: T;
 }

@@ -1,0 +1,197 @@
+name: Claude Issue Implementation
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  id-token: write
+
+jobs:
+  claude-implement:
+    if: |
+      github.event.issue_comment.issue.state == 'open' &&
+      (
+        contains(github.event.comment.body, '@claude implement') ||
+        contains(github.event.comment.body, '@claude fix') ||
+        contains(github.event.comment.body, '@claude create')
+      )
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check user permissions
+        uses: actions/github-script@v7
+        with:
+          script: |
+            if (context.actor !== 'bvdaakster') {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: '❌ **Access Denied**: Only bvdaakster can use Claude implementation.'
+              });
+              throw new Error('Unauthorized user');
+            }
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install pnpm
+        run: npm install -g pnpm@10.12.4
+
+      - name: Create branch
+        id: create-branch
+        run: |
+          BRANCH_NAME="claude/issue-${{ github.event.issue.number }}-$(date +%Y%m%d-%H%M%S)"
+          echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+          git checkout -b "$BRANCH_NAME"
+          git push origin "$BRANCH_NAME"
+
+      - name: Notify start
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `🤖 **Claude Implementation Started**\n\n📋 **Issue**: #${{ github.event.issue.number }}\n🌿 **Branch**: \`${{ steps.create-branch.outputs.branch_name }}\`\n\nImplementing your request...`
+            });
+
+      - name: Implement with Claude
+        uses: anthropics/claude-code-action@beta
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          direct_prompt: |
+            Please implement the feature or fix described in this GitHub issue:
+
+            **Issue #${{ github.event.issue.number }}**: ${{ github.event.issue.title }}
+
+            **Issue Description**:
+            ${{ github.event.issue.body }}
+
+            **User Request**:
+            ${{ github.event.comment.body }}
+
+            **Instructions**:
+            1. Analyze the issue requirements carefully
+            2. Follow existing code patterns and conventions
+            3. Use TypeScript with proper typing
+            4. Follow ESM module structure with .js extensions
+            5. Add tests if needed
+            6. Update documentation if necessary
+
+            This is the @xtr-dev/payload-billing plugin for PayloadCMS.
+          allowed_tools: "Bash(pnpm build),Bash(pnpm typecheck),Bash(pnpm lint),Bash(npm run test)"
+
+      - name: Check for changes
+        id: changes
+        run: |
+          if git diff --quiet && git diff --cached --quiet; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit and push
+        if: steps.changes.outputs.has_changes == 'true'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "Claude Implementation Bot"
+          git add .
+          git commit -m "feat: implement issue #${{ github.event.issue.number }}
+
+          Implemented via Claude automation.
+
+          Issue: #${{ github.event.issue.number }}
+          Requested by: @${{ github.event.comment.user.login }}
+
+          🤖 Generated with Claude Code
+
+          Co-Authored-By: Claude <noreply@anthropic.com>"
+          git push origin ${{ steps.create-branch.outputs.branch_name }}
+
+      - name: Create PR
+        if: steps.changes.outputs.has_changes == 'true'
+        uses: actions/github-script@v7
+        id: create-pr
+        with:
+          script: |
+            const { data: pr } = await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🤖 Implement: ${{ github.event.issue.title }}`,
+              head: '${{ steps.create-branch.outputs.branch_name }}',
+              base: 'dev',
+              body: `## 🤖 Claude Implementation
+
+            This PR implements issue #${{ github.event.issue.number }}.
+
+            **Issue**: #${{ github.event.issue.number }}
+            **Requested by**: @${{ github.event.comment.user.login }}
+            **Branch**: \`${{ steps.create-branch.outputs.branch_name }}\`
+
+            ### Review Checklist
+            - [ ] Code follows project conventions
+            - [ ] Build passes
+            - [ ] Tests pass
+            - [ ] Implementation matches requirements
+
+            Closes #${{ github.event.issue.number }}
+
+            🤖 Generated with Claude Code`
+            });
+            return pr.number;
+
+      - name: Notify success
+        if: steps.changes.outputs.has_changes == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = '${{ steps.create-pr.outputs.result }}';
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `✅ **Implementation Complete!**\n\n🎯 **Pull Request**: #${prNumber}\n🌿 **Branch**: \`${{ steps.create-branch.outputs.branch_name }}\`\n\nReady for review! 🚀`
+            });
+
+      - name: Handle no changes
+        if: steps.changes.outputs.has_changes == 'false'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `ℹ️ **No Changes Needed**\n\nI analyzed the issue but no code changes are required.`
+            });
+
+      - name: Clean up on no changes
+        if: steps.changes.outputs.has_changes == 'false'
+        run: git push origin --delete ${{ steps.create-branch.outputs.branch_name }} || true
+
+      - name: Handle failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `❌ **Implementation Failed**\n\nCheck the [workflow logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.`
+            });

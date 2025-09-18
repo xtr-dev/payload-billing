@@ -180,12 +180,19 @@ jobs:
       - name: Check for changes
         id: changes
         run: |
-          if git diff --quiet; then
+          # Check both staged and unstaged changes
+          if git diff --quiet && git diff --cached --quiet; then
             echo "has_changes=false" >> $GITHUB_OUTPUT
             echo "No changes were made during implementation"
           else
             echo "has_changes=true" >> $GITHUB_OUTPUT
             echo "Changes detected, preparing commit"
+
+            # Show what changed for debugging
+            echo "=== Changed files ==="
+            git diff --name-only
+            git diff --cached --name-only
+            echo "===================="
           fi
 
       - name: Commit changes
@@ -217,67 +224,162 @@ jobs:
         id: create-pr
         with:
           script: |
-            const { data: pr } = await github.rest.pulls.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: `🤖 Implement: ${{ github.event.issue.title }}`,
-              head: '${{ steps.create-branch.outputs.branch_name }}',
-              base: 'dev',
-              body: `## 🤖 Claude Implementation
+            try {
+              // Get the list of changed files for the PR description
+              const { data: comparison } = await github.rest.repos.compareCommits({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                base: 'dev',
+                head: '${{ steps.create-branch.outputs.branch_name }}'
+              });
 
-              This PR was automatically created by Claude to implement the feature/fix requested in issue #${{ github.event.issue.number }}.
+              const changedFiles = comparison.files || [];
+              const filesList = changedFiles.map(file => `- \`${file.filename}\``).join('\n');
 
-              ### 📋 Issue Details
-              - **Issue**: #${{ github.event.issue.number }}
-              - **Title**: ${{ github.event.issue.title }}
-              - **Requested by**: @${{ github.event.comment.user.login }}
-              - **Branch**: \`${{ steps.create-branch.outputs.branch_name }}\`
+              const { data: pr } = await github.rest.pulls.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `🤖 Implement: ${{ github.event.issue.title }}`,
+                head: '${{ steps.create-branch.outputs.branch_name }}',
+                base: 'dev',
+                body: `## 🤖 Claude Implementation
 
-              ### 🔍 Implementation
-              Claude analyzed the issue requirements and implemented the requested changes following the project's coding standards and best practices.
+This PR was automatically created by Claude to implement the feature/fix requested in issue #${{ github.event.issue.number }}.
 
-              ### ✅ Review Checklist
-              - [ ] Code follows project conventions
-              - [ ] Tests are included (if applicable)
-              - [ ] Documentation is updated (if needed)
-              - [ ] Implementation matches issue requirements
-              - [ ] No breaking changes (unless intended)
+### 📋 Issue Details
+- **Issue**: #${{ github.event.issue.number }}
+- **Title**: ${{ github.event.issue.title }}
+- **Requested by**: @${{ github.event.comment.user.login }}
+- **Branch**: \`${{ steps.create-branch.outputs.branch_name }}\`
+- **Implementation Date**: ${new Date().toISOString()}
 
-              ### 🔗 Related
-              Closes #${{ github.event.issue.number }}
+### 📁 Files Changed
+${filesList || 'No files were changed'}
 
-              ---
+### 🔍 Implementation
+Claude analyzed the issue requirements and implemented the requested changes following the project's coding standards and best practices.
 
-              **Note**: This implementation was generated automatically. Please review carefully before merging.
+### ✅ Review Checklist
+- [ ] Code follows project conventions
+- [ ] Tests are included (if applicable)
+- [ ] Documentation is updated (if needed)
+- [ ] Implementation matches issue requirements
+- [ ] No breaking changes (unless intended)
+- [ ] Build passes (\`pnpm build\`)
+- [ ] Type checking passes (\`pnpm typecheck\`)
+- [ ] Linting passes (\`pnpm lint\`)
 
-              🤖 *Generated with Claude Automation*`
-            });
+### 🔗 Related
+Closes #${{ github.event.issue.number }}
 
-            return pr.number;
+### 🚀 Deployment
+After merging this PR:
+1. Version will be automatically bumped
+2. Package will be built and published
+3. Changes will be available in the next release
+
+---
+
+**Note**: This implementation was generated automatically by Claude. Please review carefully before merging.
+
+🤖 *Generated with [Claude Code](https://claude.ai/code)*
+🔧 *Triggered by @${{ github.event.comment.user.login }}*`
+              });
+
+              console.log(`✅ PR created successfully: #${pr.number}`);
+              return pr.number;
+            } catch (error) {
+              console.error('Failed to create PR:', error);
+              throw error;
+            }
+
+      - name: Fallback PR Creation
+        if: steps.changes.outputs.has_changes == 'true' && failure() && steps.create-pr.conclusion == 'failure'
+        uses: actions/github-script@v7
+        id: fallback-pr
+        with:
+          script: |
+            console.log('Primary PR creation failed, attempting fallback...');
+            try {
+              const { data: pr } = await github.rest.pulls.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `🤖 Implement: ${{ github.event.issue.title }}`,
+                head: '${{ steps.create-branch.outputs.branch_name }}',
+                base: 'dev',
+                body: `## 🤖 Claude Implementation (Fallback)
+
+This PR was automatically created by Claude to implement issue #${{ github.event.issue.number }}.
+
+**Issue**: #${{ github.event.issue.number }} - ${{ github.event.issue.title }}
+**Requested by**: @${{ github.event.comment.user.login }}
+**Branch**: \`${{ steps.create-branch.outputs.branch_name }}\`
+
+⚠️ *This PR was created via fallback method due to an error in the primary creation process.*
+
+### 🔍 Implementation
+Claude has implemented the requested changes. Please review the code changes in this PR.
+
+### ✅ Review Required
+- [ ] Verify implementation meets issue requirements
+- [ ] Check code quality and conventions
+- [ ] Test the changes
+- [ ] Ensure no breaking changes
+
+Closes #${{ github.event.issue.number }}
+
+🤖 *Generated with Claude Automation*`
+              });
+
+              console.log(`✅ Fallback PR created successfully: #${pr.number}`);
+              return pr.number;
+            } catch (error) {
+              console.error('Fallback PR creation also failed:', error);
+              return null;
+            }
 
       - name: Update issue with success
         if: steps.changes.outputs.has_changes == 'true'
         uses: actions/github-script@v7
         with:
           script: |
+            const prNumber = '${{ steps.create-pr.outputs.result }}' || '${{ steps.fallback-pr.outputs.result }}';
+            const prLink = prNumber ? `#${prNumber}` : 'Could not determine PR number';
+
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
               body: `✅ **Implementation Complete!**
 
-              I've successfully implemented the requested changes and created a pull request:
+I've successfully implemented the requested changes and created a pull request:
 
-              🎯 **Pull Request**: #${{ steps.create-pr.outputs.result }}
-              🌿 **Branch**: \`${{ steps.create-branch.outputs.branch_name }}\`
-              ⏱️ **Completed**: ${new Date().toISOString()}
+🎯 **Pull Request**: ${prLink}
+🌿 **Branch**: \`${{ steps.create-branch.outputs.branch_name }}\`
+⏱️ **Completed**: ${new Date().toISOString()}
+🔧 **Triggered by**: @${{ github.event.comment.user.login }}
 
-              ## Next Steps
-              1. Review the implementation in the pull request
-              2. Test the changes locally if needed
-              3. Merge the PR if everything looks good
+## 📋 What Was Done
+- ✅ Analyzed issue requirements
+- ✅ Implemented requested features/fixes
+- ✅ Followed project coding standards
+- ✅ Created pull request for review
+- ✅ Applied proper branch naming (\`claude/issue-${{ github.event.issue.number }}-*\`)
 
-              The implementation follows the project's coding standards and includes appropriate documentation.`
+## 🔍 Next Steps
+1. **Review** the implementation in the pull request
+2. **Test** the changes locally if needed
+3. **Check** that build/typecheck/lint passes
+4. **Merge** the PR if everything looks good
+
+## 🛠️ Quality Checks
+The implementation includes:
+- TypeScript with proper typing
+- ESM module structure with .js extensions
+- Following existing code patterns
+- Appropriate documentation updates
+
+**Ready for review!** 🚀`
             });
 
       - name: Update issue with no changes

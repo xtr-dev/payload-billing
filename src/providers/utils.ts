@@ -4,7 +4,6 @@ import type { BillingPluginConfig } from '@/plugin/config'
 import type { ProviderData } from './types'
 import { defaults } from '@/plugin/config'
 import { extractSlug, toPayloadId } from '@/plugin/utils'
-import { markRequestAsWebhook } from './context'
 
 /**
  * Common webhook response utilities
@@ -42,29 +41,6 @@ export async function findPaymentByProviderId(
   })
 
   return payments.docs.length > 0 ? payments.docs[0] as Payment : null
-}
-
-/**
- * Update payment status from webhook with proper context tracking
- */
-export async function updatePaymentFromWebhook(
-  payload: Payload,
-  paymentId: string | number,
-  status: Payment['status'],
-  providerData: ProviderData<any>,
-  pluginConfig: BillingPluginConfig,
-  provider: string,
-  eventType?: string
-): Promise<boolean> {
-  // Mark the request context as webhook before updating with metadata
-  markRequestAsWebhook((payload as any).req, provider, 'payment_status_update', {
-    paymentId: paymentId.toString(),
-    newStatus: status,
-    eventType,
-    timestamp: new Date().toISOString()
-  })
-
-  return updatePaymentStatus(payload, paymentId, status, providerData, pluginConfig)
 }
 
 /**

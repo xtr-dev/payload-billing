@@ -6,7 +6,7 @@ import type Stripe from 'stripe'
 import {
   webhookResponses,
   findPaymentByProviderId,
-  updatePaymentFromWebhook,
+  updatePaymentStatus,
   updateInvoiceOnPaymentSuccess,
   handleWebhookError,
   logWebhookEvent
@@ -117,14 +117,12 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
                     timestamp: new Date().toISOString(),
                     provider: 'stripe'
                   }
-                  const updateSuccess = await updatePaymentFromWebhook(
+                  const updateSuccess = await updatePaymentStatus(
                     payload,
                     payment.id,
                     status,
                     providerData,
-                    pluginConfig,
-                    'stripe',
-                    event.type
+                    pluginConfig
                   )
 
                   // If payment is successful and update succeeded, update the invoice
@@ -165,14 +163,12 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
                       timestamp: new Date().toISOString(),
                       provider: 'stripe'
                     }
-                    const updateSuccess = await updatePaymentFromWebhook(
+                    const updateSuccess = await updatePaymentStatus(
                       payload,
                       payment.id,
                       isFullyRefunded ? 'refunded' : 'partially_refunded',
                       providerData,
-                      pluginConfig,
-                      'stripe',
-                      event.type
+                      pluginConfig
                     )
 
                     if (!updateSuccess) {

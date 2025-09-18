@@ -24,7 +24,7 @@ When you trigger the automation:
 
 1. **Permission Check**: Verifies you have write access to the repository
 2. **Branch Creation**: Creates a new branch under `claude/issue-{number}-{timestamp}`
-3. **Implementation**: Claude analyzes the issue and implements the requested changes
+3. **Implementation**: Claude analyzes the issue and implements the requested changes using the official Anthropic Claude Code action
 4. **Pull Request**: Automatically creates a PR with the implementation
 5. **Notification**: Updates the issue with progress and results
 
@@ -44,7 +44,7 @@ claude/issue-{issue-number}-{timestamp}
 #### Repository Setup
 - The workflow must be merged into your default branch (usually `main` or `dev`)
 - Required GitHub secrets:
-  - `CLAUDE_API_KEY` - Your Claude API key for implementation
+  - `CLAUDE_CODE_OAUTH_TOKEN` - Your Claude Code OAuth token for implementation
 
 #### Issue Requirements
 - Issue must be **open**
@@ -100,9 +100,11 @@ Please implement the PDF export feature as described in the issue. Make sure to 
 - Clear success/failure notifications
 
 ### ✅ Quality Assurance
+- Uses official Anthropic Claude Code action
 - Follows existing code patterns
 - Includes appropriate documentation
 - Maintains project coding standards
+- Runs build, typecheck, and lint commands
 
 ## Troubleshooting
 
@@ -111,7 +113,8 @@ If the workflow fails:
 1. Check the [Actions tab](../../actions) for detailed logs
 2. Verify the issue has clear, actionable requirements
 3. Ensure repository permissions are configured correctly
-4. Try again with more specific requirements
+4. Check that `CLAUDE_CODE_OAUTH_TOKEN` secret is set
+5. Try again with more specific requirements
 
 ### No Changes Made
 If Claude determines no changes are needed:
@@ -155,13 +158,38 @@ Add these secrets in repository settings:
 
 | Secret | Description | Required |
 |--------|-------------|----------|
-| `CLAUDE_API_KEY` | Claude API key for implementation | Yes |
+| `CLAUDE_CODE_OAUTH_TOKEN` | Claude Code OAuth token for implementation | Yes |
 
 ### Workflow Permissions
 The workflow requires these permissions:
 - `contents: write` - Create branches and commits
 - `issues: write` - Comment on issues
 - `pull-requests: write` - Create pull requests
+- `id-token: write` - Required for Claude Code action
+
+### Allowed Tools
+Claude can run these commands during implementation:
+- `pnpm build` - Build the project
+- `pnpm typecheck` - Run TypeScript type checking
+- `pnpm lint` - Run ESLint
+- `npm run test` - Run tests
+
+## Technical Details
+
+### Claude Code Action
+This workflow uses the official `anthropics/claude-code-action@beta` which provides:
+- Direct integration with Claude's code generation capabilities
+- Secure authentication via OAuth tokens
+- Advanced code analysis and implementation features
+- Built-in safety and quality controls
+
+### Implementation Process
+1. Claude analyzes the issue requirements
+2. Reviews existing codebase patterns
+3. Generates implementation following project conventions
+4. Runs quality checks (build, typecheck, lint)
+5. Creates commits with descriptive messages
+6. Opens pull request with detailed description
 
 ## Limitations
 
@@ -177,8 +205,9 @@ If you encounter issues with the automation:
 1. Check workflow logs in the Actions tab
 2. Verify issue requirements are clear and actionable
 3. Ensure you have proper repository permissions
-4. Create a new issue describing the problem
+4. Verify `CLAUDE_CODE_OAUTH_TOKEN` secret is configured
+5. Create a new issue describing the problem
 
 ---
 
-**Note**: This automation is powered by Claude AI and creates production-ready code, but all implementations should be reviewed before merging to ensure they meet your specific requirements and quality standards.
+**Note**: This automation is powered by Anthropic's Claude Code action and creates production-ready code, but all implementations should be reviewed before merging to ensure they meet your specific requirements and quality standards.

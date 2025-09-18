@@ -8,6 +8,7 @@ permissions:
   contents: write
   issues: write
   pull-requests: write
+  id-token: write
 
 jobs:
   claude-implement:
@@ -89,59 +90,40 @@ jobs:
               You can track the progress in the [Actions tab](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}).`
             });
 
-      - name: Install Claude Code CLI
-        run: |
-          # Install Claude Code CLI - adjust this based on available installation method
-          curl -fsSL https://claude.ai/install.sh | bash || echo "Claude CLI installation skipped - using alternative method"
-
-      - name: Prepare implementation context
-        id: context
-        run: |
-          # Create a context file with issue details
-          cat > implementation-context.md << 'EOF'
-          # Implementation Request
-
-          **Issue Number**: #${{ github.event.issue.number }}
-          **Issue Title**: ${{ github.event.issue.title }}
-          **Issue Body**:
-          ${{ github.event.issue.body }}
-
-          **Comment Trigger**:
-          ${{ github.event.comment.body }}
-
-          **Repository**: ${{ github.repository }}
-          **Branch**: ${{ steps.create-branch.outputs.branch_name }}
-
-          # Instructions
-          Please implement the feature or fix described in the issue above. Make sure to:
-          1. Follow the existing code patterns and conventions
-          2. Add appropriate tests if needed
-          3. Update documentation if necessary
-          4. Ensure the implementation is complete and working
-          5. Create a clear commit message describing the changes
-
-          The implementation should be production-ready and follow best practices.
-          EOF
-
       - name: Implement with Claude
         id: implementation
-        env:
-          CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
-        run: |
-          # This is a placeholder for Claude implementation
-          # In practice, this would call Claude Code CLI or API
+        uses: anthropics/claude-code-action@beta
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
-          echo "Starting Claude implementation..."
+          # Direct prompt with issue context
+          direct_prompt: |
+            Please implement the feature or fix described in this GitHub issue:
 
-          # Simulate implementation work
-          # In real usage, this would use Claude Code CLI:
-          # claude-code --file implementation-context.md --implement
+            **Issue #${{ github.event.issue.number }}**: ${{ github.event.issue.title }}
 
-          # For now, create a placeholder implementation
-          echo "🤖 Claude implementation completed" > claude-implementation.log
+            **Issue Description**:
+            ${{ github.event.issue.body }}
 
-          # Set output for next steps
-          echo "implemented=true" >> $GITHUB_OUTPUT
+            **Implementation Request**:
+            ${{ github.event.comment.body }}
+
+            **Instructions**:
+            1. Analyze the issue requirements carefully
+            2. Follow the existing code patterns and conventions in this PayloadCMS plugin
+            3. Add appropriate tests if needed (check for existing test patterns)
+            4. Update documentation if necessary
+            5. Ensure the implementation is complete and working
+            6. Use TypeScript with proper typing
+            7. Follow the project's ESM module structure with .js extensions
+
+            The implementation should be production-ready and follow best practices for a PayloadCMS plugin.
+
+            **Repository Context**: This is the @xtr-dev/payload-billing plugin for PayloadCMS.
+            **Branch**: ${{ steps.create-branch.outputs.branch_name }}
+
+          # Allow Claude to run necessary commands
+          allowed_tools: "Bash(pnpm build),Bash(pnpm typecheck),Bash(pnpm lint),Bash(npm run test)"
 
       - name: Check for changes
         id: changes

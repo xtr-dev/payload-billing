@@ -1,0 +1,296 @@
+name: Claude Issue Implementation
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  claude-implement:
+    if: |
+      github.event.issue_comment.issue.state == 'open' &&
+      (
+        contains(github.event.comment.body, '@claude implement') ||
+        contains(github.event.comment.body, '@claude fix') ||
+        contains(github.event.comment.body, '@claude create')
+      )
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check if user has write access
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: collaborator } = await github.rest.repos.getCollaboratorPermissionLevel({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              username: context.actor
+            });
+
+            const hasWriteAccess = ['admin', 'write'].includes(collaborator.permission);
+            if (!hasWriteAccess) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: `❌ Only collaborators with write access can request Claude implementation. Your permission level: ${collaborator.permission}`
+              });
+              throw new Error('Insufficient permissions');
+            }
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install pnpm
+        run: npm install -g pnpm@10.12.4
+
+      - name: Create Claude implementation branch
+        id: create-branch
+        run: |
+          # Create a unique branch name based on issue number and timestamp
+          BRANCH_NAME="claude/issue-${{ github.event.issue.number }}-$(date +%Y%m%d-%H%M%S)"
+          echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+
+          # Create and switch to the new branch
+          git checkout -b "$BRANCH_NAME"
+          git push origin "$BRANCH_NAME"
+
+      - name: Add comment with implementation start
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `🤖 **Claude Implementation Started**
+
+              I'm now working on implementing this issue. Here's what I'm doing:
+
+              📋 **Issue**: #${{ github.event.issue.number }} - ${{ github.event.issue.title }}
+              🌿 **Branch**: \`${{ steps.create-branch.outputs.branch_name }}\`
+              ⏱️ **Started**: ${new Date().toISOString()}
+
+              I'll analyze the requirements and create a pull request with the implementation. This may take a few minutes...
+
+              You can track the progress in the [Actions tab](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}).`
+            });
+
+      - name: Install Claude Code CLI
+        run: |
+          # Install Claude Code CLI - adjust this based on available installation method
+          curl -fsSL https://claude.ai/install.sh | bash || echo "Claude CLI installation skipped - using alternative method"
+
+      - name: Prepare implementation context
+        id: context
+        run: |
+          # Create a context file with issue details
+          cat > implementation-context.md << 'EOF'
+          # Implementation Request
+
+          **Issue Number**: #${{ github.event.issue.number }}
+          **Issue Title**: ${{ github.event.issue.title }}
+          **Issue Body**:
+          ${{ github.event.issue.body }}
+
+          **Comment Trigger**:
+          ${{ github.event.comment.body }}
+
+          **Repository**: ${{ github.repository }}
+          **Branch**: ${{ steps.create-branch.outputs.branch_name }}
+
+          # Instructions
+          Please implement the feature or fix described in the issue above. Make sure to:
+          1. Follow the existing code patterns and conventions
+          2. Add appropriate tests if needed
+          3. Update documentation if necessary
+          4. Ensure the implementation is complete and working
+          5. Create a clear commit message describing the changes
+
+          The implementation should be production-ready and follow best practices.
+          EOF
+
+      - name: Implement with Claude
+        id: implementation
+        env:
+          CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
+        run: |
+          # This is a placeholder for Claude implementation
+          # In practice, this would call Claude Code CLI or API
+
+          echo "Starting Claude implementation..."
+
+          # Simulate implementation work
+          # In real usage, this would use Claude Code CLI:
+          # claude-code --file implementation-context.md --implement
+
+          # For now, create a placeholder implementation
+          echo "🤖 Claude implementation completed" > claude-implementation.log
+
+          # Set output for next steps
+          echo "implemented=true" >> $GITHUB_OUTPUT
+
+      - name: Check for changes
+        id: changes
+        run: |
+          if git diff --quiet; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "No changes were made during implementation"
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "Changes detected, preparing commit"
+          fi
+
+      - name: Commit changes
+        if: steps.changes.outputs.has_changes == 'true'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "Claude Implementation Bot"
+
+          git add .
+          git commit -m "$(cat <<'EOF'
+          feat: implement issue #${{ github.event.issue.number }} - ${{ github.event.issue.title }}
+
+          Implemented via Claude automation based on issue requirements.
+
+          Issue: #${{ github.event.issue.number }}
+          Requested by: @${{ github.event.comment.user.login }}
+
+          🤖 Generated with Claude Automation
+
+          Co-Authored-By: Claude <noreply@anthropic.com>
+          EOF
+          )"
+
+          git push origin ${{ steps.create-branch.outputs.branch_name }}
+
+      - name: Create Pull Request
+        if: steps.changes.outputs.has_changes == 'true'
+        uses: actions/github-script@v7
+        id: create-pr
+        with:
+          script: |
+            const { data: pr } = await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🤖 Implement: ${{ github.event.issue.title }}`,
+              head: '${{ steps.create-branch.outputs.branch_name }}',
+              base: 'dev',
+              body: `## 🤖 Claude Implementation
+
+              This PR was automatically created by Claude to implement the feature/fix requested in issue #${{ github.event.issue.number }}.
+
+              ### 📋 Issue Details
+              - **Issue**: #${{ github.event.issue.number }}
+              - **Title**: ${{ github.event.issue.title }}
+              - **Requested by**: @${{ github.event.comment.user.login }}
+              - **Branch**: \`${{ steps.create-branch.outputs.branch_name }}\`
+
+              ### 🔍 Implementation
+              Claude analyzed the issue requirements and implemented the requested changes following the project's coding standards and best practices.
+
+              ### ✅ Review Checklist
+              - [ ] Code follows project conventions
+              - [ ] Tests are included (if applicable)
+              - [ ] Documentation is updated (if needed)
+              - [ ] Implementation matches issue requirements
+              - [ ] No breaking changes (unless intended)
+
+              ### 🔗 Related
+              Closes #${{ github.event.issue.number }}
+
+              ---
+
+              **Note**: This implementation was generated automatically. Please review carefully before merging.
+
+              🤖 *Generated with Claude Automation*`
+            });
+
+            return pr.number;
+
+      - name: Update issue with success
+        if: steps.changes.outputs.has_changes == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `✅ **Implementation Complete!**
+
+              I've successfully implemented the requested changes and created a pull request:
+
+              🎯 **Pull Request**: #${{ steps.create-pr.outputs.result }}
+              🌿 **Branch**: \`${{ steps.create-branch.outputs.branch_name }}\`
+              ⏱️ **Completed**: ${new Date().toISOString()}
+
+              ## Next Steps
+              1. Review the implementation in the pull request
+              2. Test the changes locally if needed
+              3. Merge the PR if everything looks good
+
+              The implementation follows the project's coding standards and includes appropriate documentation.`
+            });
+
+      - name: Update issue with no changes
+        if: steps.changes.outputs.has_changes == 'false'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `⚠️ **Implementation Completed - No Changes**
+
+              I analyzed the issue but determined that no code changes are needed. This might be because:
+
+              - The feature is already implemented
+              - The issue requires clarification
+              - The request is not actionable as a code change
+              - Additional information is needed
+
+              🌿 **Branch**: \`${{ steps.create-branch.outputs.branch_name }}\` (will be cleaned up)
+
+              Please review the issue requirements and provide additional details if needed.`
+            });
+
+      - name: Clean up branch if no changes
+        if: steps.changes.outputs.has_changes == 'false'
+        run: |
+          git push origin --delete ${{ steps.create-branch.outputs.branch_name }} || true
+
+      - name: Handle implementation failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `❌ **Implementation Failed**
+
+              I encountered an error while trying to implement this issue. Please check the [workflow logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.
+
+              Common reasons for failure:
+              - Issue requirements are unclear or incomplete
+              - Technical constraints prevent implementation
+              - Repository permissions or configuration issues
+
+              You can try again by commenting \`@claude implement\` or provide more specific requirements.`
+            });

@@ -57,6 +57,51 @@ function validatePaymentId(paymentId: string): { isValid: boolean; error?: strin
   return { isValid: true }
 }
 
+// Utility function to safely extract collection name
+function getPaymentsCollectionName(pluginConfig: BillingPluginConfig): string {
+  if (typeof pluginConfig.collections?.payments === 'string') {
+    return pluginConfig.collections.payments
+  }
+  return 'payments'
+}
+
+// Enhanced error handling utility for database operations
+async function updatePaymentInDatabase(
+  payload: Payload,
+  sessionId: string,
+  status: Payment['status'],
+  providerData: ProviderData,
+  pluginConfig: BillingPluginConfig
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const paymentsCollection = getPaymentsCollectionName(pluginConfig)
+    const payments = await payload.find({
+      collection: paymentsCollection as any, // PayloadCMS collection type constraint
+      where: { providerId: { equals: sessionId } },
+      limit: 1
+    })
+
+    if (payments.docs.length === 0) {
+      return { success: false, error: 'Payment not found in database' }
+    }
+
+    await payload.update({
+      collection: paymentsCollection as any, // PayloadCMS collection type constraint
+      id: payments.docs[0].id,
+      data: {
+        status,
+        providerData
+      }
+    })
+
+    return { success: true }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown database error'
+    console.error('[Test Provider] Database update failed:', errorMessage)
+    return { success: false, error: errorMessage }
+  }
+}
+
 export type PaymentOutcome = 'paid' | 'failed' | 'cancelled' | 'expired' | 'pending'
 
 export type PaymentMethod = 'ideal' | 'creditcard' | 'paypal' | 'applepay' | 'banktransfer'
@@ -241,10 +286,10 @@ export const testProvider = (testConfig: TestProviderConfig) => {
                 name: method.name,
                 icon: method.icon
               })),
-              testModeIndicators: testConfig.testModeIndicators || {
-                showWarningBanners: true,
-                showTestBadges: true,
-                consoleWarnings: true
+              testModeIndicators: {
+                showWarningBanners: testConfig.testModeIndicators?.showWarningBanners ?? true,
+                showTestBadges: testConfig.testModeIndicators?.showTestBadges ?? true,
+                consoleWarnings: testConfig.testModeIndicators?.consoleWarnings ?? true
               },
               defaultDelay: testConfig.defaultDelay || 1000,
               customUiRoute: uiRoute
@@ -298,35 +343,35 @@ export const testProvider = (testConfig: TestProviderConfig) => {
               setTimeout(() => {
                 processTestPayment(payload, session, pluginConfig).catch(async (error) => {
                   console.error('[Test Provider] Failed to process payment:', error)
+
+                  // Ensure session status is updated consistently
                   session.status = 'failed'
 
-                  // Also update the payment record in database
-                  try {
-                    const paymentsCollection = (typeof pluginConfig.collections?.payments === 'string'
-                      ? pluginConfig.collections.payments
-                      : 'payments') as any
-                    const payments = await payload.find({
-                      collection: paymentsCollection,
-                      where: { providerId: { equals: session.id } },
-                      limit: 1
-                    })
+                  // Create error provider data
+                  const errorProviderData: ProviderData = {
+                    raw: {
+                      error: error instanceof Error ? error.message : 'Unknown processing error',
+                      processedAt: new Date().toISOString(),
+                      testMode: true
+                    },
+                    timestamp: new Date().toISOString(),
+                    provider: 'test'
+                  }
 
-                    if (payments.docs.length > 0) {
-                      await payload.update({
-                        collection: paymentsCollection,
-                        id: payments.docs[0].id,
-                        data: {
-                          status: 'failed',
-                          providerData: {
-                            raw: { error: error.message, processedAt: new Date().toISOString() },
-                            timestamp: new Date().toISOString(),
-                            provider: 'test'
-                          }
-                        }
-                      })
-                    }
-                  } catch (dbError) {
-                    console.error('[Test Provider] Failed to update payment in database:', dbError)
+                  // Update payment record in database with enhanced error handling
+                  const dbResult = await updatePaymentInDatabase(
+                    payload,
+                    session.id,
+                    'failed',
+                    errorProviderData,
+                    pluginConfig
+                  )
+
+                  if (!dbResult.success) {
+                    console.error('[Test Provider] Database error during failure handling:', dbResult.error)
+                    // Even if database update fails, we maintain session consistency
+                  } else {
+                    logWebhookEvent('Test Provider', `Payment ${session.id} marked as failed after processing error`)
                   }
                 })
               }, scenario.delay || testConfig.defaultDelay || 1000)
@@ -492,52 +537,44 @@ async function processTestPayment(
     // Update session status
     session.status = session.scenario.outcome
 
-    // Find and update the payment in the database
-    const paymentsCollection = (typeof pluginConfig.collections?.payments === 'string'
-      ? pluginConfig.collections.payments
-      : 'payments') as any
-    const payments = await payload.find({
-      collection: paymentsCollection,
-      where: {
-        providerId: {
-          equals: session.id
-        }
+    // Update payment with final status and provider data
+    const updatedProviderData: ProviderData = {
+      raw: {
+        ...session.payment,
+        id: session.id,
+        status: session.scenario.outcome,
+        scenario: session.scenario.name,
+        method: session.method,
+        processedAt: new Date().toISOString(),
+        testMode: true
       },
-      limit: 1
-    })
+      timestamp: new Date().toISOString(),
+      provider: 'test'
+    }
 
-    if (payments.docs.length > 0) {
-      const payment = payments.docs[0]
+    // Use the utility function for database operations
+    const dbResult = await updatePaymentInDatabase(
+      payload,
+      session.id,
+      finalStatus,
+      updatedProviderData,
+      pluginConfig
+    )
 
-      // Update payment with final status and provider data
-      const updatedProviderData: ProviderData = {
-        raw: {
-          ...session.payment,
-          id: session.id,
-          status: session.scenario.outcome,
-          scenario: session.scenario.name,
-          method: session.method,
-          processedAt: new Date().toISOString(),
-          testMode: true
-        },
-        timestamp: new Date().toISOString(),
-        provider: 'test'
-      }
-
-      await payload.update({
-        collection: paymentsCollection,
-        id: payment.id,
-        data: {
-          status: finalStatus,
-          providerData: updatedProviderData
-        }
-      })
-
+    if (dbResult.success) {
       logWebhookEvent('Test Provider', `Payment ${session.id} processed with outcome: ${session.scenario.outcome}`)
+    } else {
+      console.error('[Test Provider] Failed to update payment in database:', dbResult.error)
+      // Update session status to indicate database error, but don't throw
+      // This allows the UI to still show the intended test result
+      session.status = 'failed'
+      throw new Error(`Database update failed: ${dbResult.error}`)
     }
   } catch (error) {
-    console.error('[Test Provider] Failed to process payment:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown processing error'
+    console.error('[Test Provider] Failed to process payment:', errorMessage)
     session.status = 'failed'
+    throw error // Re-throw to be handled by the caller
   }
 }
 

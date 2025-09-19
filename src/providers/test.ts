@@ -5,6 +5,58 @@ import type { Payload } from 'payload'
 import { handleWebhookError, logWebhookEvent } from './utils'
 import { isValidAmount, isValidCurrencyCode } from './currency'
 
+// Request validation schemas
+interface ProcessPaymentRequest {
+  paymentId: string
+  scenarioId: string
+  method: PaymentMethod
+}
+
+// Validation functions
+function validateProcessPaymentRequest(body: any): { isValid: boolean; data?: ProcessPaymentRequest; error?: string } {
+  if (!body || typeof body !== 'object') {
+    return { isValid: false, error: 'Request body must be a valid JSON object' }
+  }
+
+  const { paymentId, scenarioId, method } = body
+
+  if (!paymentId || typeof paymentId !== 'string') {
+    return { isValid: false, error: 'paymentId is required and must be a string' }
+  }
+
+  if (!scenarioId || typeof scenarioId !== 'string') {
+    return { isValid: false, error: 'scenarioId is required and must be a string' }
+  }
+
+  if (!method || typeof method !== 'string') {
+    return { isValid: false, error: 'method is required and must be a string' }
+  }
+
+  // Validate method is a valid payment method
+  const validMethods: PaymentMethod[] = ['ideal', 'creditcard', 'paypal', 'applepay', 'banktransfer']
+  if (!validMethods.includes(method as PaymentMethod)) {
+    return { isValid: false, error: `method must be one of: ${validMethods.join(', ')}` }
+  }
+
+  return {
+    isValid: true,
+    data: { paymentId, scenarioId, method: method as PaymentMethod }
+  }
+}
+
+function validatePaymentId(paymentId: string): { isValid: boolean; error?: string } {
+  if (!paymentId || typeof paymentId !== 'string') {
+    return { isValid: false, error: 'Payment ID is required and must be a string' }
+  }
+
+  // Validate payment ID format (should match test payment ID pattern)
+  if (!paymentId.startsWith('test_pay_')) {
+    return { isValid: false, error: 'Invalid payment ID format' }
+  }
+
+  return { isValid: true }
+}
+
 export type PaymentOutcome = 'paid' | 'failed' | 'cancelled' | 'expired' | 'pending'
 
 export type PaymentMethod = 'ideal' | 'creditcard' | 'paypal' | 'applepay' | 'banktransfer'
@@ -145,13 +197,29 @@ export const testProvider = (testConfig: TestProviderConfig) => {
             // Extract payment ID from URL path
             const urlParts = req.url?.split('/') || []
             const paymentId = urlParts[urlParts.length - 1]
+
             if (!paymentId) {
-              return new Response('Payment ID required', { status: 400 })
+              return new Response(JSON.stringify({ error: 'Payment ID required' }), {
+                status: 400,
+                headers: { 'Content-Type': 'application/json' }
+              })
+            }
+
+            // Validate payment ID format
+            const validation = validatePaymentId(paymentId)
+            if (!validation.isValid) {
+              return new Response(JSON.stringify({ error: validation.error }), {
+                status: 400,
+                headers: { 'Content-Type': 'application/json' }
+              })
             }
 
             const session = testPaymentSessions.get(paymentId)
             if (!session) {
-              return new Response('Payment session not found', { status: 404 })
+              return new Response(JSON.stringify({ error: 'Payment session not found' }), {
+                status: 404,
+                headers: { 'Content-Type': 'application/json' }
+              })
             }
 
             // Generate test payment UI
@@ -193,7 +261,17 @@ export const testProvider = (testConfig: TestProviderConfig) => {
             try {
               const payload = req.payload
               const body = await req.json?.() || {}
-              const { paymentId, scenarioId, method } = body as any
+
+              // Validate request body
+              const validation = validateProcessPaymentRequest(body)
+              if (!validation.isValid) {
+                return new Response(JSON.stringify({ error: validation.error }), {
+                  status: 400,
+                  headers: { 'Content-Type': 'application/json' }
+                })
+              }
+
+              const { paymentId, scenarioId, method } = validation.data!
 
               const session = testPaymentSessions.get(paymentId)
               if (!session) {
@@ -205,7 +283,7 @@ export const testProvider = (testConfig: TestProviderConfig) => {
 
               const scenario = scenarios.find(s => s.id === scenarioId)
               if (!scenario) {
-                return new Response(JSON.stringify({ error: 'Invalid scenario' }), {
+                return new Response(JSON.stringify({ error: 'Invalid scenario ID' }), {
                   status: 400,
                   headers: { 'Content-Type': 'application/json' }
                 })
@@ -273,8 +351,18 @@ export const testProvider = (testConfig: TestProviderConfig) => {
             // Extract payment ID from URL path
             const urlParts = req.url?.split('/') || []
             const paymentId = urlParts[urlParts.length - 1]
+
             if (!paymentId) {
               return new Response(JSON.stringify({ error: 'Payment ID required' }), {
+                status: 400,
+                headers: { 'Content-Type': 'application/json' }
+              })
+            }
+
+            // Validate payment ID format
+            const validation = validatePaymentId(paymentId)
+            if (!validation.isValid) {
+              return new Response(JSON.stringify({ error: validation.error }), {
                 status: 400,
                 headers: { 'Content-Type': 'application/json' }
               })

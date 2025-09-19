@@ -19,6 +19,26 @@ export interface TestProviderConfig {
   simulateFailures?: boolean
 }
 
+export interface AdvancedTestProviderConfig {
+  enabled: boolean
+  scenarios?: Array<{
+    id: string
+    name: string
+    description: string
+    outcome: 'paid' | 'failed' | 'cancelled' | 'expired' | 'pending'
+    delay?: number
+    method?: 'ideal' | 'creditcard' | 'paypal' | 'applepay' | 'banktransfer'
+  }>
+  customUiRoute?: string
+  testModeIndicators?: {
+    showWarningBanners?: boolean
+    showTestBadges?: boolean
+    consoleWarnings?: boolean
+  }
+  defaultDelay?: number
+  baseUrl?: string
+}
+
 // Customer info extractor callback type
 export interface CustomerInfoExtractor {
   (customer: any): {

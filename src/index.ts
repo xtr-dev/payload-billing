@@ -11,6 +11,7 @@ export type {
   StripeProviderConfig,
   MollieProviderConfig,
   TestProviderConfig,
+  TestProviderConfigResponse,
   PaymentOutcome,
   PaymentMethod,
   PaymentScenario

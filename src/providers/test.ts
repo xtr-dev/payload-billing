@@ -31,6 +31,23 @@ export interface TestProviderConfig {
   baseUrl?: string
 }
 
+export interface TestProviderConfigResponse {
+  enabled: boolean
+  scenarios: PaymentScenario[]
+  methods: Array<{
+    id: string
+    name: string
+    icon: string
+  }>
+  testModeIndicators: {
+    showWarningBanners: boolean
+    showTestBadges: boolean
+    consoleWarnings: boolean
+  }
+  defaultDelay: number
+  customUiRoute: string
+}
+
 // Properly typed session interface
 export interface TestPaymentSession {
   id: string
@@ -141,6 +158,31 @@ export const testProvider = (testConfig: TestProviderConfig) => {
             const html = generateTestPaymentUI(session, scenarios, uiRoute, baseUrl, testConfig)
             return new Response(html, {
               headers: { 'Content-Type': 'text/html' }
+            })
+          }
+        },
+        {
+          path: '/payload-billing/test/config',
+          method: 'get',
+          handler: async (req) => {
+            const response: TestProviderConfigResponse = {
+              enabled: testConfig.enabled,
+              scenarios: scenarios,
+              methods: Object.entries(PAYMENT_METHODS).map(([id, method]) => ({
+                id,
+                name: method.name,
+                icon: method.icon
+              })),
+              testModeIndicators: testConfig.testModeIndicators || {
+                showWarningBanners: true,
+                showTestBadges: true,
+                consoleWarnings: true
+              },
+              defaultDelay: testConfig.defaultDelay || 1000,
+              customUiRoute: uiRoute
+            }
+            return new Response(JSON.stringify(response), {
+              headers: { 'Content-Type': 'application/json' }
             })
           }
         },

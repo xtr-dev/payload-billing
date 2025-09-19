@@ -7,4 +7,4 @@ export * from './currency'
 // Re-export provider configurations and types
 export type { StripeProviderConfig } from './stripe'
 export type { MollieProviderConfig } from './mollie'
-export type { TestProviderConfig, PaymentOutcome, PaymentMethod, PaymentScenario } from './test'
+export type { TestProviderConfig, TestProviderConfigResponse, PaymentOutcome, PaymentMethod, PaymentScenario } from './test'

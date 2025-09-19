@@ -1,7 +1,8 @@
 import type { Payment } from '../plugin/types/payments.js'
 import type { PaymentProvider, ProviderData } from '../plugin/types/index.js'
+import type { BillingPluginConfig } from '../plugin/config.js'
 import type { Payload } from 'payload'
-import { webhookResponses, handleWebhookError, logWebhookEvent } from './utils.js'
+import { handleWebhookError, logWebhookEvent } from './utils.js'
 import { isValidAmount, isValidCurrencyCode } from './currency.js'
 
 export type PaymentOutcome = 'paid' | 'failed' | 'cancelled' | 'expired' | 'pending'
@@ -29,6 +30,18 @@ export interface TestProviderConfig {
   defaultDelay?: number
   baseUrl?: string
 }
+
+// Properly typed session interface
+export interface TestPaymentSession {
+  id: string
+  payment: Partial<Payment>
+  scenario?: PaymentScenario
+  method?: PaymentMethod
+  createdAt: Date
+  status: PaymentOutcome
+}
+
+// Use the proper BillingPluginConfig type
 
 // Default payment scenarios
 const DEFAULT_SCENARIOS: PaymentScenario[] = [
@@ -86,14 +99,7 @@ const PAYMENT_METHODS: Record<PaymentMethod, { name: string; icon: string }> = {
 }
 
 // In-memory storage for test payment sessions
-const testPaymentSessions = new Map<string, {
-  id: string
-  payment: Partial<Payment>
-  scenario?: PaymentScenario
-  method?: PaymentMethod
-  createdAt: Date
-  status: PaymentOutcome
-}>()
+const testPaymentSessions = new Map<string, TestPaymentSession>()
 
 export const testProvider = (testConfig: TestProviderConfig) => {
   if (!testConfig.enabled) {
@@ -169,8 +175,11 @@ export const testProvider = (testConfig: TestProviderConfig) => {
               session.status = 'pending'
 
               // Process payment after delay
-              setTimeout(async () => {
-                await processTestPayment(payload, session, pluginConfig)
+              setTimeout(() => {
+                processTestPayment(payload, session, pluginConfig).catch((error) => {
+                  console.error('[Test Provider] Failed to process payment:', error)
+                  session.status = 'failed'
+                })
               }, scenario.delay || testConfig.defaultDelay || 1000)
 
               return new Response(JSON.stringify({
@@ -295,9 +304,9 @@ export const testProvider = (testConfig: TestProviderConfig) => {
 // Helper function to process test payment based on scenario
 async function processTestPayment(
   payload: Payload,
-  session: any,
-  pluginConfig: any
-) {
+  session: TestPaymentSession,
+  pluginConfig: BillingPluginConfig
+): Promise<void> {
   try {
     if (!session.scenario) return
 
@@ -325,7 +334,9 @@ async function processTestPayment(
     session.status = session.scenario.outcome
 
     // Find and update the payment in the database
-    const paymentsCollection = pluginConfig.collections?.payments || 'payments'
+    const paymentsCollection = (typeof pluginConfig.collections?.payments === 'string'
+      ? pluginConfig.collections.payments
+      : 'payments') as any
     const payments = await payload.find({
       collection: paymentsCollection,
       where: {
@@ -373,7 +384,7 @@ async function processTestPayment(
 
 // Helper function to generate test payment UI
 function generateTestPaymentUI(
-  session: any,
+  session: TestPaymentSession,
   scenarios: PaymentScenario[],
   uiRoute: string,
   baseUrl: string,
@@ -571,7 +582,7 @@ function generateTestPaymentUI(
                 Test Payment Checkout
                 ${testModeIndicators.showTestBadges !== false ? '<span class="test-badge">Test</span>' : ''}
             </div>
-            <div class="amount">${payment.currency?.toUpperCase()} ${(payment.amount / 100).toFixed(2)}</div>
+            <div class="amount">${payment.currency?.toUpperCase()} ${payment.amount ? (payment.amount / 100).toFixed(2) : '0.00'}</div>
             ${payment.description ? `<div class="description">${payment.description}</div>` : ''}
         </div>
 
@@ -654,7 +665,7 @@ function generateTestPaymentUI(
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        paymentId: '${session.id}',
+                        paymentId: "${session.id}",
                         scenarioId: selectedScenario,
                         method: selectedMethod
                     })

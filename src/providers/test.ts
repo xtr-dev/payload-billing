@@ -392,7 +392,7 @@ export const testProvider = (testConfig: TestProviderConfig) => {
         {
           path: '/payload-billing/test/status/:id',
           method: 'get',
-          handler: async (req) => {
+          handler: (req) => {
             // Extract payment ID from URL path
             const urlParts = req.url?.split('/') || []
             const paymentId = urlParts[urlParts.length - 1]

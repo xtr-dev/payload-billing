@@ -432,7 +432,7 @@ export const testProvider = (testConfig: TestProviderConfig) => {
         }
       ]
     },
-    onInit: async (payload: Payload) => {
+    onInit: (payload: Payload) => {
       logWebhookEvent('Test Provider', 'Test payment provider initialized')
 
       // Clean up old sessions periodically (older than 1 hour)

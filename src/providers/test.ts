@@ -5,6 +5,103 @@ import type { Payload } from 'payload'
 import { handleWebhookError, logWebhookEvent } from './utils'
 import { isValidAmount, isValidCurrencyCode } from './currency'
 
+// Request validation schemas
+interface ProcessPaymentRequest {
+  paymentId: string
+  scenarioId: string
+  method: PaymentMethod
+}
+
+// Validation functions
+function validateProcessPaymentRequest(body: any): { isValid: boolean; data?: ProcessPaymentRequest; error?: string } {
+  if (!body || typeof body !== 'object') {
+    return { isValid: false, error: 'Request body must be a valid JSON object' }
+  }
+
+  const { paymentId, scenarioId, method } = body
+
+  if (!paymentId || typeof paymentId !== 'string') {
+    return { isValid: false, error: 'paymentId is required and must be a string' }
+  }
+
+  if (!scenarioId || typeof scenarioId !== 'string') {
+    return { isValid: false, error: 'scenarioId is required and must be a string' }
+  }
+
+  if (!method || typeof method !== 'string') {
+    return { isValid: false, error: 'method is required and must be a string' }
+  }
+
+  // Validate method is a valid payment method
+  const validMethods: PaymentMethod[] = ['ideal', 'creditcard', 'paypal', 'applepay', 'banktransfer']
+  if (!validMethods.includes(method as PaymentMethod)) {
+    return { isValid: false, error: `method must be one of: ${validMethods.join(', ')}` }
+  }
+
+  return {
+    isValid: true,
+    data: { paymentId, scenarioId, method: method as PaymentMethod }
+  }
+}
+
+function validatePaymentId(paymentId: string): { isValid: boolean; error?: string } {
+  if (!paymentId || typeof paymentId !== 'string') {
+    return { isValid: false, error: 'Payment ID is required and must be a string' }
+  }
+
+  // Validate payment ID format (should match test payment ID pattern)
+  if (!paymentId.startsWith('test_pay_')) {
+    return { isValid: false, error: 'Invalid payment ID format' }
+  }
+
+  return { isValid: true }
+}
+
+// Utility function to safely extract collection name
+function getPaymentsCollectionName(pluginConfig: BillingPluginConfig): string {
+  if (typeof pluginConfig.collections?.payments === 'string') {
+    return pluginConfig.collections.payments
+  }
+  return 'payments'
+}
+
+// Enhanced error handling utility for database operations
+async function updatePaymentInDatabase(
+  payload: Payload,
+  sessionId: string,
+  status: Payment['status'],
+  providerData: ProviderData,
+  pluginConfig: BillingPluginConfig
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const paymentsCollection = getPaymentsCollectionName(pluginConfig)
+    const payments = await payload.find({
+      collection: paymentsCollection as any, // PayloadCMS collection type constraint
+      where: { providerId: { equals: sessionId } },
+      limit: 1
+    })
+
+    if (payments.docs.length === 0) {
+      return { success: false, error: 'Payment not found in database' }
+    }
+
+    await payload.update({
+      collection: paymentsCollection as any, // PayloadCMS collection type constraint
+      id: payments.docs[0].id,
+      data: {
+        status,
+        providerData
+      }
+    })
+
+    return { success: true }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown database error'
+    console.error('[Test Provider] Database update failed:', errorMessage)
+    return { success: false, error: errorMessage }
+  }
+}
+
 export type PaymentOutcome = 'paid' | 'failed' | 'cancelled' | 'expired' | 'pending'
 
 export type PaymentMethod = 'ideal' | 'creditcard' | 'paypal' | 'applepay' | 'banktransfer'
@@ -29,6 +126,23 @@ export interface TestProviderConfig {
   }
   defaultDelay?: number
   baseUrl?: string
+}
+
+export interface TestProviderConfigResponse {
+  enabled: boolean
+  scenarios: PaymentScenario[]
+  methods: Array<{
+    id: string
+    name: string
+    icon: string
+  }>
+  testModeIndicators: {
+    showWarningBanners: boolean
+    showTestBadges: boolean
+    consoleWarnings: boolean
+  }
+  defaultDelay: number
+  customUiRoute: string
 }
 
 // Properly typed session interface
@@ -128,13 +242,29 @@ export const testProvider = (testConfig: TestProviderConfig) => {
             // Extract payment ID from URL path
             const urlParts = req.url?.split('/') || []
             const paymentId = urlParts[urlParts.length - 1]
+
             if (!paymentId) {
-              return new Response('Payment ID required', { status: 400 })
+              return new Response(JSON.stringify({ error: 'Payment ID required' }), {
+                status: 400,
+                headers: { 'Content-Type': 'application/json' }
+              })
+            }
+
+            // Validate payment ID format
+            const validation = validatePaymentId(paymentId)
+            if (!validation.isValid) {
+              return new Response(JSON.stringify({ error: validation.error }), {
+                status: 400,
+                headers: { 'Content-Type': 'application/json' }
+              })
             }
 
             const session = testPaymentSessions.get(paymentId)
             if (!session) {
-              return new Response('Payment session not found', { status: 404 })
+              return new Response(JSON.stringify({ error: 'Payment session not found' }), {
+                status: 404,
+                headers: { 'Content-Type': 'application/json' }
+              })
             }
 
             // Generate test payment UI
@@ -145,13 +275,48 @@ export const testProvider = (testConfig: TestProviderConfig) => {
           }
         },
         {
+          path: '/payload-billing/test/config',
+          method: 'get',
+          handler: async (req) => {
+            const response: TestProviderConfigResponse = {
+              enabled: testConfig.enabled,
+              scenarios: scenarios,
+              methods: Object.entries(PAYMENT_METHODS).map(([id, method]) => ({
+                id,
+                name: method.name,
+                icon: method.icon
+              })),
+              testModeIndicators: {
+                showWarningBanners: testConfig.testModeIndicators?.showWarningBanners ?? true,
+                showTestBadges: testConfig.testModeIndicators?.showTestBadges ?? true,
+                consoleWarnings: testConfig.testModeIndicators?.consoleWarnings ?? true
+              },
+              defaultDelay: testConfig.defaultDelay || 1000,
+              customUiRoute: uiRoute
+            }
+            return new Response(JSON.stringify(response), {
+              headers: { 'Content-Type': 'application/json' }
+            })
+          }
+        },
+        {
           path: '/payload-billing/test/process',
           method: 'post',
           handler: async (req) => {
             try {
               const payload = req.payload
               const body = await req.json?.() || {}
-              const { paymentId, scenarioId, method } = body as any
+
+              // Validate request body
+              const validation = validateProcessPaymentRequest(body)
+              if (!validation.isValid) {
+                return new Response(JSON.stringify({ error: validation.error }), {
+                  status: 400,
+                  headers: { 'Content-Type': 'application/json' }
+                })
+              }
+
+              const { paymentId, scenarioId, method } = validation.data!
 
               const session = testPaymentSessions.get(paymentId)
               if (!session) {
@@ -163,7 +328,7 @@ export const testProvider = (testConfig: TestProviderConfig) => {
 
               const scenario = scenarios.find(s => s.id === scenarioId)
               if (!scenario) {
-                return new Response(JSON.stringify({ error: 'Invalid scenario' }), {
+                return new Response(JSON.stringify({ error: 'Invalid scenario ID' }), {
                   status: 400,
                   headers: { 'Content-Type': 'application/json' }
                 })
@@ -178,35 +343,35 @@ export const testProvider = (testConfig: TestProviderConfig) => {
               setTimeout(() => {
                 processTestPayment(payload, session, pluginConfig).catch(async (error) => {
                   console.error('[Test Provider] Failed to process payment:', error)
+
+                  // Ensure session status is updated consistently
                   session.status = 'failed'
 
-                  // Also update the payment record in database
-                  try {
-                    const paymentsCollection = (typeof pluginConfig.collections?.payments === 'string'
-                      ? pluginConfig.collections.payments
-                      : 'payments') as any
-                    const payments = await payload.find({
-                      collection: paymentsCollection,
-                      where: { providerId: { equals: session.id } },
-                      limit: 1
-                    })
+                  // Create error provider data
+                  const errorProviderData: ProviderData = {
+                    raw: {
+                      error: error instanceof Error ? error.message : 'Unknown processing error',
+                      processedAt: new Date().toISOString(),
+                      testMode: true
+                    },
+                    timestamp: new Date().toISOString(),
+                    provider: 'test'
+                  }
 
-                    if (payments.docs.length > 0) {
-                      await payload.update({
-                        collection: paymentsCollection,
-                        id: payments.docs[0].id,
-                        data: {
-                          status: 'failed',
-                          providerData: {
-                            raw: { error: error.message, processedAt: new Date().toISOString() },
-                            timestamp: new Date().toISOString(),
-                            provider: 'test'
-                          }
-                        }
-                      })
-                    }
-                  } catch (dbError) {
-                    console.error('[Test Provider] Failed to update payment in database:', dbError)
+                  // Update payment record in database with enhanced error handling
+                  const dbResult = await updatePaymentInDatabase(
+                    payload,
+                    session.id,
+                    'failed',
+                    errorProviderData,
+                    pluginConfig
+                  )
+
+                  if (!dbResult.success) {
+                    console.error('[Test Provider] Database error during failure handling:', dbResult.error)
+                    // Even if database update fails, we maintain session consistency
+                  } else {
+                    logWebhookEvent('Test Provider', `Payment ${session.id} marked as failed after processing error`)
                   }
                 })
               }, scenario.delay || testConfig.defaultDelay || 1000)
@@ -227,12 +392,22 @@ export const testProvider = (testConfig: TestProviderConfig) => {
         {
           path: '/payload-billing/test/status/:id',
           method: 'get',
-          handler: async (req) => {
+          handler: (req) => {
             // Extract payment ID from URL path
             const urlParts = req.url?.split('/') || []
             const paymentId = urlParts[urlParts.length - 1]
+
             if (!paymentId) {
               return new Response(JSON.stringify({ error: 'Payment ID required' }), {
+                status: 400,
+                headers: { 'Content-Type': 'application/json' }
+              })
+            }
+
+            // Validate payment ID format
+            const validation = validatePaymentId(paymentId)
+            if (!validation.isValid) {
+              return new Response(JSON.stringify({ error: validation.error }), {
                 status: 400,
                 headers: { 'Content-Type': 'application/json' }
               })
@@ -257,7 +432,7 @@ export const testProvider = (testConfig: TestProviderConfig) => {
         }
       ]
     },
-    onInit: async (payload: Payload) => {
+    onInit: (payload: Payload) => {
       logWebhookEvent('Test Provider', 'Test payment provider initialized')
 
       // Clean up old sessions periodically (older than 1 hour)
@@ -362,52 +537,44 @@ async function processTestPayment(
     // Update session status
     session.status = session.scenario.outcome
 
-    // Find and update the payment in the database
-    const paymentsCollection = (typeof pluginConfig.collections?.payments === 'string'
-      ? pluginConfig.collections.payments
-      : 'payments') as any
-    const payments = await payload.find({
-      collection: paymentsCollection,
-      where: {
-        providerId: {
-          equals: session.id
-        }
+    // Update payment with final status and provider data
+    const updatedProviderData: ProviderData = {
+      raw: {
+        ...session.payment,
+        id: session.id,
+        status: session.scenario.outcome,
+        scenario: session.scenario.name,
+        method: session.method,
+        processedAt: new Date().toISOString(),
+        testMode: true
       },
-      limit: 1
-    })
+      timestamp: new Date().toISOString(),
+      provider: 'test'
+    }
 
-    if (payments.docs.length > 0) {
-      const payment = payments.docs[0]
+    // Use the utility function for database operations
+    const dbResult = await updatePaymentInDatabase(
+      payload,
+      session.id,
+      finalStatus,
+      updatedProviderData,
+      pluginConfig
+    )
 
-      // Update payment with final status and provider data
-      const updatedProviderData: ProviderData = {
-        raw: {
-          ...session.payment,
-          id: session.id,
-          status: session.scenario.outcome,
-          scenario: session.scenario.name,
-          method: session.method,
-          processedAt: new Date().toISOString(),
-          testMode: true
-        },
-        timestamp: new Date().toISOString(),
-        provider: 'test'
-      }
-
-      await payload.update({
-        collection: paymentsCollection,
-        id: payment.id,
-        data: {
-          status: finalStatus,
-          providerData: updatedProviderData
-        }
-      })
-
+    if (dbResult.success) {
       logWebhookEvent('Test Provider', `Payment ${session.id} processed with outcome: ${session.scenario.outcome}`)
+    } else {
+      console.error('[Test Provider] Failed to update payment in database:', dbResult.error)
+      // Update session status to indicate database error, but don't throw
+      // This allows the UI to still show the intended test result
+      session.status = 'failed'
+      throw new Error(`Database update failed: ${dbResult.error}`)
     }
   } catch (error) {
-    console.error('[Test Provider] Failed to process payment:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown processing error'
+    console.error('[Test Provider] Failed to process payment:', errorMessage)
     session.status = 'failed'
+    throw error // Re-throw to be handled by the caller
   }
 }
 

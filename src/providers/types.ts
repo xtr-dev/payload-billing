@@ -2,7 +2,7 @@ import type { Payment } from '../plugin/types/payments'
 import type { Config, Payload } from 'payload'
 import type { BillingPluginConfig } from '../plugin/config'
 
-export type InitPayment = (payload: Payload, payment: Partial<Payment>) => Promise<Partial<Payment>>
+export type InitPayment = (payload: Payload, payment: Partial<Payment>) => Promise<Partial<Payment>> | Partial<Payment>
 
 export type PaymentProvider = {
   key: string

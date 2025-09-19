@@ -1,9 +1,9 @@
-import type { Payment } from '../plugin/types/payments.js'
-import type { PaymentProvider, ProviderData } from '../plugin/types/index.js'
-import type { BillingPluginConfig } from '../plugin/config.js'
+import type { Payment } from '../plugin/types/payments'
+import type { PaymentProvider, ProviderData } from '../plugin/types/index'
+import type { BillingPluginConfig } from '../plugin/config'
 import type { Payload } from 'payload'
-import { handleWebhookError, logWebhookEvent } from './utils.js'
-import { isValidAmount, isValidCurrencyCode } from './currency.js'
+import { handleWebhookError, logWebhookEvent } from './utils'
+import { isValidAmount, isValidCurrencyCode } from './currency'
 
 export type PaymentOutcome = 'paid' | 'failed' | 'cancelled' | 'expired' | 'pending'
 

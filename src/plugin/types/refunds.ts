@@ -1,4 +1,4 @@
-import { Payment } from './payments.js'
+import { Payment } from './payments'
 
 export interface Refund {
   id: number;

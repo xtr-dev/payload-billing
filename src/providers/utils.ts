@@ -1,9 +1,9 @@
 import type { Payload } from 'payload'
-import type { Payment } from '../plugin/types/payments.js'
-import type { BillingPluginConfig } from '../plugin/config.js'
-import type { ProviderData } from './types.js'
-import { defaults } from '../plugin/config.js'
-import { extractSlug, toPayloadId } from '../plugin/utils.js'
+import type { Payment } from '../plugin/types/payments'
+import type { BillingPluginConfig } from '../plugin/config'
+import type { ProviderData } from './types'
+import { defaults } from '../plugin/config'
+import { extractSlug, toPayloadId } from '../plugin/utils'
 
 /**
  * Common webhook response utilities

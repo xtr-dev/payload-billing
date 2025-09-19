@@ -1,6 +1,6 @@
 import { CollectionConfig } from 'payload'
-import { FieldsOverride } from './utils.js'
-import { PaymentProvider } from './types/index.js'
+import { FieldsOverride } from './utils'
+import { PaymentProvider } from './types/index'
 
 export const defaults = {
   paymentsCollection: 'payments',
@@ -20,7 +20,7 @@ export interface TestProviderConfig {
 }
 
 // Re-export the actual test provider config instead of duplicating
-export type { TestProviderConfig as AdvancedTestProviderConfig } from '../providers/test.js'
+export type { TestProviderConfig as AdvancedTestProviderConfig } from '../providers/test'
 
 // Customer info extractor callback type
 export interface CustomerInfoExtractor {

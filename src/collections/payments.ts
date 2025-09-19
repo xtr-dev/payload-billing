@@ -1,9 +1,9 @@
 import type { AccessArgs, CollectionBeforeChangeHook, CollectionConfig, Field } from 'payload'
-import type { BillingPluginConfig} from '../plugin/config.js';
-import { defaults } from '../plugin/config.js'
-import { extractSlug } from '../plugin/utils.js'
-import type { Payment } from '../plugin/types/payments.js'
-import { initProviderPayment } from './hooks.js'
+import type { BillingPluginConfig} from '../plugin/config';
+import { defaults } from '../plugin/config'
+import { extractSlug } from '../plugin/utils'
+import type { Payment } from '../plugin/types/payments'
+import { initProviderPayment } from './hooks'
 
 export function createPaymentsCollection(pluginConfig: BillingPluginConfig): CollectionConfig {
   const overrides = typeof pluginConfig.collections?.payments === 'object' ? pluginConfig.collections?.payments : {}

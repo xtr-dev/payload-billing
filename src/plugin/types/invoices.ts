@@ -1,5 +1,5 @@
-import { Payment } from './payments.js'
-import { Id } from './id.js'
+import { Payment } from './payments'
+import { Id } from './id'
 
 export interface Invoice<TCustomer = unknown> {
   id: Id;

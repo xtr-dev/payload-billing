@@ -1,7 +1,7 @@
-import type { Payment } from '../plugin/types/payments.js'
-import type { PaymentProvider } from '../plugin/types/index.js'
+import type { Payment } from '../plugin/types/payments'
+import type { PaymentProvider } from '../plugin/types/index'
 import type { Payload } from 'payload'
-import { createSingleton } from '../plugin/singleton.js'
+import { createSingleton } from '../plugin/singleton'
 import type { createMollieClient, MollieClient } from '@mollie/api-client'
 import {
   webhookResponses,
@@ -10,8 +10,8 @@ import {
   updateInvoiceOnPaymentSuccess,
   handleWebhookError,
   validateProductionUrl
-} from './utils.js'
-import { formatAmountForProvider, isValidAmount, isValidCurrencyCode } from './currency.js'
+} from './utils'
+import { formatAmountForProvider, isValidAmount, isValidCurrencyCode } from './currency'
 
 const symbol = Symbol('mollie')
 export type MollieProviderConfig = Parameters<typeof createMollieClient>[0]

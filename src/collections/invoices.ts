@@ -5,10 +5,10 @@ import {
   CollectionBeforeValidateHook,
   CollectionConfig, Field,
 } from 'payload'
-import type { BillingPluginConfig} from '../plugin/config.js';
-import { defaults } from '../plugin/config.js'
-import { extractSlug } from '../plugin/utils.js'
-import type { Invoice } from '../plugin/types/invoices.js'
+import type { BillingPluginConfig} from '../plugin/config';
+import { defaults } from '../plugin/config'
+import { extractSlug } from '../plugin/utils'
+import type { Invoice } from '../plugin/types/invoices'
 
 export function createInvoicesCollection(pluginConfig: BillingPluginConfig): CollectionConfig {
   const {customerRelationSlug, customerInfoExtractor} = pluginConfig

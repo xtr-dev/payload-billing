@@ -1,8 +1,8 @@
-import { createInvoicesCollection, createPaymentsCollection, createRefundsCollection } from '../collections/index.js'
-import type { BillingPluginConfig } from './config.js'
+import { createInvoicesCollection, createPaymentsCollection, createRefundsCollection } from '../collections/index'
+import type { BillingPluginConfig } from './config'
 import type { Config, Payload } from 'payload'
-import { createSingleton } from './singleton.js'
-import type { PaymentProvider } from '../providers/index.js'
+import { createSingleton } from './singleton'
+import type { PaymentProvider } from '../providers/index'
 
 const singleton = createSingleton(Symbol('billingPlugin'))
 

@@ -8,7 +8,7 @@ import { fileURLToPath } from 'url'
 import { testEmailAdapter } from './helpers/testEmailAdapter'
 import { seed } from './seed'
 import billingPlugin from '../src/plugin'
-import { mollieProvider } from '../src/providers'
+import { testProvider } from '../src/providers'
 
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
@@ -50,8 +50,13 @@ const buildConfigWithSQLite = () => {
     plugins: [
       billingPlugin({
         providers: [
-          mollieProvider({
-            apiKey: process.env.MOLLIE_KEY!
+          testProvider({
+            enabled: true,
+            testModeIndicators: {
+              showWarningBanners: true,
+              showTestBadges: true,
+              consoleWarnings: true
+            }
           })
         ],
         collections: {

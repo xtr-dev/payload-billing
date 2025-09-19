@@ -176,9 +176,38 @@ export const testProvider = (testConfig: TestProviderConfig) => {
 
               // Process payment after delay
               setTimeout(() => {
-                processTestPayment(payload, session, pluginConfig).catch((error) => {
+                processTestPayment(payload, session, pluginConfig).catch(async (error) => {
                   console.error('[Test Provider] Failed to process payment:', error)
                   session.status = 'failed'
+
+                  // Also update the payment record in database
+                  try {
+                    const paymentsCollection = (typeof pluginConfig.collections?.payments === 'string'
+                      ? pluginConfig.collections.payments
+                      : 'payments') as any
+                    const payments = await payload.find({
+                      collection: paymentsCollection,
+                      where: { providerId: { equals: session.id } },
+                      limit: 1
+                    })
+
+                    if (payments.docs.length > 0) {
+                      await payload.update({
+                        collection: paymentsCollection,
+                        id: payments.docs[0].id,
+                        data: {
+                          status: 'failed',
+                          providerData: {
+                            raw: { error: error.message, processedAt: new Date().toISOString() },
+                            timestamp: new Date().toISOString(),
+                            provider: 'test'
+                          }
+                        }
+                      })
+                    }
+                  } catch (dbError) {
+                    console.error('[Test Provider] Failed to update payment in database:', dbError)
+                  }
                 })
               }, scenario.delay || testConfig.defaultDelay || 1000)
 
@@ -665,7 +694,7 @@ function generateTestPaymentUI(
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        paymentId: "${session.id}",
+                        paymentId: '${session.id}',
                         scenarioId: selectedScenario,
                         method: selectedMethod
                     })

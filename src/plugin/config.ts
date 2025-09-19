@@ -19,25 +19,8 @@ export interface TestProviderConfig {
   simulateFailures?: boolean
 }
 
-export interface AdvancedTestProviderConfig {
-  enabled: boolean
-  scenarios?: Array<{
-    id: string
-    name: string
-    description: string
-    outcome: 'paid' | 'failed' | 'cancelled' | 'expired' | 'pending'
-    delay?: number
-    method?: 'ideal' | 'creditcard' | 'paypal' | 'applepay' | 'banktransfer'
-  }>
-  customUiRoute?: string
-  testModeIndicators?: {
-    showWarningBanners?: boolean
-    showTestBadges?: boolean
-    consoleWarnings?: boolean
-  }
-  defaultDelay?: number
-  baseUrl?: string
-}
+// Re-export the actual test provider config instead of duplicating
+export type { TestProviderConfig as AdvancedTestProviderConfig } from '../providers/test.js'
 
 // Customer info extractor callback type
 export interface CustomerInfoExtractor {

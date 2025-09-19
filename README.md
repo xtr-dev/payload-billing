@@ -1,5 +1,7 @@
 # @xtr-dev/payload-billing
 
+[![npm version](https://badge.fury.io/js/@xtr-dev%2Fpayload-billing.svg)](https://badge.fury.io/js/@xtr-dev%2Fpayload-billing)
+
 A billing and payment provider plugin for PayloadCMS 3.x. Supports Stripe, Mollie, and local testing with comprehensive tracking and flexible customer data management.
 
 ⚠️ **Pre-release Warning**: This package is currently in active development (v0.1.x). Breaking changes may occur before v1.0.0. Not recommended for production use.

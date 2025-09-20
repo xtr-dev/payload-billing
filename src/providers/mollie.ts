@@ -12,6 +12,7 @@ import {
   validateProductionUrl
 } from './utils'
 import { formatAmountForProvider, isValidAmount, isValidCurrencyCode } from './currency'
+import { createContextLogger } from '../utils/logger'
 
 const symbol = Symbol('mollie')
 export type MollieProviderConfig = Parameters<typeof createMollieClient>[0]
@@ -96,12 +97,13 @@ export const mollieProvider = (mollieConfig: MollieProviderConfig & {
               if (status === 'succeeded' && updateSuccess) {
                 await updateInvoiceOnPaymentSuccess(payload, payment, pluginConfig)
               } else if (!updateSuccess) {
-                console.warn(`[Mollie Webhook] Failed to update payment ${payment.id}, skipping invoice update`)
+                const logger = createContextLogger(payload, 'Mollie Webhook')
+                logger.warn(`Failed to update payment ${payment.id}, skipping invoice update`)
               }
 
               return webhookResponses.success()
             } catch (error) {
-              return handleWebhookError('Mollie', error)
+              return handleWebhookError('Mollie', error, undefined, req.payload)
             }
           }
         }

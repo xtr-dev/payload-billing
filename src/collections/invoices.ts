@@ -8,6 +8,7 @@ import {
 import type { BillingPluginConfig} from '../plugin/config';
 import { defaults } from '../plugin/config'
 import { extractSlug } from '../plugin/utils'
+import { createContextLogger } from '../utils/logger'
 import type { Invoice } from '../plugin/types/invoices'
 
 export function createInvoicesCollection(pluginConfig: BillingPluginConfig): CollectionConfig {
@@ -314,7 +315,8 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
       afterChange: [
         ({ doc, operation, req }) => {
           if (operation === 'create') {
-            req.payload.logger.info(`Invoice created: ${doc.number}`)
+            const logger = createContextLogger(req.payload, 'Invoices Collection')
+            logger.info(`Invoice created: ${doc.number}`)
           }
         },
       ] satisfies CollectionAfterChangeHook<Invoice>[],
@@ -350,7 +352,8 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
                   data.billingAddress = extractedInfo.billingAddress
                 }
               } catch (error) {
-                req.payload.logger.error(`Failed to extract customer info: ${error}`)
+                const logger = createContextLogger(req.payload, 'Invoices Collection')
+                logger.error(`Failed to extract customer info: ${error}`)
                 throw new Error('Failed to extract customer information')
               }
             }

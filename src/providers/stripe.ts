@@ -12,6 +12,7 @@ import {
   logWebhookEvent
 } from './utils'
 import { isValidAmount, isValidCurrencyCode } from './currency'
+import { createContextLogger } from '../utils/logger'
 
 const symbol = Symbol('stripe')
 
@@ -60,13 +61,13 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
                   return webhookResponses.missingBody()
                 }
               } catch (error) {
-                return handleWebhookError('Stripe', error, 'Failed to read request body')
+                return handleWebhookError('Stripe', error, 'Failed to read request body', req.payload)
               }
 
               const signature = req.headers.get('stripe-signature')
 
               if (!signature) {
-                return webhookResponses.error('Missing webhook signature', 400)
+                return webhookResponses.error('Missing webhook signature', 400, req.payload)
               }
 
               // webhookSecret is guaranteed to exist since we only register this endpoint when it's configured
@@ -76,7 +77,7 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
               try {
                 event = stripe.webhooks.constructEvent(body, signature, stripeConfig.webhookSecret!)
               } catch (err) {
-                return handleWebhookError('Stripe', err, 'Signature verification failed')
+                return handleWebhookError('Stripe', err, 'Signature verification failed', req.payload)
               }
 
               // Handle different event types
@@ -90,7 +91,7 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
                   const payment = await findPaymentByProviderId(payload, paymentIntent.id, pluginConfig)
 
                   if (!payment) {
-                    logWebhookEvent('Stripe', `Payment not found for intent: ${paymentIntent.id}`)
+                    logWebhookEvent('Stripe', `Payment not found for intent: ${paymentIntent.id}`, undefined, req.payload)
                     return webhookResponses.success() // Still return 200 to acknowledge receipt
                   }
 
@@ -129,7 +130,8 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
                   if (status === 'succeeded' && updateSuccess) {
                     await updateInvoiceOnPaymentSuccess(payload, payment, pluginConfig)
                   } else if (!updateSuccess) {
-                    console.warn(`[Stripe Webhook] Failed to update payment ${payment.id}, skipping invoice update`)
+                    const logger = createContextLogger(payload, 'Stripe Webhook')
+                    logger.warn(`Failed to update payment ${payment.id}, skipping invoice update`)
                   }
                   break
                 }
@@ -172,7 +174,8 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
                     )
 
                     if (!updateSuccess) {
-                      console.warn(`[Stripe Webhook] Failed to update refund status for payment ${payment.id}`)
+                      const logger = createContextLogger(payload, 'Stripe Webhook')
+                      logger.warn(`Failed to update refund status for payment ${payment.id}`)
                     }
                   }
                   break
@@ -180,12 +183,12 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
 
                 default:
                   // Unhandled event type
-                  logWebhookEvent('Stripe', `Unhandled event type: ${event.type}`)
+                  logWebhookEvent('Stripe', `Unhandled event type: ${event.type}`, undefined, req.payload)
               }
 
               return webhookResponses.success()
             } catch (error) {
-              return handleWebhookError('Stripe', error)
+              return handleWebhookError('Stripe', error, undefined, req.payload)
             }
             }
           }

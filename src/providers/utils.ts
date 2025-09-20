@@ -4,6 +4,7 @@ import type { BillingPluginConfig } from '../plugin/config'
 import type { ProviderData } from './types'
 import { defaults } from '../plugin/config'
 import { extractSlug, toPayloadId } from '../plugin/utils'
+import { createContextLogger } from '../utils/logger'
 
 /**
  * Common webhook response utilities
@@ -11,9 +12,14 @@ import { extractSlug, toPayloadId } from '../plugin/utils'
  */
 export const webhookResponses = {
   success: () => Response.json({ received: true }, { status: 200 }),
-  error: (message: string, status = 400) => {
+  error: (message: string, status = 400, payload?: Payload) => {
     // Log error internally but don't expose details
-    console.error('[Webhook] Error:', message)
+    if (payload) {
+      const logger = createContextLogger(payload, 'Webhook')
+      logger.error('Error:', message)
+    } else {
+      console.error('[Webhook] Error:', message)
+    }
     return Response.json({ error: 'Invalid request' }, { status })
   },
   missingBody: () => Response.json({ received: true }, { status: 200 }),
@@ -63,7 +69,8 @@ export async function updatePaymentStatus(
     }) as Payment
 
     if (!currentPayment) {
-      console.error(`[Payment Update] Payment ${paymentId} not found`)
+      const logger = createContextLogger(payload, 'Payment Update')
+      logger.error(`Payment ${paymentId} not found`)
       return false
     }
 
@@ -74,7 +81,8 @@ export async function updatePaymentStatus(
     const transactionID = await payload.db.beginTransaction()
 
     if (!transactionID) {
-      console.error(`[Payment Update] Failed to begin transaction`)
+      const logger = createContextLogger(payload, 'Payment Update')
+      logger.error('Failed to begin transaction')
       return false
     }
 
@@ -89,7 +97,8 @@ export async function updatePaymentStatus(
       // Check if version still matches
       if ((paymentInTransaction.version || 1) !== currentVersion) {
         // Version conflict detected - payment was modified by another process
-        console.warn(`[Payment Update] Version conflict for payment ${paymentId} (expected version: ${currentVersion}, got: ${paymentInTransaction.version})`)
+        const logger = createContextLogger(payload, 'Payment Update')
+        logger.warn(`Version conflict for payment ${paymentId} (expected version: ${currentVersion}, got: ${paymentInTransaction.version})`)
         await payload.db.rollbackTransaction(transactionID)
         return false
       }
@@ -116,7 +125,8 @@ export async function updatePaymentStatus(
       throw error
     }
   } catch (error) {
-    console.error(`[Payment Update] Failed to update payment ${paymentId}:`, error)
+    const logger = createContextLogger(payload, 'Payment Update')
+    logger.error(`Failed to update payment ${paymentId}:`, error)
     return false
   }
 }
@@ -152,13 +162,19 @@ export async function updateInvoiceOnPaymentSuccess(
 export function handleWebhookError(
   provider: string,
   error: unknown,
-  context?: string
+  context?: string,
+  payload?: Payload
 ): Response {
   const message = error instanceof Error ? error.message : 'Unknown error'
-  const fullContext = context ? `[${provider} Webhook - ${context}]` : `[${provider} Webhook]`
+  const fullContext = context ? `${provider} Webhook - ${context}` : `${provider} Webhook`
 
   // Log detailed error internally for debugging
-  console.error(`${fullContext} Error:`, error)
+  if (payload) {
+    const logger = createContextLogger(payload, fullContext)
+    logger.error('Error:', error)
+  } else {
+    console.error(`[${fullContext}] Error:`, error)
+  }
 
   // Return generic response to avoid information disclosure
   return Response.json({
@@ -173,9 +189,15 @@ export function handleWebhookError(
 export function logWebhookEvent(
   provider: string,
   event: string,
-  details?: any
+  details?: any,
+  payload?: Payload
 ): void {
-  console.log(`[${provider} Webhook] ${event}`, details ? JSON.stringify(details) : '')
+  if (payload) {
+    const logger = createContextLogger(payload, `${provider} Webhook`)
+    logger.info(event, details ? JSON.stringify(details) : '')
+  } else {
+    console.log(`[${provider} Webhook] ${event}`, details ? JSON.stringify(details) : '')
+  }
 }
 
 /**

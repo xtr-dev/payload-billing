@@ -5,6 +5,9 @@ export type { BillingPluginConfig, CustomerInfoExtractor, AdvancedTestProviderCo
 export type { Invoice, Payment, Refund } from './plugin/types/index.js'
 export type { PaymentProvider, ProviderData } from './providers/types.js'
 
+// Export logging utilities
+export { getPluginLogger, createContextLogger } from './utils/logger.js'
+
 // Export all providers
 export { testProvider } from './providers/test.js'
 export type {

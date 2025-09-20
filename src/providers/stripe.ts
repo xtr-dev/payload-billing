@@ -193,9 +193,6 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
             }
           }
         ]
-      } else {
-        // Log that webhook endpoint is not registered
-        console.warn('[Stripe Provider] Webhook endpoint not registered - webhookSecret not configured')
       }
     },
     onInit: async (payload: Payload) => {
@@ -204,6 +201,12 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
         apiVersion: stripeConfig.apiVersion || DEFAULT_API_VERSION,
       })
       singleton.set(payload, stripe)
+
+      // Log webhook registration status
+      if (!stripeConfig.webhookSecret) {
+        const logger = createContextLogger(payload, 'Stripe Provider')
+        logger.warn('Webhook endpoint not registered - webhookSecret not configured')
+      }
     },
     initPayment: async (payload, payment) => {
       // Validate required fields

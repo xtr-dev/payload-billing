@@ -928,14 +928,12 @@ function generateTestPaymentUI(
                     setTimeout(() => pollStatus(), 2000);
                 }
             } catch (error) {
-                const logger = createContextLogger(payload, 'Test Provider')
-                logger.error('Failed to poll status:', error);
+                console.error('[Test Provider] Failed to poll status:', error);
             }
         }
 
         ${testModeIndicators.consoleWarnings !== false ? `
-        const logger = createContextLogger(payload, 'Test Provider')
-        logger.warn('🧪 TEST MODE: This is a simulated payment interface for development purposes');
+        console.warn('[Test Provider] 🧪 TEST MODE: This is a simulated payment interface for development purposes');
         ` : ''}
     </script>
 </body>

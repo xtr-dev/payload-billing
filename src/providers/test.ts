@@ -4,6 +4,12 @@ import type { BillingPluginConfig } from '../plugin/config'
 import type { Payload } from 'payload'
 import { handleWebhookError, logWebhookEvent } from './utils'
 import { isValidAmount, isValidCurrencyCode } from './currency'
+import { createContextLogger } from '../utils/logger'
+
+const TestModeWarningSymbol = Symbol('TestModeWarning')
+const hasGivenTestModeWarning = () => TestModeWarningSymbol in globalThis
+const setTestModeWarning = () => ((<any>globalThis)[TestModeWarningSymbol] = true)
+
 
 // Request validation schemas
 interface ProcessPaymentRequest {
@@ -97,7 +103,8 @@ async function updatePaymentInDatabase(
     return { success: true }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown database error'
-    console.error('[Test Provider] Database update failed:', errorMessage)
+    const logger = createContextLogger(payload, 'Test Provider')
+    logger.error('Database update failed:', errorMessage)
     return { success: false, error: errorMessage }
   }
 }
@@ -224,10 +231,7 @@ export const testProvider = (testConfig: TestProviderConfig) => {
   const baseUrl = testConfig.baseUrl || (process.env.PAYLOAD_PUBLIC_SERVER_URL || 'http://localhost:3000')
   const uiRoute = testConfig.customUiRoute || '/test-payment'
 
-  // Log test mode warnings if enabled
-  if (testConfig.testModeIndicators?.consoleWarnings !== false) {
-    console.warn('🧪 [TEST PROVIDER] Payment system is running in test mode')
-  }
+  // Test mode warnings will be logged in onInit when payload is available
 
   return {
     key: 'test',
@@ -342,7 +346,8 @@ export const testProvider = (testConfig: TestProviderConfig) => {
               // Process payment after delay
               setTimeout(() => {
                 processTestPayment(payload, session, pluginConfig).catch(async (error) => {
-                  console.error('[Test Provider] Failed to process payment:', error)
+                  const logger = createContextLogger(payload, 'Test Provider')
+                  logger.error('Failed to process payment:', error)
 
                   // Ensure session status is updated consistently
                   session.status = 'failed'
@@ -368,10 +373,11 @@ export const testProvider = (testConfig: TestProviderConfig) => {
                   )
 
                   if (!dbResult.success) {
-                    console.error('[Test Provider] Database error during failure handling:', dbResult.error)
+                    const logger = createContextLogger(payload, 'Test Provider')
+                    logger.error('Database error during failure handling:', dbResult.error)
                     // Even if database update fails, we maintain session consistency
                   } else {
-                    logWebhookEvent('Test Provider', `Payment ${session.id} marked as failed after processing error`)
+                    logWebhookEvent('Test Provider', `Payment ${session.id} marked as failed after processing error`, undefined, req.payload)
                   }
                 })
               }, scenario.delay || testConfig.defaultDelay || 1000)
@@ -385,7 +391,7 @@ export const testProvider = (testConfig: TestProviderConfig) => {
                 headers: { 'Content-Type': 'application/json' }
               })
             } catch (error) {
-              return handleWebhookError('Test Provider', error, 'Failed to process test payment')
+              return handleWebhookError('Test Provider', error, 'Failed to process test payment', req.payload)
             }
           }
         },
@@ -433,7 +439,14 @@ export const testProvider = (testConfig: TestProviderConfig) => {
       ]
     },
     onInit: (payload: Payload) => {
-      logWebhookEvent('Test Provider', 'Test payment provider initialized')
+      logWebhookEvent('Test Provider', 'Test payment provider initialized', undefined, payload)
+
+      // Log test mode warnings if enabled
+      if (testConfig.testModeIndicators?.consoleWarnings !== false && !hasGivenTestModeWarning()) {
+        setTestModeWarning()
+        const logger = createContextLogger(payload, 'Test Provider')
+        logger.warn('🧪 Payment system is running in test mode')
+      }
 
       // Clean up old sessions periodically (older than 1 hour)
       setInterval(() => {
@@ -562,9 +575,10 @@ async function processTestPayment(
     )
 
     if (dbResult.success) {
-      logWebhookEvent('Test Provider', `Payment ${session.id} processed with outcome: ${session.scenario.outcome}`)
+      logWebhookEvent('Test Provider', `Payment ${session.id} processed with outcome: ${session.scenario.outcome}`, undefined, payload)
     } else {
-      console.error('[Test Provider] Failed to update payment in database:', dbResult.error)
+      const logger = createContextLogger(payload, 'Test Provider')
+      logger.error('Failed to update payment in database:', dbResult.error)
       // Update session status to indicate database error, but don't throw
       // This allows the UI to still show the intended test result
       session.status = 'failed'
@@ -572,7 +586,8 @@ async function processTestPayment(
     }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown processing error'
-    console.error('[Test Provider] Failed to process payment:', errorMessage)
+    const logger = createContextLogger(payload, 'Test Provider')
+    logger.error('Failed to process payment:', errorMessage)
     session.status = 'failed'
     throw error // Re-throw to be handled by the caller
   }
@@ -913,12 +928,12 @@ function generateTestPaymentUI(
                     setTimeout(() => pollStatus(), 2000);
                 }
             } catch (error) {
-                console.error('Failed to poll status:', error);
+                console.error('[Test Provider] Failed to poll status:', error);
             }
         }
 
         ${testModeIndicators.consoleWarnings !== false ? `
-        console.warn('🧪 TEST MODE: This is a simulated payment interface for development purposes');
+        console.warn('[Test Provider] 🧪 TEST MODE: This is a simulated payment interface for development purposes');
         ` : ''}
     </script>
 </body>

@@ -2,6 +2,7 @@ import type { AccessArgs, CollectionConfig } from 'payload'
 import { BillingPluginConfig, defaults } from '../plugin/config'
 import { extractSlug } from '../plugin/utils'
 import { Payment } from '../plugin/types/index'
+import { createContextLogger } from '../utils/logger'
 
 export function createRefundsCollection(pluginConfig: BillingPluginConfig): CollectionConfig {
   // TODO: finish collection overrides
@@ -111,7 +112,8 @@ export function createRefundsCollection(pluginConfig: BillingPluginConfig): Coll
       afterChange: [
         async ({ doc, operation, req }) => {
           if (operation === 'create') {
-            req.payload.logger.info(`Refund created: ${doc.id} for payment: ${doc.payment}`)
+            const logger = createContextLogger(req.payload, 'Refunds Collection')
+            logger.info(`Refund created: ${doc.id} for payment: ${doc.payment}`)
 
             // Update the related payment's refund relationship
             try {
@@ -129,7 +131,8 @@ export function createRefundsCollection(pluginConfig: BillingPluginConfig): Coll
                 },
               })
             } catch (error) {
-              req.payload.logger.error(`Failed to update payment refunds: ${error}`)
+              const logger = createContextLogger(req.payload, 'Refunds Collection')
+              logger.error(`Failed to update payment refunds: ${error}`)
             }
           }
         },

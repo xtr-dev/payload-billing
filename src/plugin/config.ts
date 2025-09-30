@@ -55,6 +55,6 @@ export interface BillingPluginConfig {
   customerInfoExtractor?: CustomerInfoExtractor // Callback to extract customer info from relationship
   customerRelationSlug?: string // Customer collection slug for relationship
   disabled?: boolean
-  providers?: PaymentProvider[]
+  providers?: (PaymentProvider | undefined | null)[]
 }
 

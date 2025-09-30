@@ -224,7 +224,7 @@ const testPaymentSessions = new Map<string, TestPaymentSession>()
 
 export const testProvider = (testConfig: TestProviderConfig) => {
   if (!testConfig.enabled) {
-    throw new Error('Test provider is disabled')
+    return
   }
 
   const scenarios = testConfig.scenarios || DEFAULT_SCENARIOS
@@ -242,7 +242,7 @@ export const testProvider = (testConfig: TestProviderConfig) => {
         {
           path: '/payload-billing/test/payment/:id',
           method: 'get',
-          handler: async (req) => {
+          handler: (req) => {
             // Extract payment ID from URL path
             const urlParts = req.url?.split('/') || []
             const paymentId = urlParts[urlParts.length - 1]
@@ -458,7 +458,7 @@ export const testProvider = (testConfig: TestProviderConfig) => {
         })
       }, 10 * 60 * 1000) // Clean every 10 minutes
     },
-    initPayment: async (payload, payment) => {
+    initPayment: (payload, payment) => {
       // Validate required fields
       if (!payment.amount) {
         throw new Error('Amount is required')

@@ -28,8 +28,8 @@ export const billingPlugin = (pluginConfig: BillingPluginConfig = {}) => (config
   ];
 
   (pluginConfig.providers || [])
-    .filter(provider => provider.onConfig)
-    .forEach(provider => provider.onConfig!(config, pluginConfig))
+    .filter(provider => provider?.onConfig)
+    .forEach(provider => provider?.onConfig!(config, pluginConfig))
 
   const incomingOnInit = config.onInit
   config.onInit = async (payload) => {
@@ -38,17 +38,17 @@ export const billingPlugin = (pluginConfig: BillingPluginConfig = {}) => (config
     }
     singleton.set(payload, {
       config: pluginConfig,
-      providerConfig: (pluginConfig.providers || []).reduce(
+      providerConfig: (pluginConfig.providers || []).filter(Boolean).reduce(
         (record, provider) => {
-          record[provider.key] = provider
+          record[provider!.key] = provider as PaymentProvider
           return record
         },
         {} as Record<string, PaymentProvider>
       )
     } satisfies BillingPlugin)
     await Promise.all((pluginConfig.providers || [])
-      .filter(provider => provider.onInit)
-      .map(provider => provider.onInit!(payload)))
+      .filter(provider => provider?.onInit)
+      .map(provider => provider?.onInit!(payload)))
   }
 
   return config

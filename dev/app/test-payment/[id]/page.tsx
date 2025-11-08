@@ -123,6 +123,7 @@ export default function TestPaymentPage() {
       if (result.status === 'paid') {
         setStatus({ type: 'success', message: '✅ Payment successful!' })
         setTimeout(() => {
+          if (!session) return
           const params = new URLSearchParams({
             paymentId: paymentId,
             amount: session.amount.toString(),
@@ -133,6 +134,7 @@ export default function TestPaymentPage() {
       } else if (['failed', 'cancelled', 'expired'].includes(result.status)) {
         setStatus({ type: 'error', message: `❌ Payment ${result.status}` })
         setTimeout(() => {
+          if (!session) return
           const params = new URLSearchParams({
             paymentId: paymentId,
             amount: session.amount.toString(),

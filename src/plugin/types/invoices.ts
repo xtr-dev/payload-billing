@@ -1,5 +1,5 @@
-import { Payment } from './payments'
-import { Id } from './id'
+import type { Payment } from './payments'
+import type { Id } from './id'
 
 export interface Invoice<TCustomer = unknown> {
   id: Id;

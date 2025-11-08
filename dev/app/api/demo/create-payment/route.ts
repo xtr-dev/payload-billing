@@ -44,6 +44,7 @@ export async function POST(request: Request) {
       },
     })
   } catch (error) {
+    // eslint-disable-next-line no-console
     console.error('Failed to create payment:', error)
     return Response.json(
       {

@@ -1,7 +1,8 @@
 import type { AccessArgs, CollectionConfig } from 'payload'
-import { BillingPluginConfig, defaults } from '../plugin/config'
+import type { BillingPluginConfig} from '../plugin/config';
+import { defaults } from '../plugin/config'
 import { extractSlug } from '../plugin/utils'
-import { Payment } from '../plugin/types/index'
+import type { Payment } from '../plugin/types/index'
 import { createContextLogger } from '../utils/logger'
 
 export function createRefundsCollection(pluginConfig: BillingPluginConfig): CollectionConfig {

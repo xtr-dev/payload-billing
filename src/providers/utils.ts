@@ -91,7 +91,7 @@ export async function updatePaymentStatus(
       const paymentInTransaction = await payload.findByID({
         collection: paymentsCollection,
         id: toPayloadId(paymentId),
-        req: { transactionID: transactionID }
+        req: { transactionID }
       }) as Payment
 
       // Check if version still matches
@@ -115,7 +115,7 @@ export async function updatePaymentStatus(
           },
           version: currentVersion + 1
         },
-        req: { transactionID: transactionID }
+        req: { transactionID }
       })
 
       await payload.db.commitTransaction(transactionID)
@@ -139,7 +139,7 @@ export async function updateInvoiceOnPaymentSuccess(
   payment: Payment,
   pluginConfig: BillingPluginConfig
 ): Promise<void> {
-  if (!payment.invoice) return
+  if (!payment.invoice) {return}
 
   const invoicesCollection = extractSlug(pluginConfig.collections?.invoices || defaults.invoicesCollection)
   const invoiceId = typeof payment.invoice === 'object'
@@ -206,7 +206,7 @@ export function logWebhookEvent(
 export function validateProductionUrl(url: string | undefined, urlType: string): void {
   const isProduction = process.env.NODE_ENV === 'production'
 
-  if (!isProduction) return
+  if (!isProduction) {return}
 
   if (!url) {
     throw new Error(`${urlType} URL is required for production`)

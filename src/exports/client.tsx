@@ -62,7 +62,7 @@ export const PaymentStatusBadge: React.FC<{ status: string }> = ({ status }) => 
 
 // Test mode indicator components
 export const TestModeWarningBanner: React.FC<{ visible?: boolean }> = ({ visible = true }) => {
-  if (!visible) return null
+  if (!visible) {return null}
 
   return (
     <div style={{
@@ -75,13 +75,13 @@ export const TestModeWarningBanner: React.FC<{ visible?: boolean }> = ({ visible
       marginBottom: '20px',
       borderRadius: '4px'
     }}>
-      🧪 TEST MODE - Payment system is running in test mode for development
+      <span role="img" aria-label="test tube">🧪</span> TEST MODE - Payment system is running in test mode for development
     </div>
   )
 }
 
 export const TestModeBadge: React.FC<{ visible?: boolean }> = ({ visible = true }) => {
-  if (!visible) return null
+  if (!visible) {return null}
 
   return (
     <span style={{
@@ -127,7 +127,7 @@ export const TestPaymentControls: React.FC<{
 
   return (
     <div style={{ border: '1px solid #e9ecef', borderRadius: '8px', padding: '16px', margin: '16px 0' }}>
-      <h4 style={{ marginBottom: '12px', color: '#2c3e50' }}>🧪 Test Payment Controls</h4>
+      <h4 style={{ marginBottom: '12px', color: '#2c3e50' }}><span role="img" aria-label="test tube">🧪</span> Test Payment Controls</h4>
 
       <div style={{ marginBottom: '16px' }}>
         <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>Payment Method:</label>

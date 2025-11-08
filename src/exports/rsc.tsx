@@ -10,8 +10,8 @@ interface BillingServerStatsProps {
   payloadInstance?: unknown
 }
 
-export const BillingServerStats: React.FC<BillingServerStatsProps> = async ({ 
-  payloadInstance 
+export const BillingServerStats: React.FC<BillingServerStatsProps> = ({
+  payloadInstance: _payloadInstance
 }) => {
   // In a real implementation, this would fetch data from the database
   // const stats = await payloadInstance?.find({

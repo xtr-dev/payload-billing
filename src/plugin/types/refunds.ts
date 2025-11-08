@@ -1,4 +1,4 @@
-import { Payment } from './payments'
+import type { Payment } from './payments'
 
 export interface Refund {
   id: number;

@@ -1,6 +1,6 @@
-import { Refund } from './refunds'
-import { Invoice } from './invoices'
-import { Id } from './id'
+import type { Refund } from './refunds'
+import type { Invoice } from './invoices'
+import type { Id } from './id'
 
 export interface Payment {
   id: Id;

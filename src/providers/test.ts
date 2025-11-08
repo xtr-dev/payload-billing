@@ -281,10 +281,10 @@ export const testProvider = (testConfig: TestProviderConfig) => {
         {
           path: '/payload-billing/test/config',
           method: 'get',
-          handler: async (req) => {
+          handler: () => {
             const response: TestProviderConfigResponse = {
               enabled: testConfig.enabled,
-              scenarios: scenarios,
+              scenarios,
               methods: Object.entries(PAYMENT_METHODS).map(([id, method]) => ({
                 id,
                 name: method.name,
@@ -525,7 +525,7 @@ async function processTestPayment(
   pluginConfig: BillingPluginConfig
 ): Promise<void> {
   try {
-    if (!session.scenario) return
+    if (!session.scenario) {return}
 
     // Map scenario outcome to payment status
     let finalStatus: Payment['status'] = 'pending'

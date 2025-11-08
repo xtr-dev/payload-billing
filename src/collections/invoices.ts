@@ -1,4 +1,4 @@
-import {
+import type {
   AccessArgs,
   CollectionAfterChangeHook,
   CollectionBeforeChangeHook,
@@ -390,7 +390,7 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
       ] satisfies CollectionBeforeChangeHook<Invoice>[],
       beforeValidate: [
         ({ data }) => {
-          if (!data) return
+          if (!data) {return}
 
           // If using extractor, customer relationship is required
           if (customerRelationSlug && customerInfoExtractor && !data.customer) {

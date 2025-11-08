@@ -69,6 +69,7 @@ export interface Config {
   collections: {
     posts: Post;
     media: Media;
+    customers: Customer;
     payments: Payment;
     invoices: Invoice;
     refunds: Refund;
@@ -81,6 +82,7 @@ export interface Config {
   collectionsSelect: {
     posts: PostsSelect<false> | PostsSelect<true>;
     media: MediaSelect<false> | MediaSelect<true>;
+    customers: CustomersSelect<false> | CustomersSelect<true>;
     payments: PaymentsSelect<false> | PaymentsSelect<true>;
     invoices: InvoicesSelect<false> | InvoicesSelect<true>;
     refunds: RefundsSelect<false> | RefundsSelect<true>;
@@ -150,6 +152,28 @@ export interface Media {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "customers".
+ */
+export interface Customer {
+  id: number;
+  name: string;
+  email: string;
+  phone?: string | null;
+  company?: string | null;
+  taxId?: string | null;
+  address?: {
+    line1?: string | null;
+    line2?: string | null;
+    city?: string | null;
+    state?: string | null;
+    postalCode?: string | null;
+    country?: string | null;
+  };
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payments".
  */
 export interface Payment {
@@ -213,17 +237,21 @@ export interface Invoice {
    */
   number: string;
   /**
-   * Customer billing information
+   * Link to customer record (optional)
    */
-  customerInfo: {
+  customer?: (number | null) | Customer;
+  /**
+   * Customer billing information (auto-populated from customer relationship)
+   */
+  customerInfo?: {
     /**
      * Customer name
      */
-    name: string;
+    name?: string | null;
     /**
      * Customer email address
      */
-    email: string;
+    email?: string | null;
     /**
      * Customer phone number
      */
@@ -238,18 +266,18 @@ export interface Invoice {
     taxId?: string | null;
   };
   /**
-   * Billing address
+   * Billing address (auto-populated from customer relationship)
    */
-  billingAddress: {
+  billingAddress?: {
     /**
      * Address line 1
      */
-    line1: string;
+    line1?: string | null;
     /**
      * Address line 2
      */
     line2?: string | null;
-    city: string;
+    city?: string | null;
     /**
      * State or province
      */
@@ -257,11 +285,11 @@ export interface Invoice {
     /**
      * Postal or ZIP code
      */
-    postalCode: string;
+    postalCode?: string | null;
     /**
      * Country code (e.g., US, GB)
      */
-    country: string;
+    country?: string | null;
   };
   status: 'draft' | 'open' | 'paid' | 'void' | 'uncollectible';
   /**
@@ -403,6 +431,10 @@ export interface PayloadLockedDocument {
         value: number | Media;
       } | null)
     | ({
+        relationTo: 'customers';
+        value: number | Customer;
+      } | null)
+    | ({
         relationTo: 'payments';
         value: number | Payment;
       } | null)
@@ -487,6 +519,29 @@ export interface MediaSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "customers_select".
+ */
+export interface CustomersSelect<T extends boolean = true> {
+  name?: T;
+  email?: T;
+  phone?: T;
+  company?: T;
+  taxId?: T;
+  address?:
+    | T
+    | {
+        line1?: T;
+        line2?: T;
+        city?: T;
+        state?: T;
+        postalCode?: T;
+        country?: T;
+      };
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payments_select".
  */
 export interface PaymentsSelect<T extends boolean = true> {
@@ -510,6 +565,7 @@ export interface PaymentsSelect<T extends boolean = true> {
  */
 export interface InvoicesSelect<T extends boolean = true> {
   number?: T;
+  customer?: T;
   customerInfo?:
     | T
     | {

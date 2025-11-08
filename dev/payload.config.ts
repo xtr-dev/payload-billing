@@ -36,6 +36,71 @@ const buildConfigWithSQLite = () => {
           staticDir: path.resolve(dirname, 'media'),
         },
       },
+      {
+        slug: 'customers',
+        admin: {
+          useAsTitle: 'name',
+        },
+        fields: [
+          {
+            name: 'name',
+            type: 'text',
+            required: true,
+          },
+          {
+            name: 'email',
+            type: 'email',
+            required: true,
+          },
+          {
+            name: 'phone',
+            type: 'text',
+          },
+          {
+            name: 'company',
+            type: 'text',
+          },
+          {
+            name: 'taxId',
+            type: 'text',
+            label: 'Tax ID',
+          },
+          {
+            name: 'address',
+            type: 'group',
+            fields: [
+              {
+                name: 'line1',
+                type: 'text',
+                label: 'Address Line 1',
+              },
+              {
+                name: 'line2',
+                type: 'text',
+                label: 'Address Line 2',
+              },
+              {
+                name: 'city',
+                type: 'text',
+              },
+              {
+                name: 'state',
+                type: 'text',
+                label: 'State/Province',
+              },
+              {
+                name: 'postalCode',
+                type: 'text',
+                label: 'Postal Code',
+              },
+              {
+                name: 'country',
+                type: 'text',
+              },
+            ],
+          },
+        ],
+      },
     ],
     db: sqliteAdapter({
       client: {
@@ -56,7 +121,8 @@ const buildConfigWithSQLite = () => {
               showWarningBanners: true,
               showTestBadges: true,
               consoleWarnings: true
-            }
+            },
+            customUiRoute: '/test-payment',
           })
         ],
         collections: {
@@ -64,6 +130,22 @@ const buildConfigWithSQLite = () => {
           invoices: 'invoices',
           refunds: 'refunds',
         },
+        customerRelationSlug: 'customers',
+        customerInfoExtractor: (customer) => ({
+          name: customer.name,
+          email: customer.email,
+          phone: customer.phone,
+          company: customer.company,
+          taxId: customer.taxId,
+          billingAddress: customer.address ? {
+            line1: customer.address.line1,
+            line2: customer.address.line2,
+            city: customer.address.city,
+            state: customer.address.state,
+            postalCode: customer.address.postalCode,
+            country: customer.address.country,
+          } : undefined,
+        }),
       }),
     ],
     secret: process.env.PAYLOAD_SECRET || 'test-secret_key',

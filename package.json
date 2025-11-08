@@ -1,6 +1,6 @@
 {
   "name": "@xtr-dev/payload-billing",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "description": "PayloadCMS plugin for billing and payment provider integrations with tracking and local testing",
   "license": "MIT",
   "type": "module",
@@ -81,6 +81,7 @@
     "@playwright/test": "^1.52.0",
     "@swc-node/register": "1.10.9",
     "@swc/cli": "0.6.0",
+    "@swc/plugin-transform-imports": "^11.0.0",
     "@tailwindcss/postcss": "^4.1.17",
     "@types/node": "^22.5.4",
     "@types/react": "19.1.8",
@@ -105,6 +106,7 @@
     "sort-package-json": "^2.10.0",
     "stripe": "^18.5.0",
     "tailwindcss": "^4.1.17",
+    "tsc-alias": "^1.8.16",
     "typescript": "5.7.3",
     "vite-tsconfig-paths": "^5.1.4",
     "vitest": "^3.1.2"

@@ -7,11 +7,11 @@ import type {
   CollectionSlug,
   Field,
 } from 'payload'
-import type { BillingPluginConfig} from '@/plugin/config';
-import { defaults } from '@/plugin/config'
-import { extractSlug } from '@/plugin/utils'
-import { createContextLogger } from '@/utils/logger'
-import type { Invoice } from '@/plugin/types'
+import type { BillingPluginConfig} from '../plugin/config.js';
+import { defaults } from '../plugin/config.js'
+import { extractSlug } from '../plugin/utils.js'
+import { createContextLogger } from '../utils/logger.js'
+import type { Invoice } from '../plugin/types/index.js'
 
 export function createInvoicesCollection(pluginConfig: BillingPluginConfig): CollectionConfig {
   const {customerRelationSlug, customerInfoExtractor} = pluginConfig

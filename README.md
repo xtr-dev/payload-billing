@@ -6,6 +6,23 @@ A billing and payment provider plugin for PayloadCMS 3.x. Supports Stripe, Molli
 
 ⚠️ **Pre-release Warning**: This package is currently in active development (v0.1.x). Breaking changes may occur before v1.0.0. Not recommended for production use.
 
+## Table of Contents
+
+- [Features](#features)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Imports](#imports)
+- [Usage Examples](#usage-examples)
+  - [Creating a Payment](#creating-a-payment)
+  - [Creating an Invoice](#creating-an-invoice)
+  - [Creating a Refund](#creating-a-refund)
+  - [Querying Payments](#querying-payments)
+  - [Using REST API](#using-rest-api)
+- [Provider Types](#provider-types)
+- [Collections](#collections)
+- [Webhook Endpoints](#webhook-endpoints)
+- [Development](#development)
+
 ## Features
 
 - 💳 Multiple payment providers (Stripe, Mollie, Test)
@@ -189,6 +206,272 @@ The plugin supports flexible customer data handling:
 2. **With Customer Relationship (no extractor)**: Customer relationship optional, customer info manually editable, either relationship OR customer info required
 
 3. **No Customer Collection**: Customer info fields always required and editable, no relationship field available
+
+## Usage Examples
+
+### Creating a Payment
+
+Payments are created through PayloadCMS's local API or REST API. The plugin automatically initializes the payment with the configured provider.
+
+```typescript
+// Using Payload Local API
+const payment = await payload.create({
+  collection: 'payments',
+  data: {
+    provider: 'stripe', // or 'mollie' or 'test'
+    amount: 2000, // Amount in cents ($20.00)
+    currency: 'USD',
+    description: 'Product purchase',
+    status: 'pending',
+    metadata: {
+      orderId: 'order-123',
+      customerId: 'cust-456'
+    }
+  }
+})
+```
+
+### Creating an Invoice
+
+Invoices can be created with customer information embedded or linked via relationship:
+
+```typescript
+// Create invoice with embedded customer info
+const invoice = await payload.create({
+  collection: 'invoices',
+  data: {
+    customerInfo: {
+      name: 'John Doe',
+      email: 'john@example.com',
+      phone: '+1234567890',
+      company: 'Acme Corp',
+      taxId: 'TAX-123'
+    },
+    billingAddress: {
+      line1: '123 Main St',
+      line2: 'Suite 100',
+      city: 'New York',
+      state: 'NY',
+      postalCode: '10001',
+      country: 'US'
+    },
+    currency: 'USD',
+    items: [
+      {
+        description: 'Web Development Services',
+        quantity: 10,
+        unitAmount: 5000 // $50.00 per hour
+      },
+      {
+        description: 'Hosting (Monthly)',
+        quantity: 1,
+        unitAmount: 2500 // $25.00
+      }
+    ],
+    taxAmount: 7500, // $75.00 tax
+    status: 'open'
+  }
+})
+
+console.log(`Invoice created: ${invoice.number}`)
+console.log(`Total amount: $${invoice.amount / 100}`)
+```
+
+### Creating an Invoice with Customer Relationship
+
+If you've configured a customer collection with `customerRelationSlug` and `customerInfoExtractor`:
+
+```typescript
+// Create invoice linked to customer (info auto-populated)
+const invoice = await payload.create({
+  collection: 'invoices',
+  data: {
+    customer: 'customer-id-123', // Customer relationship
+    currency: 'USD',
+    items: [
+      {
+        description: 'Subscription - Pro Plan',
+        quantity: 1,
+        unitAmount: 9900 // $99.00
+      }
+    ],
+    status: 'open'
+    // customerInfo and billingAddress are auto-populated from customer
+  }
+})
+```
+
+### Creating a Refund
+
+Refunds are linked to existing payments:
+
+```typescript
+const refund = await payload.create({
+  collection: 'refunds',
+  data: {
+    payment: payment.id, // Link to payment
+    providerId: 'refund-provider-id', // Provider's refund ID
+    amount: 1000, // Partial refund: $10.00
+    currency: 'USD',
+    status: 'succeeded',
+    reason: 'requested_by_customer',
+    description: 'Customer requested partial refund'
+  }
+})
+```
+
+### Querying Payments
+
+```typescript
+// Find all successful payments
+const payments = await payload.find({
+  collection: 'payments',
+  where: {
+    status: {
+      equals: 'succeeded'
+    }
+  }
+})
+
+// Find payments for a specific invoice
+const invoicePayments = await payload.find({
+  collection: 'payments',
+  where: {
+    invoice: {
+      equals: invoiceId
+    }
+  }
+})
+```
+
+### Updating Payment Status
+
+Payment status is typically updated via webhooks, but you can also update manually:
+
+```typescript
+const updatedPayment = await payload.update({
+  collection: 'payments',
+  id: payment.id,
+  data: {
+    status: 'succeeded',
+    providerData: {
+      // Provider-specific data
+      raw: providerResponse,
+      timestamp: new Date().toISOString(),
+      provider: 'stripe'
+    }
+  }
+})
+```
+
+### Marking an Invoice as Paid
+
+```typescript
+const paidInvoice = await payload.update({
+  collection: 'invoices',
+  id: invoice.id,
+  data: {
+    status: 'paid',
+    payment: payment.id // Link to payment
+    // paidAt is automatically set by the plugin
+  }
+})
+```
+
+### Using the Test Provider
+
+The test provider is useful for local development:
+
+```typescript
+// In your payload.config.ts
+import { billingPlugin, testProvider } from '@xtr-dev/payload-billing'
+
+billingPlugin({
+  providers: [
+    testProvider({
+      enabled: true,
+      testModeIndicators: {
+        showWarningBanners: true,
+        showTestBadges: true,
+        consoleWarnings: true
+      }
+    })
+  ],
+  collections: {
+    payments: 'payments',
+    invoices: 'invoices',
+    refunds: 'refunds',
+  }
+})
+```
+
+Then create test payments:
+
+```typescript
+const testPayment = await payload.create({
+  collection: 'payments',
+  data: {
+    provider: 'test',
+    amount: 5000,
+    currency: 'USD',
+    description: 'Test payment',
+    status: 'pending'
+  }
+})
+// Test provider automatically processes the payment
+```
+
+### Using REST API
+
+All collections can be accessed via PayloadCMS REST API:
+
+```bash
+# Create a payment
+curl -X POST http://localhost:3000/api/payments \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{
+    "provider": "stripe",
+    "amount": 2000,
+    "currency": "USD",
+    "description": "Product purchase",
+    "status": "pending"
+  }'
+
+# Create an invoice
+curl -X POST http://localhost:3000/api/invoices \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{
+    "customerInfo": {
+      "name": "John Doe",
+      "email": "john@example.com"
+    },
+    "billingAddress": {
+      "line1": "123 Main St",
+      "city": "New York",
+      "postalCode": "10001",
+      "country": "US"
+    },
+    "currency": "USD",
+    "items": [
+      {
+        "description": "Service",
+        "quantity": 1,
+        "unitAmount": 5000
+      }
+    ],
+    "status": "open"
+  }'
+
+# Get all payments
+curl http://localhost:3000/api/payments \
+  -H "Authorization: Bearer YOUR_TOKEN"
+
+# Get a specific invoice
+curl http://localhost:3000/api/invoices/INVOICE_ID \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
 
 ## Webhook Endpoints
 

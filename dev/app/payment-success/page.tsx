@@ -2,13 +2,31 @@
 
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import { Suspense } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 
 function PaymentSuccessContent() {
   const searchParams = useSearchParams()
   const paymentId = searchParams.get('paymentId')
   const amount = searchParams.get('amount')
   const currency = searchParams.get('currency')
+  const [invoiceId, setInvoiceId] = useState<string | null>(null)
+
+  useEffect(() => {
+    // Fetch the payment to get the invoice ID
+    if (paymentId) {
+      fetch(`/api/demo/payment/${paymentId}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.success && data.payment?.invoice) {
+            const invId = typeof data.payment.invoice === 'object' ? data.payment.invoice.id : data.payment.invoice
+            setInvoiceId(invId)
+          }
+        })
+        .catch((err) => {
+          console.error('Failed to fetch payment invoice:', err)
+        })
+    }
+  }, [paymentId])
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-600 to-emerald-700 flex items-center justify-center p-4">
@@ -76,6 +94,35 @@ function PaymentSuccessContent() {
             <h3 className="font-semibold text-slate-800 text-lg">What's Next?</h3>
 
             <div className="grid gap-3">
+              {invoiceId && (
+                <Link
+                  href={`/invoice/${invoiceId}`}
+                  className="flex items-center justify-between p-4 border-2 border-green-500 bg-green-50 rounded-lg hover:bg-green-100 transition-all group cursor-pointer"
+                >
+                  <div>
+                    <div className="font-semibold text-green-800 group-hover:text-green-900">
+                      📄 View Invoice
+                    </div>
+                    <div className="text-sm text-green-700">
+                      See your invoice with custom message
+                    </div>
+                  </div>
+                  <svg
+                    className="w-5 h-5 text-green-600 group-hover:text-green-800"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 5l7 7-7 7"
+                    />
+                  </svg>
+                </Link>
+              )}
+
               <Link
                 href="/"
                 className="flex items-center justify-between p-4 border-2 border-slate-200 rounded-lg hover:border-green-500 hover:bg-green-50 transition-all group cursor-pointer"

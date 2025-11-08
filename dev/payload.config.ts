@@ -36,71 +36,7 @@ const buildConfigWithSQLite = () => {
           staticDir: path.resolve(dirname, 'media'),
         },
       },
-      {
-        slug: 'customers',
-        admin: {
-          useAsTitle: 'name',
-        },
-        fields: [
-          {
-            name: 'name',
-            type: 'text',
-            required: true,
-          },
-          {
-            name: 'email',
-            type: 'email',
-            required: true,
-          },
-          {
-            name: 'phone',
-            type: 'text',
-          },
-          {
-            name: 'company',
-            type: 'text',
-          },
-          {
-            name: 'taxId',
-            type: 'text',
-            label: 'Tax ID',
-          },
-          {
-            name: 'address',
-            type: 'group',
-            fields: [
-              {
-                name: 'line1',
-                type: 'text',
-                label: 'Address Line 1',
-              },
-              {
-                name: 'line2',
-                type: 'text',
-                label: 'Address Line 2',
-              },
-              {
-                name: 'city',
-                type: 'text',
-              },
-              {
-                name: 'state',
-                type: 'text',
-                label: 'State/Province',
-              },
-              {
-                name: 'postalCode',
-                type: 'text',
-                label: 'Postal Code',
-              },
-              {
-                name: 'country',
-                type: 'text',
-              },
-            ],
-          },
-        ],
-      },
+      // Note: No customers collection - the demo uses direct customerInfo fields on invoices
     ],
     db: sqliteAdapter({
       client: {
@@ -127,25 +63,62 @@ const buildConfigWithSQLite = () => {
         ],
         collections: {
           payments: 'payments',
-          invoices: 'invoices',
+          invoices: {
+            slug: 'invoices',
+            // Use extend to add custom fields and hooks to the invoice collection
+            extend: (config) => ({
+              ...config,
+              fields: [
+                ...(config.fields || []),
+                // Add a custom message field to invoices
+                {
+                  name: 'customMessage',
+                  type: 'textarea',
+                  admin: {
+                    description: 'Custom message from the payment (auto-populated)',
+                  },
+                },
+              ],
+              hooks: {
+                ...config.hooks,
+                beforeChange: [
+                  ...(config.hooks?.beforeChange || []),
+                  // Hook to copy the message from payment metadata to invoice
+                  async ({ data, req, operation }) => {
+                    // Only run on create operations
+                    if (operation === 'create' && data.payment) {
+                      try {
+                        // Fetch the related payment
+                        const payment = await req.payload.findByID({
+                          collection: 'payments',
+                          id: typeof data.payment === 'object' ? data.payment.id : data.payment,
+                        })
+
+                        // Copy the custom message from payment metadata to invoice
+                        if (
+                          payment?.metadata &&
+                          typeof payment.metadata === 'object' &&
+                          'customMessage' in payment.metadata &&
+                          payment.metadata.customMessage
+                        ) {
+                          data.customMessage = payment.metadata.customMessage as string
+                        }
+                      } catch (error) {
+                        // Log error but don't fail the invoice creation
+                        req.payload.logger.error('Failed to copy custom message to invoice:', error)
+                      }
+                    }
+                    return data
+                  },
+                ],
+              },
+            }),
+          },
           refunds: 'refunds',
         },
-        customerRelationSlug: 'customers',
-        customerInfoExtractor: (customer) => ({
-          name: customer.name,
-          email: customer.email,
-          phone: customer.phone,
-          company: customer.company,
-          taxId: customer.taxId,
-          billingAddress: customer.address ? {
-            line1: customer.address.line1,
-            line2: customer.address.line2,
-            city: customer.address.city,
-            state: customer.address.state,
-            postalCode: customer.address.postalCode,
-            country: customer.address.country,
-          } : undefined,
-        }),
+        // Note: No customerRelationSlug or customerInfoExtractor configured
+        // This allows the demo to work without a customer collection
+        // Invoices will use the direct customerInfo and billingAddress fields
       }),
     ],
     secret: process.env.PAYLOAD_SECRET || 'test-secret_key',

@@ -8,7 +8,10 @@ export async function POST(request: Request) {
     })
 
     const body = await request.json()
-    const { amount, currency, description } = body
+    const { amount, currency, description, message, customerName, customerEmail, customerCompany } = body
+
+    // eslint-disable-next-line no-console
+    console.log('Received payment request:', { amount, currency, customerName, customerEmail, customerCompany })
 
     if (!amount || !currency) {
       return Response.json(
@@ -17,7 +20,16 @@ export async function POST(request: Request) {
       )
     }
 
-    // Create a payment using the test provider
+    if (!customerName || !customerEmail) {
+      // eslint-disable-next-line no-console
+      console.log('Missing customer info:', { customerName, customerEmail })
+      return Response.json(
+        { success: false, error: 'Customer name and email are required' },
+        { status: 400 }
+      )
+    }
+
+    // Create a payment first using the test provider
     const payment = await payload.create({
       collection: 'payments',
       data: {
@@ -29,7 +41,39 @@ export async function POST(request: Request) {
         metadata: {
           source: 'demo-ui',
           createdAt: new Date().toISOString(),
+          customMessage: message, // Store the custom message in metadata
         },
+      },
+    })
+
+    // Create an invoice linked to the payment
+    // The invoice's afterChange hook will automatically link the payment back to the invoice
+    const invoice = await payload.create({
+      collection: 'invoices',
+      data: {
+        payment: payment.id, // Link to the payment
+        customerInfo: {
+          name: customerName,
+          email: customerEmail,
+          company: customerCompany,
+        },
+        billingAddress: {
+          line1: '123 Demo Street',
+          city: 'Demo City',
+          state: 'DC',
+          postalCode: '12345',
+          country: 'US',
+        },
+        currency,
+        items: [
+          {
+            description: description || 'Demo payment',
+            quantity: 1,
+            unitAmount: amount,
+          },
+        ],
+        taxAmount: 0,
+        status: 'open',
       },
     })
 
@@ -41,6 +85,7 @@ export async function POST(request: Request) {
         amount: payment.amount,
         currency: payment.currency,
         description: payment.description,
+        invoiceId: invoice.id,
       },
     })
   } catch (error) {

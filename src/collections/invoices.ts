@@ -3,7 +3,9 @@ import type {
   CollectionAfterChangeHook,
   CollectionBeforeChangeHook,
   CollectionBeforeValidateHook,
-  CollectionConfig, Field,
+  CollectionConfig,
+  CollectionSlug,
+  Field,
 } from 'payload'
 import type { BillingPluginConfig} from '@/plugin/config';
 import { defaults } from '@/plugin/config'
@@ -13,8 +15,12 @@ import type { Invoice } from '@/plugin/types'
 
 export function createInvoicesCollection(pluginConfig: BillingPluginConfig): CollectionConfig {
   const {customerRelationSlug, customerInfoExtractor} = pluginConfig
-  const overrides = typeof pluginConfig.collections?.invoices === 'object' ? pluginConfig.collections?.invoices : {}
-  let fields: Field[] = [
+
+  // Get slugs for relationships - these need to be determined before building fields
+  const paymentsSlug = extractSlug(pluginConfig.collections?.payments, defaults.paymentsCollection)
+  const invoicesSlug = extractSlug(pluginConfig.collections?.invoices, defaults.invoicesCollection)
+
+  const fields: Field[] = [
     {
       name: 'number',
       type: 'text',
@@ -33,7 +39,7 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
         position: 'sidebar' as const,
         description: 'Link to customer record (optional)',
       },
-      relationTo: extractSlug(customerRelationSlug),
+      relationTo: customerRelationSlug as any,
       required: false,
     }] : []),
     // Basic customer info fields (embedded)
@@ -277,7 +283,7 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
         condition: (data) => data.status === 'paid',
         position: 'sidebar',
       },
-      relationTo: extractSlug(pluginConfig.collections?.payments || defaults.paymentsCollection),
+      relationTo: paymentsSlug,
     },
     {
       name: 'notes',
@@ -294,11 +300,9 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
       },
     },
   ]
-  if (overrides?.fields) {
-    fields = overrides.fields({defaultFields: fields})
-  }
-  return {
-    slug: extractSlug(pluginConfig.collections?.invoices || defaults.invoicesCollection),
+
+  const baseConfig: CollectionConfig = {
+    slug: invoicesSlug,
     access: {
       create: ({ req: { user } }: AccessArgs) => !!user,
       delete: ({ req: { user } }: AccessArgs) => !!user,
@@ -313,10 +317,68 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
     fields,
     hooks: {
       afterChange: [
-        ({ doc, operation, req }) => {
+        async ({ doc, operation, req, previousDoc }) => {
+          const logger = createContextLogger(req.payload, 'Invoices Collection')
+
           if (operation === 'create') {
-            const logger = createContextLogger(req.payload, 'Invoices Collection')
             logger.info(`Invoice created: ${doc.number}`)
+
+            // If invoice has a linked payment, update the payment to link back to this invoice
+            if (doc.payment) {
+              try {
+                const paymentId = typeof doc.payment === 'object' ? doc.payment.id : doc.payment
+
+                logger.info(`Linking payment ${paymentId} back to invoice ${doc.id}`)
+
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                await req.payload.update({
+                  collection: paymentsSlug as CollectionSlug,
+                  id: paymentId,
+                  data: {
+                    invoice: doc.id,
+                  } as any,
+                })
+
+                logger.info(`Payment ${paymentId} linked to invoice ${doc.id}`)
+              } catch (error) {
+                logger.error(`Failed to link payment to invoice: ${String(error)}`)
+                // Don't throw - invoice is already created
+              }
+            }
+          }
+
+          // If invoice status changes to paid, ensure linked payment is also marked as paid
+          const statusChanged = operation === 'update' && previousDoc && previousDoc.status !== doc.status
+          if (statusChanged && doc.status === 'paid' && doc.payment) {
+            try {
+              const paymentId = typeof doc.payment === 'object' ? doc.payment.id : doc.payment
+
+              // Fetch the payment to check its status
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const payment = await req.payload.findByID({
+                collection: paymentsSlug as CollectionSlug,
+                id: paymentId,
+              }) as any
+
+              // Only update if payment is not already in a successful state
+              if (payment && !['paid', 'succeeded'].includes(payment.status)) {
+                logger.info(`Invoice ${doc.id} marked as paid, updating payment ${paymentId}`)
+
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                await req.payload.update({
+                  collection: paymentsSlug as CollectionSlug,
+                  id: paymentId,
+                  data: {
+                    status: 'succeeded',
+                  } as any,
+                })
+
+                logger.info(`Payment ${paymentId} marked as succeeded`)
+              }
+            } catch (error) {
+              logger.error(`Failed to update payment status: ${String(error)}`)
+              // Don't throw - invoice update is already complete
+            }
           }
         },
       ] satisfies CollectionAfterChangeHook<Invoice>[],
@@ -353,7 +415,7 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
                 }
               } catch (error) {
                 const logger = createContextLogger(req.payload, 'Invoices Collection')
-                logger.error(`Failed to extract customer info: ${error}`)
+                logger.error(`Failed to extract customer info: ${String(error)}`)
                 throw new Error('Failed to extract customer information')
               }
             }
@@ -429,4 +491,12 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
     },
     timestamps: true,
   }
+
+  // Apply collection extension function if provided
+  const collectionConfig = pluginConfig.collections?.invoices
+  if (typeof collectionConfig === 'object' && collectionConfig.extend) {
+    return collectionConfig.extend(baseConfig)
+  }
+
+  return baseConfig
 }

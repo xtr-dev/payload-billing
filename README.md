@@ -30,9 +30,11 @@ A billing and payment provider plugin for PayloadCMS 3.x. Supports Stripe, Molli
 - 👥 Flexible customer data management with relationship support
 - 📊 Complete payment tracking and history
 - 🪝 Secure webhook processing for all providers
+- 🔄 Automatic payment/invoice status synchronization
 - 🧪 Built-in test provider for local development
 - 📱 Payment management in PayloadCMS admin
-- 🔄 Callback-based customer data syncing
+- 🔗 Bidirectional payment-invoice relationship management
+- 🎨 Collection extension support for custom fields and hooks
 - 🔒 Full TypeScript support
 
 ## Installation
@@ -196,6 +198,16 @@ The plugin adds these collections:
 - **payments** - Payment transactions with status and provider data
 - **invoices** - Invoice generation with line items and embedded customer info
 - **refunds** - Refund tracking and management
+
+### Automatic Status Synchronization
+
+The plugin automatically keeps payments and invoices in sync:
+
+- **Payment → Invoice**: When a payment status changes to `paid` or `succeeded`, any linked invoice is automatically updated to `paid` status
+- **Invoice → Payment**: When an invoice is created with a payment link, the payment is automatically linked back (bidirectional relationship)
+- **Manual Invoice Payment**: When an invoice status is manually changed to `paid`, the linked payment is updated to `succeeded`
+
+This ensures data consistency without manual intervention and works seamlessly with webhook updates from payment providers.
 
 ### Customer Data Management
 

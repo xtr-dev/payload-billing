@@ -7,20 +7,39 @@ export default function HomePage() {
   const [paymentId, setPaymentId] = useState<string>('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string>('')
+  const [customerName, setCustomerName] = useState<string>('Demo Customer')
+  const [customerEmail, setCustomerEmail] = useState<string>('demo@example.com')
+  const [customerCompany, setCustomerCompany] = useState<string>('Demo Company')
+  const [message, setMessage] = useState<string>('')
 
   const createDemoPayment = async () => {
     setLoading(true)
     setError('')
 
+    // Validate required fields
+    if (!customerName || !customerEmail) {
+      setError('Customer name and email are required')
+      setLoading(false)
+      return
+    }
+
     try {
+      const requestBody = {
+        amount: 2500,
+        currency: 'USD',
+        description: 'Demo payment from custom UI',
+        customerName,
+        customerEmail,
+        customerCompany: customerCompany || undefined,
+        message: message || undefined,
+      }
+
+      console.log('Sending payment request:', requestBody)
+
       const response = await fetch('/api/demo/create-payment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          amount: 2500,
-          currency: 'USD',
-          description: 'Demo payment from custom UI',
-        }),
+        body: JSON.stringify(requestBody),
       })
 
       const data = await response.json()
@@ -64,17 +83,80 @@ export default function HomePage() {
                 </h3>
 
                 {!paymentId ? (
-                  <div>
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label htmlFor="customerName" className="block text-sm font-medium text-slate-700 mb-2">
+                          Customer Name <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          id="customerName"
+                          value={customerName}
+                          onChange={(e) => setCustomerName(e.target.value)}
+                          placeholder="John Doe"
+                          className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          required
+                        />
+                      </div>
+
+                      <div>
+                        <label htmlFor="customerEmail" className="block text-sm font-medium text-slate-700 mb-2">
+                          Customer Email <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="email"
+                          id="customerEmail"
+                          value={customerEmail}
+                          onChange={(e) => setCustomerEmail(e.target.value)}
+                          placeholder="john@example.com"
+                          className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label htmlFor="customerCompany" className="block text-sm font-medium text-slate-700 mb-2">
+                        Company Name (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        id="customerCompany"
+                        value={customerCompany}
+                        onChange={(e) => setCustomerCompany(e.target.value)}
+                        placeholder="Acme Corporation"
+                        className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="message" className="block text-sm font-medium text-slate-700 mb-2">
+                        Custom Message (Optional)
+                      </label>
+                      <textarea
+                        id="message"
+                        rows={3}
+                        value={message}
+                        onChange={(e) => setMessage(e.target.value)}
+                        placeholder="Enter a message to include in the invoice..."
+                        className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+                      />
+                      <p className="mt-1 text-xs text-slate-500">
+                        This message will be added to the invoice using collection extension options
+                      </p>
+                    </div>
+
                     <button
                       onClick={createDemoPayment}
                       disabled={loading}
-                      className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-3 rounded-lg font-semibold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                      className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-3 rounded-lg font-semibold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                     >
                       {loading ? 'Creating Payment...' : 'Create Demo Payment'}
                     </button>
 
                     {error && (
-                      <div className="mt-4 p-4 bg-red-50 border border-red-200 text-red-800 rounded-lg">
+                      <div className="p-4 bg-red-50 border border-red-200 text-red-800 rounded-lg">
                         {error}
                       </div>
                     )}
@@ -102,6 +184,10 @@ export default function HomePage() {
                         onClick={() => {
                           setPaymentId('')
                           setError('')
+                          setCustomerName('Demo Customer')
+                          setCustomerEmail('demo@example.com')
+                          setCustomerCompany('Demo Company')
+                          setMessage('')
                         }}
                         className="bg-slate-200 text-slate-700 px-6 py-3 rounded-lg font-semibold hover:bg-slate-300 transition-all cursor-pointer"
                       >

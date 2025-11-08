@@ -7,10 +7,13 @@ This is a demo application showcasing the `@xtr-dev/payload-billing` plugin for 
 - 🧪 **Test Payment Provider** with customizable scenarios
 - 💳 **Payment Management** with full CRUD operations
 - 🧾 **Invoice Generation** with line items and tax calculation
-- 👥 **Customer Management** with relationship support
-- 🔄 **Refund Processing** and tracking
+- 🔄 **Automatic Status Sync** - payments and invoices stay in sync automatically
+- 🔗 **Bidirectional Relationships** - payment/invoice links maintained by plugin hooks
 - 🎨 **Custom Payment UI** with modern design
-- 📊 **Sample Data** for quick testing
+- 📄 **Invoice View Page** - professional printable invoice layout
+- 🔧 **Collection Extensions** - demonstrates how to extend collections with custom fields and hooks
+- 💬 **Custom Message Field** - shows hook-based data copying from payment to invoice
+- 📊 **No Customer Collection Required** - uses direct customer info fields
 
 ## Getting Started
 
@@ -56,6 +59,20 @@ This page demonstrates:
 - Test scenario selection (success, failure, cancellation, etc.)
 - Real-time payment status updates
 - Test mode indicators and warnings
+
+### Invoice View Page
+View and print invoices at:
+```
+http://localhost:3000/invoice/{invoice-id}
+```
+
+This page demonstrates:
+- Professional printable invoice layout
+- Customer billing information
+- Line items table with quantities and amounts
+- Tax calculations and totals
+- Custom message field (populated from payment metadata)
+- Print-friendly styling
 
 ### Admin Routes
 
@@ -109,6 +126,57 @@ testProvider({
   },
   customUiRoute: '/test-payment',
 })
+```
+
+### Collection Extension Options
+
+This demo showcases how to extend the plugin's collections with custom fields and hooks. The invoices collection is extended to include a `customMessage` field that is automatically populated from payment metadata:
+
+```typescript
+collections: {
+  payments: 'payments',
+  invoices: {
+    slug: 'invoices',
+    extend: (config) => ({
+      ...config,
+      fields: [
+        ...(config.fields || []),
+        {
+          name: 'customMessage',
+          type: 'textarea',
+          admin: {
+            description: 'Custom message from the payment (auto-populated)',
+          },
+        },
+      ],
+      hooks: {
+        ...config.hooks,
+        beforeChange: [
+          ...(config.hooks?.beforeChange || []),
+          async ({ data, req, operation }) => {
+            if (operation === 'create' && data.payment) {
+              const payment = await req.payload.findByID({
+                collection: 'payments',
+                id: typeof data.payment === 'object' ? data.payment.id : data.payment,
+              })
+
+              if (
+                payment?.metadata &&
+                typeof payment.metadata === 'object' &&
+                'customMessage' in payment.metadata &&
+                payment.metadata.customMessage
+              ) {
+                data.customMessage = payment.metadata.customMessage as string
+              }
+            }
+            return data
+          },
+        ],
+      },
+    }),
+  },
+  refunds: 'refunds',
+}
 ```
 
 ### Customer Relationship
@@ -228,9 +296,12 @@ Request body:
 {
   "amount": 2500,
   "currency": "USD",
-  "description": "Demo payment"
+  "description": "Demo payment",
+  "message": "Custom message to include in the invoice (optional)"
 }
 ```
+
+The `message` field will be stored in the payment's metadata and automatically copied to the invoice when it's created, thanks to the collection extension hook.
 
 Response:
 ```json
@@ -246,6 +317,68 @@ Response:
 }
 ```
 
+### Get Payment
+```
+GET /api/demo/payment/{payment-provider-id}
+```
+
+Fetches payment details including invoice relationship. Used by the payment success page to find the associated invoice.
+
+Response:
+```json
+{
+  "success": true,
+  "payment": {
+    "id": "67890",
+    "providerId": "test_pay_1234567890_abc123",
+    "amount": 2500,
+    "currency": "USD",
+    "status": "paid",
+    "description": "Demo payment",
+    "invoice": "invoice-id-here",
+    "metadata": {
+      "customMessage": "Your custom message"
+    }
+  }
+}
+```
+
+### Get Invoice
+```
+GET /api/demo/invoice/{invoice-id}
+```
+
+Fetches complete invoice data including customer details, line items, and custom message. Used by the invoice view page.
+
+Response:
+```json
+{
+  "success": true,
+  "invoice": {
+    "id": "invoice-id",
+    "invoiceNumber": "INV-2024-001",
+    "customer": {
+      "name": "John Doe",
+      "email": "john@example.com",
+      "company": "Acme Corp"
+    },
+    "currency": "USD",
+    "items": [
+      {
+        "description": "Service",
+        "quantity": 1,
+        "unitAmount": 2500
+      }
+    ],
+    "subtotal": 2500,
+    "taxAmount": 250,
+    "total": 2750,
+    "status": "paid",
+    "customMessage": "Your custom message from payment"
+  }
+}
+```
+
 ## Development
 
 ### File Structure
@@ -257,10 +390,23 @@ dev/
 │   ├── test-payment/
 │   │   └── [id]/
 │   │       └── page.tsx             # Custom payment UI
+│   ├── invoice/
+│   │   └── [id]/
+│   │       └── page.tsx             # Invoice view/print page
+│   ├── payment-success/
+│   │   └── page.tsx                 # Payment success page
+│   ├── payment-failed/
+│   │   └── page.tsx                 # Payment failed page
 │   ├── api/
 │   │   └── demo/
-│   │       └── create-payment/
-│   │           └── route.ts         # Payment creation endpoint
+│   │       ├── create-payment/
+│   │       │   └── route.ts         # Payment creation endpoint
+│   │       ├── invoice/
+│   │       │   └── [id]/
+│   │       │       └── route.ts     # Invoice fetch endpoint
+│   │       └── payment/
+│   │           └── [id]/
+│   │               └── route.ts     # Payment fetch endpoint
 │   └── (payload)/                   # PayloadCMS admin routes
 ├── helpers/
 │   └── credentials.ts               # Default user credentials

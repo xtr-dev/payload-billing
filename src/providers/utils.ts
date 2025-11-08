@@ -35,7 +35,7 @@ export async function findPaymentByProviderId(
   providerId: string,
   pluginConfig: BillingPluginConfig
 ): Promise<Payment | null> {
-  const paymentsCollection = extractSlug(pluginConfig.collections?.payments || defaults.paymentsCollection)
+  const paymentsCollection = extractSlug(pluginConfig.collections?.payments, defaults.paymentsCollection)
 
   const payments = await payload.find({
     collection: paymentsCollection,
@@ -59,7 +59,7 @@ export async function updatePaymentStatus(
   providerData: ProviderData<any>,
   pluginConfig: BillingPluginConfig
 ): Promise<boolean> {
-  const paymentsCollection = extractSlug(pluginConfig.collections?.payments || defaults.paymentsCollection)
+  const paymentsCollection = extractSlug(pluginConfig.collections?.payments, defaults.paymentsCollection)
 
   try {
     // First, fetch the current payment to get the current version
@@ -141,7 +141,7 @@ export async function updateInvoiceOnPaymentSuccess(
 ): Promise<void> {
   if (!payment.invoice) {return}
 
-  const invoicesCollection = extractSlug(pluginConfig.collections?.invoices || defaults.invoicesCollection)
+  const invoicesCollection = extractSlug(pluginConfig.collections?.invoices, defaults.invoicesCollection)
   const invoiceId = typeof payment.invoice === 'object'
     ? payment.invoice.id
     : payment.invoice

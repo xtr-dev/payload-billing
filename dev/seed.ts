@@ -83,6 +83,8 @@ async function seedBillingData(payload: Payload): Promise<void> {
       },
     })
     customer2Id = customer2.id
+  } else {
+    payload.logger.info('No customers collection found, will use direct customer info in invoices')
   }
 
   // Seed invoices

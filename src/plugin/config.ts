@@ -41,6 +41,14 @@ export interface CustomerInfoExtractor {
   }
 }
 
+// Collection configuration type
+export type CollectionExtension =
+  | string
+  | {
+      slug: string
+      extend?: (config: CollectionConfig) => CollectionConfig
+    }
+
 // Plugin configuration
 export interface BillingPluginConfig {
   admin?: {
@@ -48,9 +56,9 @@ export interface BillingPluginConfig {
     dashboard?: boolean
   }
   collections?: {
-    invoices?: string | (Partial<CollectionConfig> & {fields?: FieldsOverride})
-    payments?: string | (Partial<CollectionConfig> & {fields?: FieldsOverride})
-    refunds?: string | (Partial<CollectionConfig> & {fields?: FieldsOverride})
+    invoices?: CollectionExtension
+    payments?: CollectionExtension
+    refunds?: CollectionExtension
   }
   customerInfoExtractor?: CustomerInfoExtractor // Callback to extract customer info from relationship
   customerRelationSlug?: string // Customer collection slug for relationship

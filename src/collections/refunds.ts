@@ -6,9 +6,12 @@ import type { Payment } from '../plugin/types/index'
 import { createContextLogger } from '../utils/logger'
 
 export function createRefundsCollection(pluginConfig: BillingPluginConfig): CollectionConfig {
-  // TODO: finish collection overrides
-  return {
-    slug: extractSlug(pluginConfig.collections?.refunds || defaults.refundsCollection),
+  // Get slugs for relationships - these need to be determined before building fields
+  const paymentsSlug = extractSlug(pluginConfig.collections?.payments, defaults.paymentsCollection)
+  const refundsSlug = extractSlug(pluginConfig.collections?.refunds, defaults.refundsCollection)
+
+  const baseConfig: CollectionConfig = {
+    slug: refundsSlug,
     access: {
       create: ({ req: { user } }: AccessArgs) => !!user,
       delete: ({ req: { user } }: AccessArgs) => !!user,
@@ -37,7 +40,7 @@ export function createRefundsCollection(pluginConfig: BillingPluginConfig): Coll
         admin: {
           position: 'sidebar',
         },
-        relationTo: extractSlug(pluginConfig.collections?.payments || defaults.paymentsCollection),
+        relationTo: paymentsSlug,
         required: true,
       },
       {
@@ -120,13 +123,13 @@ export function createRefundsCollection(pluginConfig: BillingPluginConfig): Coll
             try {
               const payment = await req.payload.findByID({
                 id: typeof doc.payment === 'string' ? doc.payment : doc.payment.id,
-                collection: extractSlug(pluginConfig.collections?.payments || defaults.paymentsCollection),
+                collection: paymentsSlug,
               }) as Payment
 
               const refundIds = Array.isArray(payment.refunds) ? payment.refunds : []
               await req.payload.update({
                 id: typeof doc.payment === 'string' ? doc.payment : doc.payment.id,
-                collection: extractSlug(pluginConfig.collections?.payments || defaults.paymentsCollection),
+                collection: paymentsSlug,
                 data: {
                   refunds: [...refundIds, doc.id],
                 },
@@ -159,4 +162,12 @@ export function createRefundsCollection(pluginConfig: BillingPluginConfig): Coll
     },
     timestamps: true,
   }
+
+  // Apply collection extension function if provided
+  const collectionConfig = pluginConfig.collections?.refunds
+  if (typeof collectionConfig === 'object' && collectionConfig.extend) {
+    return collectionConfig.extend(baseConfig)
+  }
+
+  return baseConfig
 }

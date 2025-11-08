@@ -1,13 +1,18 @@
-import type { AccessArgs, CollectionBeforeChangeHook, CollectionConfig, Field } from 'payload'
+import type { AccessArgs, CollectionAfterChangeHook, CollectionBeforeChangeHook, CollectionConfig, Field } from 'payload'
 import type { BillingPluginConfig} from '../plugin/config';
 import { defaults } from '../plugin/config'
 import { extractSlug } from '../plugin/utils'
 import type { Payment } from '../plugin/types/payments'
 import { initProviderPayment } from './hooks'
+import { createContextLogger } from '../utils/logger'
 
 export function createPaymentsCollection(pluginConfig: BillingPluginConfig): CollectionConfig {
-  const overrides = typeof pluginConfig.collections?.payments === 'object' ? pluginConfig.collections?.payments : {}
-  let fields: Field[] = [
+  // Get slugs for relationships - these need to be determined before building fields
+  const invoicesSlug = extractSlug(pluginConfig.collections?.invoices, defaults.invoicesCollection)
+  const refundsSlug = extractSlug(pluginConfig.collections?.refunds, defaults.refundsCollection)
+  const paymentsSlug = extractSlug(pluginConfig.collections?.payments, defaults.paymentsCollection)
+
+  const fields: Field[] = [
     {
       name: 'provider',
       type: 'select',
@@ -79,7 +84,7 @@ export function createPaymentsCollection(pluginConfig: BillingPluginConfig): Col
       admin: {
         position: 'sidebar',
       },
-      relationTo: extractSlug(pluginConfig.collections?.invoices || defaults.invoicesCollection),
+      relationTo: invoicesSlug,
     },
     {
       name: 'metadata',
@@ -104,7 +109,7 @@ export function createPaymentsCollection(pluginConfig: BillingPluginConfig): Col
         readOnly: true,
       },
       hasMany: true,
-      relationTo: extractSlug(pluginConfig.collections?.refunds || defaults.refundsCollection),
+      relationTo: refundsSlug,
     },
     {
       name: 'version',
@@ -116,12 +121,10 @@ export function createPaymentsCollection(pluginConfig: BillingPluginConfig): Col
       index: true, // Index for optimistic locking performance
     },
   ]
-  if (overrides?.fields) {
-    fields = overrides?.fields({defaultFields: fields})
-  }
-  return {
-    slug: extractSlug(pluginConfig.collections?.payments || defaults.paymentsCollection),
-    access: overrides?.access || {
+
+  const baseConfig: CollectionConfig = {
+    slug: paymentsSlug,
+    access: {
       create: ({ req: { user } }: AccessArgs) => !!user,
       delete: ({ req: { user } }: AccessArgs) => !!user,
       read: ({ req: { user } }: AccessArgs) => !!user,
@@ -131,10 +134,43 @@ export function createPaymentsCollection(pluginConfig: BillingPluginConfig): Col
       defaultColumns: ['id', 'provider', 'status', 'amount', 'currency', 'createdAt'],
       group: 'Billing',
       useAsTitle: 'id',
-      ...overrides?.admin
     },
     fields,
     hooks: {
+      afterChange: [
+        async ({ doc, operation, req, previousDoc }) => {
+          const logger = createContextLogger(req.payload, 'Payments Collection')
+
+          // Only process when payment status changes to a successful state
+          const successStatuses = ['paid', 'succeeded']
+          const paymentSucceeded = successStatuses.includes(doc.status)
+          const statusChanged = operation === 'update' && previousDoc && previousDoc.status !== doc.status
+
+          if (paymentSucceeded && (operation === 'create' || statusChanged)) {
+            // If payment has a linked invoice, update the invoice status to paid
+            if (doc.invoice) {
+              try {
+                const invoiceId = typeof doc.invoice === 'object' ? doc.invoice.id : doc.invoice
+
+                logger.info(`Payment ${doc.id} succeeded, updating invoice ${invoiceId} to paid`)
+
+                await req.payload.update({
+                  collection: invoicesSlug,
+                  id: invoiceId,
+                  data: {
+                    status: 'paid',
+                  },
+                })
+
+                logger.info(`Invoice ${invoiceId} marked as paid`)
+              } catch (error) {
+                logger.error(`Failed to update invoice status: ${error}`)
+                // Don't throw - we don't want to fail the payment update
+              }
+            }
+          }
+        },
+      ] satisfies CollectionAfterChangeHook<Payment>[],
       beforeChange: [
         async ({ data, operation, req, originalDoc }) => {
           if (operation === 'create') {
@@ -167,4 +203,12 @@ export function createPaymentsCollection(pluginConfig: BillingPluginConfig): Col
     },
     timestamps: true,
   }
+
+  // Apply collection extension function if provided
+  const collectionConfig = pluginConfig.collections?.payments
+  if (typeof collectionConfig === 'object' && collectionConfig.extend) {
+    return collectionConfig.extend(baseConfig)
+  }
+
+  return baseConfig
 }

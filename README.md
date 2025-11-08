@@ -26,15 +26,13 @@ A billing and payment provider plugin for PayloadCMS 3.x. Supports Stripe, Molli
 ## Features
 
 - 💳 Multiple payment providers (Stripe, Mollie, Test)
-- 🧾 Invoice generation and management with embedded customer info
-- 👥 Flexible customer data management with relationship support
-- 📊 Complete payment tracking and history
-- 🪝 Secure webhook processing for all providers
+- 🧾 Invoice generation with line items and tax calculation
+- 👥 Flexible customer data management (relationship or embedded)
 - 🔄 Automatic payment/invoice status synchronization
-- 🧪 Built-in test provider for local development
-- 📱 Payment management in PayloadCMS admin
-- 🔗 Bidirectional payment-invoice relationship management
+- 🪝 Secure webhook processing for all providers
+- 🔗 Bidirectional payment-invoice-refund relationships
 - 🎨 Collection extension support for custom fields and hooks
+- 🧪 Built-in test provider for local development
 - 🔒 Full TypeScript support
 
 ## Installation

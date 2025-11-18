@@ -22,6 +22,10 @@ export interface Payment {
    * Payment description
    */
   description?: string | null;
+  /**
+   * Checkout URL where user can complete payment (if applicable)
+   */
+  checkoutUrl?: string | null;
   invoice?: (Id | null) | Invoice;
   /**
    * Additional metadata for the payment

@@ -155,6 +155,7 @@ export const mollieProvider = (mollieConfig: MollieProviderConfig & {
       });
       payment.providerId = molliePayment.id
       payment.providerData = molliePayment.toPlainObject()
+      payment.checkoutUrl = molliePayment._links?.checkout?.href || null
       return payment
     },
   } satisfies PaymentProvider

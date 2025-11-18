@@ -492,6 +492,7 @@ export const testProvider = (testConfig: TestProviderConfig) => {
 
       // Set provider ID and data
       payment.providerId = testPaymentId
+      const paymentUrl = `${baseUrl}/api/payload-billing/test/payment/${testPaymentId}`
       const providerData: ProviderData = {
         raw: {
           id: testPaymentId,
@@ -500,7 +501,7 @@ export const testProvider = (testConfig: TestProviderConfig) => {
           description: payment.description,
           status: 'pending',
           testMode: true,
-          paymentUrl: `${baseUrl}/api/payload-billing/test/payment/${testPaymentId}`,
+          paymentUrl,
           scenarios: scenarios.map(s => ({ id: s.id, name: s.name, description: s.description })),
           methods: Object.entries(PAYMENT_METHODS).map(([key, value]) => ({
             id: key,
@@ -512,6 +513,7 @@ export const testProvider = (testConfig: TestProviderConfig) => {
         provider: 'test'
       }
       payment.providerData = providerData
+      payment.checkoutUrl = paymentUrl
 
       return payment
     },

@@ -79,6 +79,14 @@ export function createPaymentsCollection(pluginConfig: BillingPluginConfig): Col
       },
     },
     {
+      name: 'checkoutUrl',
+      type: 'text',
+      admin: {
+        description: 'Checkout URL where user can complete payment (if applicable)',
+        readOnly: true,
+      },
+    },
+    {
       name: 'invoice',
       type: 'relationship',
       admin: {

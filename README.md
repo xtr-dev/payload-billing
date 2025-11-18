@@ -111,9 +111,9 @@ const payment = await payload.create({
 
 **What you get back:**
 
-- **Stripe**: `providerId` = PaymentIntent ID, `providerData.raw.client_secret` for Stripe.js
-- **Mollie**: `providerId` = Transaction ID, `providerData.raw._links.checkout.href` for redirect URL
-- **Test**: `providerId` = Test payment ID, `providerData.raw.paymentUrl` for interactive test UI
+- **Stripe**: `providerId` = PaymentIntent ID, use `providerData.raw.client_secret` with Stripe.js on frontend
+- **Mollie**: `providerId` = Transaction ID, redirect user to `checkoutUrl` to complete payment
+- **Test**: `providerId` = Test payment ID, navigate to `checkoutUrl` for interactive test UI
 
 ## Payment Providers
 
@@ -407,6 +407,7 @@ Tracks payment transactions with provider integration.
   amount: number                        // Amount in cents
   currency: string                      // ISO 4217 currency code
   description?: string
+  checkoutUrl?: string                  // Checkout URL (if applicable)
   invoice?: Invoice | string            // Linked invoice
   metadata?: Record<string, any>        // Custom metadata
   providerData?: ProviderData           // Raw provider response (read-only)
@@ -639,12 +640,14 @@ const payment = await payload.create({
   }
 })
 
-// Get client secret for Stripe.js
+// Get client secret for Stripe.js (Stripe doesn't use checkoutUrl)
 const clientSecret = payment.providerData.raw.client_secret
 
 // Frontend: Confirm payment with Stripe.js
 // const stripe = Stripe('pk_...')
 // await stripe.confirmCardPayment(clientSecret, { ... })
+
+// For Mollie/Test: redirect to payment.checkoutUrl instead
 ```
 
 ### Creating an Invoice with Line Items

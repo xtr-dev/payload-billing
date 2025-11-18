@@ -13,7 +13,7 @@ type BillingPlugin = {
   }
 }
 
-export const useBillingPlugin = (payload: Payload) => singleton.get(payload) as BillingPlugin
+export const useBillingPlugin = (payload: Payload) => singleton.get(payload) as BillingPlugin | undefined
 
 export const billingPlugin = (pluginConfig: BillingPluginConfig = {}) => (config: Config): Config => {
   if (pluginConfig.disabled) {

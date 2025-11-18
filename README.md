@@ -100,17 +100,20 @@ export default buildConfig({
 const payment = await payload.create({
   collection: 'payments',
   data: {
-    provider: 'stripe',
+    provider: 'stripe',  // or 'mollie' or 'test'
     amount: 5000,        // $50.00 in cents
     currency: 'USD',
     description: 'Product purchase',
     status: 'pending',
   }
 })
-
-// Payment is automatically initialized with Stripe
-console.log(payment.providerId)  // Stripe PaymentIntent ID
 ```
+
+**What you get back:**
+
+- **Stripe**: `providerId` = PaymentIntent ID, `providerData.raw.client_secret` for Stripe.js
+- **Mollie**: `providerId` = Transaction ID, `providerData.raw._links.checkout.href` for redirect URL
+- **Test**: `providerId` = Test payment ID, `providerData.raw.paymentUrl` for interactive test UI
 
 ## Payment Providers
 

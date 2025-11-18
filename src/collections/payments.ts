@@ -144,6 +144,18 @@ export function createPaymentsCollection(pluginConfig: BillingPluginConfig): Col
       useAsTitle: 'id',
     },
     fields,
+    defaultPopulate: {
+      id: true,
+      provider: true,
+      status: true,
+      amount: true,
+      currency: true,
+      description: true,
+      checkoutUrl: true,
+      providerId: true,
+      metadata: true,
+      providerData: true,
+    },
     hooks: {
       afterChange: [
         async ({ doc, operation, req, previousDoc }) => {

@@ -242,10 +242,15 @@ export const testProvider = (testConfig: TestProviderConfig) => {
         {
           path: '/payload-billing/test/payment/:id',
           method: 'get',
-          handler: (req) => {
+          handler: async (req) => {
             // Extract payment ID from URL path
             const urlParts = req.url?.split('/') || []
-            const paymentId = urlParts[urlParts.length - 1]
+            let paymentId = urlParts[urlParts.length - 1]
+
+            // Remove query parameters if present
+            if (paymentId?.includes('?')) {
+              paymentId = paymentId.split('?')[0]
+            }
 
             if (!paymentId) {
               return new Response(JSON.stringify({ error: 'Payment ID required' }), {
@@ -263,7 +268,41 @@ export const testProvider = (testConfig: TestProviderConfig) => {
               })
             }
 
-            const session = testPaymentSessions.get(paymentId)
+            // Try to get session from memory first (for backward compatibility)
+            let session = testPaymentSessions.get(paymentId)
+
+            // If not in memory, fetch from database
+            if (!session && req.payload) {
+              try {
+                const paymentsConfig = pluginConfig.collections?.payments
+                const paymentSlug = typeof paymentsConfig === 'string' ? paymentsConfig : (paymentsConfig?.slug || 'payments')
+                const result = await req.payload.find({
+                  collection: paymentSlug,
+                  where: {
+                    providerId: {
+                      equals: paymentId
+                    }
+                  },
+                  limit: 1
+                })
+
+                if (result.docs && result.docs.length > 0) {
+                  const payment = result.docs[0] as Payment
+                  // Create session from database payment
+                  session = {
+                    id: paymentId,
+                    payment: payment,
+                    createdAt: new Date(payment.createdAt || Date.now()),
+                    status: 'pending' as PaymentOutcome
+                  }
+                  // Store in memory for future requests
+                  testPaymentSessions.set(paymentId, session)
+                }
+              } catch (error) {
+                console.error('Error fetching payment from database:', error)
+              }
+            }
+
             if (!session) {
               return new Response(JSON.stringify({ error: 'Payment session not found' }), {
                 status: 404,
@@ -322,7 +361,41 @@ export const testProvider = (testConfig: TestProviderConfig) => {
 
               const { paymentId, scenarioId, method } = validation.data!
 
-              const session = testPaymentSessions.get(paymentId)
+              // Try to get session from memory first
+              let session = testPaymentSessions.get(paymentId)
+
+              // If not in memory, fetch from database
+              if (!session && req.payload) {
+                try {
+                  const paymentsConfig = pluginConfig.collections?.payments
+                const paymentSlug = typeof paymentsConfig === 'string' ? paymentsConfig : (paymentsConfig?.slug || 'payments')
+                  const result = await req.payload.find({
+                    collection: paymentSlug,
+                    where: {
+                      providerId: {
+                        equals: paymentId
+                      }
+                    },
+                    limit: 1
+                  })
+
+                  if (result.docs && result.docs.length > 0) {
+                    const payment = result.docs[0] as Payment
+                    // Create session from database payment
+                    session = {
+                      id: paymentId,
+                      payment: payment,
+                      createdAt: new Date(payment.createdAt || Date.now()),
+                      status: 'pending' as PaymentOutcome
+                    }
+                    // Store in memory for future requests
+                    testPaymentSessions.set(paymentId, session)
+                  }
+                } catch (error) {
+                  console.error('Error fetching payment from database:', error)
+                }
+              }
+
               if (!session) {
                 return new Response(JSON.stringify({ error: 'Payment session not found' }), {
                   status: 404,
@@ -398,10 +471,15 @@ export const testProvider = (testConfig: TestProviderConfig) => {
         {
           path: '/payload-billing/test/status/:id',
           method: 'get',
-          handler: (req) => {
+          handler: async (req) => {
             // Extract payment ID from URL path
             const urlParts = req.url?.split('/') || []
-            const paymentId = urlParts[urlParts.length - 1]
+            let paymentId = urlParts[urlParts.length - 1]
+
+            // Remove query parameters if present
+            if (paymentId?.includes('?')) {
+              paymentId = paymentId.split('?')[0]
+            }
 
             if (!paymentId) {
               return new Response(JSON.stringify({ error: 'Payment ID required' }), {
@@ -419,7 +497,41 @@ export const testProvider = (testConfig: TestProviderConfig) => {
               })
             }
 
-            const session = testPaymentSessions.get(paymentId)
+            // Try to get session from memory first
+            let session = testPaymentSessions.get(paymentId)
+
+            // If not in memory, fetch from database
+            if (!session && req.payload) {
+              try {
+                const paymentsConfig = pluginConfig.collections?.payments
+                const paymentSlug = typeof paymentsConfig === 'string' ? paymentsConfig : (paymentsConfig?.slug || 'payments')
+                const result = await req.payload.find({
+                  collection: paymentSlug,
+                  where: {
+                    providerId: {
+                      equals: paymentId
+                    }
+                  },
+                  limit: 1
+                })
+
+                if (result.docs && result.docs.length > 0) {
+                  const payment = result.docs[0] as Payment
+                  // Create session from database payment
+                  session = {
+                    id: paymentId,
+                    payment: payment,
+                    createdAt: new Date(payment.createdAt || Date.now()),
+                    status: 'pending' as PaymentOutcome
+                  }
+                  // Store in memory for future requests
+                  testPaymentSessions.set(paymentId, session)
+                }
+              } catch (error) {
+                console.error('Error fetching payment from database:', error)
+              }
+            }
+
             if (!session) {
               return new Response(JSON.stringify({ error: 'Payment session not found' }), {
                 status: 404,

@@ -492,7 +492,7 @@ export const testProvider = (testConfig: TestProviderConfig) => {
 
       // Set provider ID and data
       payment.providerId = testPaymentId
-      const paymentUrl = `${baseUrl}/api/payload-billing/test/payment/${testPaymentId}`
+      const paymentUrl = `${baseUrl}${uiRoute}/${testPaymentId}`
       const providerData: ProviderData = {
         raw: {
           id: testPaymentId,

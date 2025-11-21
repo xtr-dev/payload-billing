@@ -4,7 +4,7 @@ import type { Config, Payload } from 'payload'
 import { createSingleton } from './singleton'
 import type { PaymentProvider } from '../providers/index'
 
-const singleton = createSingleton(Symbol('billingPlugin'))
+const singleton = createSingleton(Symbol.for('@xtr-dev/payload-billing'))
 
 type BillingPlugin = {
   config: BillingPluginConfig

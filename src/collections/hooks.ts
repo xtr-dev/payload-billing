@@ -7,7 +7,8 @@ export const initProviderPayment = async (payload: Payload, payment: Partial<Pay
 
   if (!billing) {
     throw new Error(
-      'Billing plugin not initialized. Make sure the billingPlugin is properly configured in your Payload config and that Payload has finished initializing.'
+      'Billing plugin not initialized. Make sure the billingPlugin is properly configured in your Payload config and that Payload has finished initializing. ' +
+      'If you are calling this from a Next.js API route or Server Component, ensure you are using getPayload() with the same config instance used in your Payload configuration.'
     )
   }
 

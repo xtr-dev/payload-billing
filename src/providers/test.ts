@@ -6,7 +6,7 @@ import { handleWebhookError, logWebhookEvent } from './utils'
 import { isValidAmount, isValidCurrencyCode } from './currency'
 import { createContextLogger } from '../utils/logger'
 
-const TestModeWarningSymbol = Symbol('TestModeWarning')
+const TestModeWarningSymbol = Symbol.for('@xtr-dev/payload-billing/test-mode-warning')
 const hasGivenTestModeWarning = () => TestModeWarningSymbol in globalThis
 const setTestModeWarning = () => ((<any>globalThis)[TestModeWarningSymbol] = true)
 

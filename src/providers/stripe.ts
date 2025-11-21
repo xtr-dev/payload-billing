@@ -14,7 +14,7 @@ import {
 import { isValidAmount, isValidCurrencyCode } from './currency'
 import { createContextLogger } from '../utils/logger'
 
-const symbol = Symbol('stripe')
+const symbol = Symbol.for('@xtr-dev/payload-billing/stripe')
 
 export interface StripeProviderConfig {
   secretKey: string

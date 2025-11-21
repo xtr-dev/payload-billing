@@ -14,7 +14,7 @@ import {
 import { formatAmountForProvider, isValidAmount, isValidCurrencyCode } from './currency'
 import { createContextLogger } from '../utils/logger'
 
-const symbol = Symbol('mollie')
+const symbol = Symbol.for('@xtr-dev/payload-billing/mollie')
 export type MollieProviderConfig = Parameters<typeof createMollieClient>[0]
 
 /**

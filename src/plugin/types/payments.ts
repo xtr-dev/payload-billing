@@ -26,6 +26,10 @@ export interface Payment {
    * Checkout URL where user can complete payment (if applicable)
    */
   checkoutUrl?: string | null;
+  /**
+   * URL to redirect user after payment completion
+   */
+  redirectUrl?: string | null;
   invoice?: (Id | null) | Invoice;
   /**
    * Additional metadata for the payment

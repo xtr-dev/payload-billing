@@ -87,6 +87,13 @@ export function createPaymentsCollection(pluginConfig: BillingPluginConfig): Col
       },
     },
     {
+      name: 'redirectUrl',
+      type: 'text',
+      admin: {
+        description: 'URL to redirect user after payment completion',
+      },
+    },
+    {
       name: 'invoice',
       type: 'relationship',
       admin: {

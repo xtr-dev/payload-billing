@@ -134,11 +134,24 @@ export const mollieProvider = (mollieConfig: MollieProviderConfig & {
       }
 
       // Setup URLs with development defaults
+      // Only use localhost fallbacks in non-production environments
       const isProduction = process.env.NODE_ENV === 'production'
-      const redirectUrl = mollieConfig.redirectUrl ||
-        (!isProduction ? 'https://localhost:3000/payment/success' : undefined)
-      const webhookUrl = mollieConfig.webhookUrl ||
-        `${process.env.PAYLOAD_PUBLIC_SERVER_URL || (!isProduction ? 'https://localhost:3000' : '')}/api/payload-billing/mollie/webhook`
+      const serverUrl = process.env.NEXT_PUBLIC_SERVER_URL || process.env.PAYLOAD_PUBLIC_SERVER_URL || process.env.SERVER_URL
+
+      // Priority: payment.redirectUrl > config.redirectUrl > dev fallback
+      let redirectUrl = payment.redirectUrl || mollieConfig.redirectUrl
+      if (!redirectUrl && !isProduction) {
+        redirectUrl = 'https://localhost:3000/payment/success'
+      }
+
+      let webhookUrl = mollieConfig.webhookUrl
+      if (!webhookUrl) {
+        if (serverUrl) {
+          webhookUrl = `${serverUrl}/api/payload-billing/mollie/webhook`
+        } else if (!isProduction) {
+          webhookUrl = 'https://localhost:3000/api/payload-billing/mollie/webhook'
+        }
+      }
 
       // Validate URLs for production
       validateProductionUrl(redirectUrl, 'Redirect')

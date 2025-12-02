@@ -234,6 +234,9 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
 
       const stripe = singleton.get(payload)
 
+      // Priority: payment.redirectUrl > config.returnUrl
+      const returnUrl = payment.redirectUrl || stripeConfig.returnUrl
+
       // Create a payment intent
       const paymentIntent = await stripe.paymentIntents.create({
         amount: payment.amount, // Stripe handles currency conversion internally
@@ -250,6 +253,7 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
         automatic_payment_methods: {
           enabled: true,
         },
+        ...(returnUrl && { return_url: returnUrl }),
       })
 
       payment.providerId = paymentIntent.id

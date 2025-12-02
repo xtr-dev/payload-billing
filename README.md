@@ -175,13 +175,15 @@ mollieProvider({
 
 ```bash
 MOLLIE_API_KEY=test_...
-MOLLIE_WEBHOOK_URL=https://yourdomain.com/api/payload-billing/mollie/webhook
-PAYLOAD_PUBLIC_SERVER_URL=https://yourdomain.com
+MOLLIE_WEBHOOK_URL=https://yourdomain.com/api/payload-billing/mollie/webhook  # Optional if server URL is set
+NEXT_PUBLIC_SERVER_URL=https://yourdomain.com  # Or PAYLOAD_PUBLIC_SERVER_URL or SERVER_URL
 ```
 
 **Important Notes:**
 - Mollie requires HTTPS URLs in production (no localhost)
-- Webhook URL defaults to `{PAYLOAD_PUBLIC_SERVER_URL}/api/payload-billing/mollie/webhook`
+- Webhook URL is auto-generated from server URL environment variables (checked in order: `NEXT_PUBLIC_SERVER_URL`, `PAYLOAD_PUBLIC_SERVER_URL`, `SERVER_URL`)
+- Falls back to `https://localhost:3000` only in non-production environments
+- In production, throws an error if no valid URL can be determined
 - Amounts are formatted as decimal strings (e.g., "50.00")
 
 ### Test Provider
@@ -408,6 +410,7 @@ Tracks payment transactions with provider integration.
   currency: string                      // ISO 4217 currency code
   description?: string
   checkoutUrl?: string                  // Checkout URL (if applicable)
+  redirectUrl?: string                  // URL to redirect user after payment
   invoice?: Invoice | string            // Linked invoice
   metadata?: Record<string, any>        // Custom metadata
   providerData?: ProviderData           // Raw provider response (read-only)
@@ -433,6 +436,36 @@ succeeded → partially_refunded → refunded
 - Version incremented on each update
 - Provider's `initPayment()` called on creation
 - Linked invoice updated when status becomes `succeeded`
+
+**Per-Payment Redirect URLs:**
+
+The `redirectUrl` field allows customizing where users are redirected after payment completion on a per-payment basis. This is useful when different payments need different destinations:
+
+```typescript
+// Invoice payment redirects to invoice confirmation
+await payload.create({
+  collection: 'payments',
+  data: {
+    provider: 'mollie',
+    amount: 5000,
+    currency: 'EUR',
+    redirectUrl: 'https://example.com/invoices/123/thank-you'
+  }
+})
+
+// Subscription payment redirects to subscription page
+await payload.create({
+  collection: 'payments',
+  data: {
+    provider: 'mollie',
+    amount: 1999,
+    currency: 'EUR',
+    redirectUrl: 'https://example.com/subscription/confirmed'
+  }
+})
+```
+
+**Priority:** `payment.redirectUrl` > provider config `redirectUrl`/`returnUrl` > default fallback
 
 ### Invoices
 
@@ -864,10 +897,15 @@ const campaignPayments = await payload.find({
 
 ### Mollie Webhook Configuration
 
-1. **Set webhook URL:**
+1. **Set server URL** (webhook URL is auto-generated):
    ```bash
-   MOLLIE_WEBHOOK_URL=https://yourdomain.com/api/payload-billing/mollie/webhook
+   # Any of these work (checked in this order):
+   NEXT_PUBLIC_SERVER_URL=https://yourdomain.com
    PAYLOAD_PUBLIC_SERVER_URL=https://yourdomain.com
+   SERVER_URL=https://yourdomain.com
+
+   # Or set explicit webhook URL:
+   MOLLIE_WEBHOOK_URL=https://yourdomain.com/api/payload-billing/mollie/webhook
    ```
 
 2. **Mollie automatically calls webhook** for payment status updates
@@ -875,12 +913,13 @@ const campaignPayments = await payload.find({
 3. **Test locally with ngrok:**
    ```bash
    ngrok http 3000
-   # Use ngrok URL as PAYLOAD_PUBLIC_SERVER_URL
+   # Use ngrok URL as NEXT_PUBLIC_SERVER_URL
    ```
 
 **Important:**
 - Mollie requires HTTPS URLs (no `http://` or `localhost` in production)
-- Webhook URL defaults to `{PAYLOAD_PUBLIC_SERVER_URL}/api/payload-billing/mollie/webhook`
+- Webhook URL auto-generated from `NEXT_PUBLIC_SERVER_URL`, `PAYLOAD_PUBLIC_SERVER_URL`, or `SERVER_URL`
+- In production, throws an error if no valid server URL is configured
 - Mollie validates webhooks by verifying payment ID exists
 
 ### Webhook Security
@@ -1096,8 +1135,10 @@ echo $STRIPE_WEBHOOK_SECRET
 
 **Mollie:**
 ```bash
-# Verify PAYLOAD_PUBLIC_SERVER_URL is set
+# Verify server URL is set (any of these work):
+echo $NEXT_PUBLIC_SERVER_URL
 echo $PAYLOAD_PUBLIC_SERVER_URL
+echo $SERVER_URL
 
 # Check webhook URL is accessible (must be HTTPS in production)
 curl -X POST https://yourdomain.com/api/payload-billing/mollie/webhook \
@@ -1134,7 +1175,7 @@ curl -X POST https://yourdomain.com/api/payload-billing/mollie/webhook \
 - Use ngrok or deploy to staging for local testing:
   ```bash
   ngrok http 3000
-  # Set PAYLOAD_PUBLIC_SERVER_URL to ngrok URL
+  # Set NEXT_PUBLIC_SERVER_URL to ngrok URL
   ```
 
 ### Test Provider Payment Not Processing

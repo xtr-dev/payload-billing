@@ -1,7 +1,7 @@
 import type { Payment } from '../plugin/types/payments'
 import type { PaymentProvider, ProviderData } from '../plugin/types/index'
 import type { BillingPluginConfig } from '../plugin/config'
-import type { Payload } from 'payload'
+import type { CollectionSlug, Payload } from 'payload'
 import { handleWebhookError, logWebhookEvent } from './utils'
 import { isValidAmount, isValidCurrencyCode } from './currency'
 import { createContextLogger } from '../utils/logger'
@@ -160,6 +160,7 @@ export interface TestPaymentSession {
   method?: PaymentMethod
   createdAt: Date
   status: PaymentOutcome
+  redirectUrl?: string
 }
 
 // Use the proper BillingPluginConfig type
@@ -228,7 +229,7 @@ export const testProvider = (testConfig: TestProviderConfig) => {
   }
 
   const scenarios = testConfig.scenarios || DEFAULT_SCENARIOS
-  const baseUrl = testConfig.baseUrl || (process.env.PAYLOAD_PUBLIC_SERVER_URL || 'http://localhost:3000')
+  const baseUrl = testConfig.baseUrl || process.env.NEXT_PUBLIC_SERVER_URL || process.env.PAYLOAD_PUBLIC_SERVER_URL || process.env.SERVER_URL || 'http://localhost:3000'
   const uiRoute = testConfig.customUiRoute || '/test-payment'
 
   // Test mode warnings will be logged in onInit when payload is available
@@ -277,7 +278,7 @@ export const testProvider = (testConfig: TestProviderConfig) => {
                 const paymentsConfig = pluginConfig.collections?.payments
                 const paymentSlug = typeof paymentsConfig === 'string' ? paymentsConfig : (paymentsConfig?.slug || 'payments')
                 const result = await req.payload.find({
-                  collection: paymentSlug,
+                  collection: paymentSlug as CollectionSlug,
                   where: {
                     providerId: {
                       equals: paymentId
@@ -310,8 +311,11 @@ export const testProvider = (testConfig: TestProviderConfig) => {
               })
             }
 
+            // Determine redirect URL: session.redirectUrl > payment.redirectUrl > default
+            const redirectUrl = session.redirectUrl || (session.payment as Payment)?.redirectUrl || `${baseUrl}/payment/success`
+
             // Generate test payment UI
-            const html = generateTestPaymentUI(session, scenarios, uiRoute, baseUrl, testConfig)
+            const html = generateTestPaymentUI(session, scenarios, uiRoute, baseUrl, testConfig, redirectUrl)
             return new Response(html, {
               headers: { 'Content-Type': 'text/html' }
             })
@@ -370,7 +374,7 @@ export const testProvider = (testConfig: TestProviderConfig) => {
                   const paymentsConfig = pluginConfig.collections?.payments
                 const paymentSlug = typeof paymentsConfig === 'string' ? paymentsConfig : (paymentsConfig?.slug || 'payments')
                   const result = await req.payload.find({
-                    collection: paymentSlug,
+                    collection: paymentSlug as CollectionSlug,
                     where: {
                       providerId: {
                         equals: paymentId
@@ -592,12 +596,13 @@ export const testProvider = (testConfig: TestProviderConfig) => {
       // Generate unique test payment ID
       const testPaymentId = `test_pay_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
-      // Create test payment session
-      const session = {
+      // Create test payment session with redirect URL
+      const session: TestPaymentSession = {
         id: testPaymentId,
         payment: { ...payment },
         createdAt: new Date(),
-        status: 'pending' as PaymentOutcome
+        status: 'pending' as PaymentOutcome,
+        redirectUrl: payment.redirectUrl || undefined
       }
 
       testPaymentSessions.set(testPaymentId, session)
@@ -716,7 +721,8 @@ function generateTestPaymentUI(
   scenarios: PaymentScenario[],
   uiRoute: string,
   baseUrl: string,
-  testConfig: TestProviderConfig
+  testConfig: TestProviderConfig,
+  redirectUrl: string
 ): string {
   const payment = session.payment
   const testModeIndicators = testConfig.testModeIndicators || {}
@@ -1030,9 +1036,9 @@ function generateTestPaymentUI(
 
                 if (result.status === 'paid') {
                     status.className = 'status success';
-                    status.textContent = '✅ Payment successful!';
+                    status.textContent = '✅ Payment successful! Redirecting...';
                     setTimeout(() => {
-                        window.location.href = '${baseUrl}/success';
+                        window.location.href = '${redirectUrl}';
                     }, 2000);
                 } else if (result.status === 'failed' || result.status === 'cancelled' || result.status === 'expired') {
                     status.className = 'status error';

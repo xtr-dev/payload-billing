@@ -85,11 +85,15 @@ export const mollieProvider = (mollieConfig: MollieProviderConfig & {
               const status = mapMollieStatusToPaymentStatus(molliePayment.status)
 
               // Update the payment status and provider data
+              // Use toPlainObject if available, otherwise spread the object
+              const providerData = typeof molliePayment.toPlainObject === 'function'
+                ? molliePayment.toPlainObject()
+                : { ...molliePayment }
               const updateSuccess = await updatePaymentStatus(
                 payload,
                 payment.id,
                 status,
-                molliePayment.toPlainObject(),
+                providerData,
                 pluginConfig
               )
 
@@ -167,7 +171,10 @@ export const mollieProvider = (mollieConfig: MollieProviderConfig & {
         webhookUrl,
       });
       payment.providerId = molliePayment.id
-      payment.providerData = molliePayment.toPlainObject()
+      // Use toPlainObject if available, otherwise spread the object (for compatibility with different Mollie client versions)
+      payment.providerData = typeof molliePayment.toPlainObject === 'function'
+        ? molliePayment.toPlainObject()
+        : { ...molliePayment }
       payment.checkoutUrl = molliePayment._links?.checkout?.href || null
       return payment
     },

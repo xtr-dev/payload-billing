@@ -1,6 +1,6 @@
 {
   "name": "@xtr-dev/payload-billing",
-  "version": "0.1.24",
+  "version": "0.1.25",
   "description": "PayloadCMS plugin for billing and payment provider integrations with tracking and local testing",
   "license": "MIT",
   "type": "module",

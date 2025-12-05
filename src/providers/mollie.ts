@@ -18,6 +18,13 @@ const symbol = Symbol.for('@xtr-dev/payload-billing/mollie')
 export type MollieProviderConfig = Parameters<typeof createMollieClient>[0]
 
 /**
+ * Determine the Mollie mode based on API key prefix
+ */
+function getMollieMode(apiKey: string): 'test' | 'live' {
+  return apiKey.startsWith('test_') ? 'test' : 'live'
+}
+
+/**
  * Type-safe mapping of Mollie payment status to internal status
  */
 function mapMollieStatusToPaymentStatus(mollieStatus: string): Payment['status'] {
@@ -161,6 +168,9 @@ export const mollieProvider = (mollieConfig: MollieProviderConfig & {
       validateProductionUrl(redirectUrl, 'Redirect')
       validateProductionUrl(webhookUrl, 'Webhook')
 
+      // Determine mode from API key (test_ or live_)
+      const mode = getMollieMode(mollieConfig.apiKey)
+
       const molliePayment = await singleton.get(payload).payments.create({
         amount: {
           value: formatAmountForProvider(payment.amount, payment.currency),
@@ -169,7 +179,8 @@ export const mollieProvider = (mollieConfig: MollieProviderConfig & {
         description: payment.description || '',
         redirectUrl,
         webhookUrl,
-      });
+        mode,
+      } as any);
       payment.providerId = molliePayment.id
       // Use toPlainObject if available, otherwise spread the object (for compatibility with different Mollie client versions)
       payment.providerData = typeof molliePayment.toPlainObject === 'function'

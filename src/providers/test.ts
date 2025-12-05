@@ -424,7 +424,8 @@ export const testProvider = (testConfig: TestProviderConfig) => {
               setTimeout(() => {
                 processTestPayment(payload, session, pluginConfig).catch(async (error) => {
                   const logger = createContextLogger(payload, 'Test Provider')
-                  logger.error('Failed to process payment:', error)
+                  const errorMessage = error instanceof Error ? error.message : String(error)
+                  logger.error(`Failed to process payment: ${errorMessage}`)
 
                   // Ensure session status is updated consistently
                   session.status = 'failed'

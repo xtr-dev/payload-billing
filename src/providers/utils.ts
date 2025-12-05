@@ -16,7 +16,7 @@ export const webhookResponses = {
     // Log error internally but don't expose details
     if (payload) {
       const logger = createContextLogger(payload, 'Webhook')
-      logger.error('Error:', message)
+      logger.error(`Error: ${message}`)
     } else {
       console.error('[Webhook] Error:', message)
     }
@@ -126,7 +126,12 @@ export async function updatePaymentStatus(
     }
   } catch (error) {
     const logger = createContextLogger(payload, 'Payment Update')
-    logger.error(`Failed to update payment ${paymentId}:`, error)
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    const errorStack = error instanceof Error ? error.stack : undefined
+    logger.error(`Failed to update payment ${paymentId}: ${errorMessage}`)
+    if (errorStack) {
+      logger.error(`Stack trace: ${errorStack}`)
+    }
     return false
   }
 }
@@ -165,15 +170,22 @@ export function handleWebhookError(
   context?: string,
   payload?: Payload
 ): Response {
-  const message = error instanceof Error ? error.message : 'Unknown error'
+  const message = error instanceof Error ? error.message : String(error)
+  const stack = error instanceof Error ? error.stack : undefined
   const fullContext = context ? `${provider} Webhook - ${context}` : `${provider} Webhook`
 
   // Log detailed error internally for debugging
   if (payload) {
     const logger = createContextLogger(payload, fullContext)
-    logger.error('Error:', error)
+    logger.error(`Error: ${message}`)
+    if (stack) {
+      logger.error(`Stack trace: ${stack}`)
+    }
   } else {
-    console.error(`[${fullContext}] Error:`, error)
+    console.error(`[${fullContext}] Error: ${message}`)
+    if (stack) {
+      console.error(`[${fullContext}] Stack trace:`, stack)
+    }
   }
 
   // Return generic response to avoid information disclosure

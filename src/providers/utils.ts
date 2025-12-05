@@ -60,6 +60,7 @@ export async function updatePaymentStatus(
   pluginConfig: BillingPluginConfig
 ): Promise<boolean> {
   const paymentsCollection = extractSlug(pluginConfig.collections?.payments, defaults.paymentsCollection)
+  const logger = createContextLogger(payload, 'Payment Update')
 
   try {
     // First, fetch the current payment to get the current version
@@ -69,41 +70,65 @@ export async function updatePaymentStatus(
     }) as Payment
 
     if (!currentPayment) {
-      const logger = createContextLogger(payload, 'Payment Update')
       logger.error(`Payment ${paymentId} not found`)
       return false
     }
 
     const currentVersion = currentPayment.version || 1
 
-    // Attempt to update with optimistic locking
-    // We'll use a transaction to ensure atomicity
-    const transactionID = await payload.db.beginTransaction()
-
-    if (!transactionID) {
-      const logger = createContextLogger(payload, 'Payment Update')
-      logger.error('Failed to begin transaction')
-      return false
+    // Try to use transactions if supported by the database adapter
+    let transactionID: string | number | null = null
+    try {
+      transactionID = await payload.db.beginTransaction()
+    } catch (error) {
+      // Transaction support may not be available in all database adapters
+      logger.debug('Transactions not supported, falling back to direct update')
     }
 
-    try {
-      // Re-fetch within transaction to ensure consistency
-      const paymentInTransaction = await payload.findByID({
-        collection: paymentsCollection,
-        id: toPayloadId(paymentId),
-        req: { transactionID }
-      }) as Payment
+    if (transactionID) {
+      // Use transactional update with optimistic locking
+      try {
+        // Re-fetch within transaction to ensure consistency
+        const paymentInTransaction = await payload.findByID({
+          collection: paymentsCollection,
+          id: toPayloadId(paymentId),
+          req: { transactionID }
+        }) as Payment
 
-      // Check if version still matches
-      if ((paymentInTransaction.version || 1) !== currentVersion) {
-        // Version conflict detected - payment was modified by another process
-        const logger = createContextLogger(payload, 'Payment Update')
-        logger.warn(`Version conflict for payment ${paymentId} (expected version: ${currentVersion}, got: ${paymentInTransaction.version})`)
+        // Check if version still matches
+        if ((paymentInTransaction.version || 1) !== currentVersion) {
+          // Version conflict detected - payment was modified by another process
+          logger.warn(`Version conflict for payment ${paymentId} (expected version: ${currentVersion}, got: ${paymentInTransaction.version})`)
+          await payload.db.rollbackTransaction(transactionID)
+          return false
+        }
+
+        // Update with new version
+        await payload.update({
+          collection: paymentsCollection,
+          id: toPayloadId(paymentId),
+          data: {
+            status,
+            providerData: {
+              ...providerData,
+              webhookProcessedAt: new Date().toISOString()
+            },
+            version: currentVersion + 1
+          },
+          req: { transactionID }
+        })
+
+        await payload.db.commitTransaction(transactionID)
+        return true
+      } catch (error) {
         await payload.db.rollbackTransaction(transactionID)
-        return false
+        throw error
       }
+    } else {
+      // Fallback: Direct update without transaction support
+      // This is less safe but allows payment updates on databases without transaction support
+      logger.debug('Using direct update without transaction')
 
-      // Update with new version
       await payload.update({
         collection: paymentsCollection,
         id: toPayloadId(paymentId),
@@ -114,18 +139,12 @@ export async function updatePaymentStatus(
             webhookProcessedAt: new Date().toISOString()
           },
           version: currentVersion + 1
-        },
-        req: { transactionID }
+        }
       })
 
-      await payload.db.commitTransaction(transactionID)
       return true
-    } catch (error) {
-      await payload.db.rollbackTransaction(transactionID)
-      throw error
     }
   } catch (error) {
-    const logger = createContextLogger(payload, 'Payment Update')
     const errorMessage = error instanceof Error ? error.message : String(error)
     const errorStack = error instanceof Error ? error.stack : undefined
     logger.error(`Failed to update payment ${paymentId}: ${errorMessage}`)

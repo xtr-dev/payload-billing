@@ -85,10 +85,10 @@ export function isValidCurrencyCode(currency: string): boolean {
 }
 
 /**
- * Validate amount is positive and within reasonable limits
+ * Validate amount is non-negative and within reasonable limits
  * @param amount - Amount to validate
  * @returns True if valid
  */
 export function isValidAmount(amount: number): boolean {
-  return Number.isInteger(amount) && amount > 0 && amount <= 99999999999 // Max ~999 million in major units
+  return Number.isInteger(amount) && amount >= 0 && amount <= 99999999999 // Max ~999 million in major units
 }

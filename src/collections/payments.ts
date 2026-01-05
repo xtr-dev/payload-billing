@@ -51,6 +51,7 @@ export function createPaymentsCollection(pluginConfig: BillingPluginConfig): Col
         { label: 'Refunded', value: 'refunded' },
         { label: 'Partially Refunded', value: 'partially_refunded' },
       ],
+      defaultValue: 'pending',
       required: true,
     },
     {

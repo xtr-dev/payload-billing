@@ -120,7 +120,7 @@ export const mollieProvider = (mollieConfig: MollieProviderConfig & {
     },
     initPayment: async (payload, payment) => {
       // Validate required fields
-      if (!payment.amount) {
+      if (payment.amount == null) {
         throw new Error('Amount is required')
       }
       if (!payment.currency) {
@@ -129,7 +129,7 @@ export const mollieProvider = (mollieConfig: MollieProviderConfig & {
 
       // Validate amount
       if (!isValidAmount(payment.amount)) {
-        throw new Error('Invalid amount: must be a positive integer within reasonable limits')
+        throw new Error('Invalid amount: must be a non-negative integer within reasonable limits')
       }
 
       // Validate currency code

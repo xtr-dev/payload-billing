@@ -133,6 +133,7 @@ export interface TestProviderConfig {
   }
   defaultDelay?: number
   baseUrl?: string
+  returnUrl?: string
 }
 
 export interface TestProviderConfigResponse {
@@ -311,8 +312,9 @@ export const testProvider = (testConfig: TestProviderConfig) => {
               })
             }
 
-            // Determine redirect URL: session.redirectUrl > payment.redirectUrl > default
-            const redirectUrl = session.redirectUrl || (session.payment as Payment)?.redirectUrl || `${baseUrl}/payment/success`
+            // Determine redirect URL: session.redirectUrl > payment.redirectUrl > config.returnUrl > default
+            const defaultReturnUrl = testConfig.returnUrl ? `${baseUrl}${testConfig.returnUrl}` : `${baseUrl}/payment/success`
+            const redirectUrl = session.redirectUrl || (session.payment as Payment)?.redirectUrl || defaultReturnUrl
 
             // Generate test payment UI
             const html = generateTestPaymentUI(session, scenarios, uiRoute, baseUrl, testConfig, redirectUrl)
@@ -577,7 +579,7 @@ export const testProvider = (testConfig: TestProviderConfig) => {
     },
     initPayment: (payload, payment) => {
       // Validate required fields
-      if (!payment.amount) {
+      if (payment.amount == null) {
         throw new Error('Amount is required')
       }
       if (!payment.currency) {
@@ -586,7 +588,7 @@ export const testProvider = (testConfig: TestProviderConfig) => {
 
       // Validate amount
       if (!isValidAmount(payment.amount)) {
-        throw new Error('Invalid amount: must be a positive integer within reasonable limits')
+        throw new Error('Invalid amount: must be a non-negative integer within reasonable limits')
       }
 
       // Validate currency code

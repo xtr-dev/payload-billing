@@ -135,12 +135,14 @@ import { stripeProvider } from '@xtr-dev/payload-billing'
 
 stripeProvider({
   secretKey: string          // Required: Stripe secret key (sk_test_... or sk_live_...)
-  webhookSecret?: string     // Recommended: Webhook signing secret (whsec_...)
+  webhookSecret?: string     // Required to register the webhook endpoint (whsec_...)
   apiVersion?: string        // Optional: API version (default: '2025-08-27.basil')
   returnUrl?: string         // Optional: Custom return URL after payment
   webhookUrl?: string        // Optional: Custom webhook URL
 })
 ```
+
+Without `webhookSecret`, the Stripe webhook endpoint is not registered. Payments that depend on webhook updates remain `pending`, and requests to the webhook URL return 404.
 
 **Environment Variables:**
 
@@ -207,6 +209,8 @@ testProvider({
   scenarios?: PaymentScenario[]              // Optional: Custom scenarios
   defaultDelay?: number                      // Optional: Default processing delay (ms)
   baseUrl?: string                           // Optional: Server URL
+  customUiRoute?: string                     // Optional: Route for a custom test payment UI
+  returnUrl?: string                         // Optional: Default path after test payment completion
   testModeIndicators?: {
     showWarningBanners?: boolean             // Show test mode warnings
     showTestBadges?: boolean                 // Show test badges on UI
@@ -275,6 +279,25 @@ billingPlugin({
       webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
     })
   ]
+})
+```
+
+Each collection also accepts an object when you need to rename and extend its Payload collection config:
+
+```typescript
+billingPlugin({
+  collections: {
+    payments: {
+      slug: 'transactions',
+      extend: (config) => ({
+        ...config,
+        fields: [
+          ...config.fields,
+          { name: 'internalReference', type: 'text' },
+        ],
+      }),
+    },
+  },
 })
 ```
 
@@ -388,9 +411,9 @@ billingPlugin({
 
 | Provider | Required Config | Optional Config | Notes |
 |----------|----------------|-----------------|-------|
-| **Stripe** | `secretKey` | `webhookSecret`, `apiVersion`, `returnUrl`, `webhookUrl` | Webhook secret highly recommended for production |
+| **Stripe** | `secretKey` | `webhookSecret`, `apiVersion`, `returnUrl`, `webhookUrl` | `webhookSecret` is required to register the webhook endpoint |
 | **Mollie** | `apiKey` | `webhookUrl`, `redirectUrl` | Requires HTTPS in production |
-| **Test** | `enabled: true` | `scenarios`, `defaultDelay`, `baseUrl`, `testModeIndicators` | Only for development |
+| **Test** | `enabled: true` | `scenarios`, `defaultDelay`, `baseUrl`, `customUiRoute`, `returnUrl`, `testModeIndicators` | Only for development |
 
 ## Collections
 
@@ -476,7 +499,7 @@ Generate and manage invoices with line items and customer information.
 ```typescript
 {
   id: string | number
-  number: string                        // Auto-generated (INV-YYYYMMDD-XXXX)
+  number: string                        // Auto-generated (INV-<millisecond timestamp>)
   customer?: string                     // Customer relationship (if configured)
   customerInfo: {
     name: string
@@ -493,20 +516,19 @@ Generate and manage invoices with line items and customer information.
     postalCode: string
     country: string                     // ISO 3166-1 alpha-2
   }
-  currency: string                      // ISO 4217 currency code
+  currency: string                      // ISO 4217 currency code (defaults to 'USD')
   items: Array<{
     description: string
     quantity: number
     unitAmount: number                  // In cents
-    amount: number                      // Auto-calculated (quantity × unitAmount)
+    totalAmount?: number                // Auto-calculated (quantity × unitAmount)
   }>
   subtotal: number                      // Auto-calculated sum of items
   taxAmount?: number
   amount: number                        // Auto-calculated (subtotal + taxAmount)
   status: 'draft' | 'open' | 'paid' | 'void' | 'uncollectible'
   payment?: Payment | string            // Linked payment
-  dueDate?: string
-  issuedAt?: string
+  dueDate?: string                      // Defaults to 30 days after creation
   paidAt?: string                       // Auto-set when status becomes 'paid'
   notes?: string
   metadata?: Record<string, any>
@@ -525,8 +547,10 @@ draft → open → paid
 
 **Automatic Behaviors:**
 - Invoice number auto-generated on creation
-- Item amounts calculated from quantity × unitAmount
-- Subtotal calculated from sum of item amounts
+- Currency defaults to `USD`
+- Due date defaults to 30 days after creation
+- Item `totalAmount` values calculated from quantity × unitAmount
+- Subtotal calculated from the sum of item `totalAmount` values
 - Total amount calculated as subtotal + taxAmount
 - `paidAt` timestamp set when status becomes 'paid'
 - Linked payment updated when invoice marked as paid
@@ -541,11 +565,11 @@ Track refunds associated with payments.
 ```typescript
 {
   id: string | number
+  providerId: string                    // Required, unique provider refund ID
   payment: Payment | string             // Required: linked payment
-  providerId?: string                   // Provider's refund ID
   amount: number                        // Refund amount in cents
   currency: string                      // ISO 4217 currency code
-  status: 'pending' | 'succeeded' | 'failed' | 'canceled'
+  status: 'pending' | 'processing' | 'succeeded' | 'failed' | 'canceled'
   reason?: 'duplicate' | 'fraudulent' | 'requested_by_customer' | 'other'
   description?: string
   metadata?: Record<string, any>
@@ -556,10 +580,9 @@ Track refunds associated with payments.
 ```
 
 **Automatic Behaviors:**
-- Payment status updated based on refund amount:
-  - Full refund: payment status → `refunded`
-  - Partial refund: payment status → `partially_refunded`
 - Refunds tracked in payment's `refunds` array
+
+Creating a refund record does not submit a refund to the provider or change the payment status. Stripe's verified `charge.refunded` webhook changes the related payment to `refunded` or `partially_refunded`; the Mollie and test providers do not currently perform that status update.
 
 ## Payment Flows
 
@@ -761,6 +784,7 @@ await payload.update({
 const refund = await payload.create({
   collection: 'refunds',
   data: {
+    providerId: 're_provider_refund_id',
     payment: payment.id,
     amount: payment.amount,      // Full amount
     currency: payment.currency,
@@ -769,12 +793,13 @@ const refund = await payload.create({
     description: 'Customer cancelled order'
   }
 })
-// Payment status automatically updated to 'refunded'
+// The payment's refunds relation is updated; its status is unchanged.
 
 // Partial refund
 const partialRefund = await payload.create({
   collection: 'refunds',
   data: {
+    providerId: 're_provider_partial_refund_id',
     payment: payment.id,
     amount: 1000,               // Partial amount ($10.00)
     currency: payment.currency,
@@ -783,7 +808,7 @@ const partialRefund = await payload.create({
     description: 'Partial refund for damaged item'
   }
 })
-// Payment status automatically updated to 'partially_refunded'
+// The payment's refunds relation is updated; its status is unchanged.
 ```
 
 ### Using Customer Relationships
@@ -891,7 +916,7 @@ const campaignPayments = await payload.find({
 
 **Events Handled:**
 - `payment_intent.succeeded` → Updates payment status to `succeeded`
-- `payment_intent.failed` → Updates payment status to `failed`
+- `payment_intent.payment_failed` → Updates payment status to `failed`
 - `payment_intent.canceled` → Updates payment status to `canceled`
 - `charge.refunded` → Updates payment status to `refunded` or `partially_refunded`
 
@@ -924,12 +949,12 @@ const campaignPayments = await payload.find({
 
 ### Webhook Security
 
-All webhook endpoints:
-- Return HTTP 200 OK for all requests (prevents replay attacks)
+Webhook endpoints:
+- Return HTTP 200 for successfully handled events so providers do not retry them; malformed or unverifiable requests return an error response (for example, Stripe requests without a signature return HTTP 400)
 - Validate signatures (Stripe) or payment IDs (Mollie)
 - Use optimistic locking to prevent concurrent update conflicts
 - Log detailed errors internally but return generic responses
-- Run within database transactions for atomicity
+- Use database transactions when the Payload adapter supports them and otherwise fall back to a direct, non-transactional update
 
 ## API Reference
 
@@ -939,14 +964,27 @@ All webhook endpoints:
 type BillingPluginConfig = {
   providers?: PaymentProvider[]
   collections?: {
-    payments?: string
-    invoices?: string
-    refunds?: string
+    payments?: CollectionExtension
+    invoices?: CollectionExtension
+    refunds?: CollectionExtension
   }
   customerRelationSlug?: string
   customerInfoExtractor?: CustomerInfoExtractor
+  disabled?: boolean
+  // Reserved in the current type, but not consumed by the plugin yet:
+  admin?: {
+    customComponents?: boolean
+    dashboard?: boolean
+  }
+}
+
+type CollectionExtension = string | {
+  slug: string
+  extend?: (config: CollectionConfig) => CollectionConfig
 }
 ```
+
+Setting `disabled: true` returns the host configuration unchanged: no billing collections, endpoints, hooks, or admin views are registered.
 
 ### Provider Types
 
@@ -966,8 +1004,11 @@ type StripeProviderConfig = {
   webhookUrl?: string
 }
 
-type MollieProviderConfig = {
-  apiKey: string
+// Options accepted by createMollieClient, including apiKey.
+type MollieProviderConfig = Parameters<typeof createMollieClient>[0]
+
+// mollieProvider additionally accepts:
+type MollieBillingOptions = MollieProviderConfig & {
   webhookUrl?: string
   redirectUrl?: string
 }
@@ -977,6 +1018,8 @@ type TestProviderConfig = {
   scenarios?: PaymentScenario[]
   defaultDelay?: number
   baseUrl?: string
+  customUiRoute?: string
+  returnUrl?: string
   testModeIndicators?: {
     showWarningBanners?: boolean
     showTestBadges?: boolean
@@ -996,7 +1039,7 @@ type CustomerInfoExtractor = (
   phone?: string
   company?: string
   taxId?: string
-  billingAddress: Address
+  billingAddress?: Address
 }
 
 type Address = {
@@ -1024,36 +1067,18 @@ type ProviderData<T = any> = {
 Full TypeScript support with comprehensive type definitions:
 
 ```typescript
+import type { Payload } from 'payload'
 import type {
-  // Main types
   Payment,
   Invoice,
   Refund,
-
-  // Provider types
   PaymentProvider,
   StripeProviderConfig,
   MollieProviderConfig,
   TestProviderConfig,
-
-  // Configuration
   BillingPluginConfig,
   CustomerInfoExtractor,
-
-  // Data types
   ProviderData,
-  Address,
-  InvoiceItem,
-  CustomerInfo,
-
-  // Status types
-  PaymentStatus,
-  InvoiceStatus,
-  RefundStatus,
-  RefundReason,
-
-  // Utility types
-  InitPayment,
   PaymentScenario,
 } from '@xtr-dev/payload-billing'
 
@@ -1069,7 +1094,7 @@ const createPayment = async (
       provider: 'stripe',
       amount,
       currency,
-      status: 'pending' as PaymentStatus
+      status: 'pending'
     }
   })
 }
@@ -1119,6 +1144,8 @@ const createPayment = async (
 ## Troubleshooting
 
 ### Webhook Not Receiving Events
+
+For Stripe, configure `webhookSecret` before testing this URL. Without it, the plugin does not register the endpoint and the URL returns 404.
 
 **Stripe:**
 ```bash

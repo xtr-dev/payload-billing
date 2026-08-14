@@ -25,7 +25,7 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
       name: 'number',
       type: 'text',
       admin: {
-        description: 'Invoice number (e.g., INV-001)',
+        description: 'Invoice number (e.g., INV-1754737000000)',
       },
       index: true,
       required: true,

@@ -11,7 +11,7 @@ describe('billingPlugin disabled configuration', () => {
     const config = {
       collections: [hostCollection],
       onInit: existingOnInit,
-    } as Config
+    } as unknown as Config
 
     const result = billingPlugin({
       disabled: true,
@@ -55,7 +55,7 @@ describe('billingPlugin disabled configuration', () => {
         },
       },
       disabled: true,
-    })({} as Config)
+    })({} as unknown as Config)
 
     const payments = result.collections?.find(collection => collection.slug === 'charges')
     expect(payments?.fields.some(field => 'name' in field && field.name === 'reference')).toBe(true)

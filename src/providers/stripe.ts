@@ -9,7 +9,7 @@ import {
   updatePaymentStatus,
   updateInvoiceOnPaymentSuccess,
   handleWebhookError,
-  logWebhookEvent
+  logWebhookEvent,
 } from './utils'
 import { isValidAmount, isValidCurrencyCode } from './currency'
 import { createContextLogger } from '../utils/logger'
@@ -25,7 +25,8 @@ export interface StripeProviderConfig {
 }
 
 // Default API version for consistency
-const DEFAULT_API_VERSION: Stripe.StripeConfig['apiVersion'] = '2025-08-27.basil'
+const DEFAULT_API_VERSION: Stripe.StripeConfig['apiVersion'] =
+  '2025-08-27.basil'
 
 export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
   // Validate required configuration at initialization
@@ -46,152 +47,236 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
             path: '/payload-billing/stripe/webhook',
             method: 'post',
             handler: async (req) => {
-            try {
-              const payload = req.payload
-              const stripe = singleton.get(payload)
-
-              // Get the raw body for signature verification
-              let body: string
               try {
-                if (!req.text) {
-                  return webhookResponses.missingBody()
-                }
-                body = await req.text()
-                if (!body) {
-                  return webhookResponses.missingBody()
-                }
-              } catch (error) {
-                return handleWebhookError('Stripe', error, 'Failed to read request body', req.payload)
-              }
+                const payload = req.payload
+                const stripe = singleton.get(payload)
 
-              const signature = req.headers.get('stripe-signature')
-
-              if (!signature) {
-                return webhookResponses.error('Missing webhook signature', 400, req.payload)
-              }
-
-              // webhookSecret is guaranteed to exist since we only register this endpoint when it's configured
-
-              // Verify webhook signature and construct event
-              let event: Stripe.Event
-              try {
-                event = stripe.webhooks.constructEvent(body, signature, stripeConfig.webhookSecret!)
-              } catch (err) {
-                return handleWebhookError('Stripe', err, 'Signature verification failed', req.payload)
-              }
-
-              // Handle different event types
-              switch (event.type) {
-                case 'payment_intent.succeeded':
-                case 'payment_intent.payment_failed':
-                case 'payment_intent.canceled': {
-                  const paymentIntent = event.data.object
-
-                  // Find the corresponding payment in our database
-                  const payment = await findPaymentByProviderId(payload, paymentIntent.id, pluginConfig)
-
-                  if (!payment) {
-                    logWebhookEvent('Stripe', `Payment not found for intent: ${paymentIntent.id}`, undefined, req.payload)
-                    return webhookResponses.success() // Still return 200 to acknowledge receipt
+                // Get the raw body for signature verification
+                let body: string
+                try {
+                  if (!req.text) {
+                    return webhookResponses.missingBody()
                   }
-
-                  // Map Stripe status to our status
-                  let status: Payment['status'] = 'pending'
-
-                  if (paymentIntent.status === 'succeeded') {
-                    status = 'succeeded'
-                  } else if (paymentIntent.status === 'canceled') {
-                    status = 'canceled'
-                  } else if (paymentIntent.status === 'requires_payment_method' ||
-                             paymentIntent.status === 'requires_confirmation' ||
-                             paymentIntent.status === 'requires_action') {
-                    status = 'pending'
-                  } else if (paymentIntent.status === 'processing') {
-                    status = 'processing'
-                  } else {
-                    status = 'failed'
+                  body = await req.text()
+                  if (!body) {
+                    return webhookResponses.missingBody()
                   }
-
-                  // Update the payment status and provider data
-                  const providerData: ProviderData<Stripe.PaymentIntent> = {
-                    raw: paymentIntent,
-                    timestamp: new Date().toISOString(),
-                    provider: 'stripe'
-                  }
-                  const updateSuccess = await updatePaymentStatus(
-                    payload,
-                    payment.id,
-                    status,
-                    providerData,
-                    pluginConfig
+                } catch (error) {
+                  return handleWebhookError(
+                    'Stripe',
+                    error,
+                    'Failed to read request body',
+                    req.payload,
                   )
-
-                  // If payment is successful and update succeeded, update the invoice
-                  if (status === 'succeeded' && updateSuccess) {
-                    await updateInvoiceOnPaymentSuccess(payload, payment, pluginConfig)
-                  } else if (!updateSuccess) {
-                    const logger = createContextLogger(payload, 'Stripe Webhook')
-                    logger.warn(`Failed to update payment ${payment.id}, skipping invoice update`)
-                  }
-                  break
                 }
 
-                case 'charge.refunded': {
-                  const charge = event.data.object
+                const signature = req.headers.get('stripe-signature')
 
-                  // Find the payment by charge ID or payment intent
-                  let payment: Payment | null = null
+                if (!signature) {
+                  return webhookResponses.error(
+                    'Missing webhook signature',
+                    400,
+                    req.payload,
+                  )
+                }
 
-                  // First try to find by payment intent ID
-                  if (charge.payment_intent) {
-                    payment = await findPaymentByProviderId(
+                // webhookSecret is guaranteed to exist since we only register this endpoint when it's configured
+
+                // Verify webhook signature and construct event
+                let event: Stripe.Event
+                try {
+                  event = stripe.webhooks.constructEvent(
+                    body,
+                    signature,
+                    stripeConfig.webhookSecret!,
+                  )
+                } catch (err) {
+                  const logger = createContextLogger(
+                    req.payload,
+                    'Stripe Webhook',
+                  )
+                  logger.error(
+                    `Signature verification failed: ${err instanceof Error ? err.message : String(err)}`,
+                  )
+                  return webhookResponses.error(
+                    'Invalid webhook signature',
+                    400,
+                    req.payload,
+                  )
+                }
+
+                // Handle different event types
+                switch (event.type) {
+                  case 'payment_intent.succeeded':
+                  case 'payment_intent.payment_failed':
+                  case 'payment_intent.canceled': {
+                    const paymentIntent = event.data.object
+
+                    // Find the corresponding payment in our database
+                    const payment = await findPaymentByProviderId(
                       payload,
-                      charge.payment_intent as string,
-                      pluginConfig
+                      paymentIntent.id,
+                      pluginConfig,
                     )
-                  }
 
-                  // If not found, try charge ID
-                  if (!payment) {
-                    payment = await findPaymentByProviderId(payload, charge.id, pluginConfig)
-                  }
+                    if (!payment) {
+                      logWebhookEvent(
+                        'Stripe',
+                        `Payment not found for intent: ${paymentIntent.id}`,
+                        undefined,
+                        req.payload,
+                      )
+                      return webhookResponses.success() // Still return 200 to acknowledge receipt
+                    }
 
-                  if (payment) {
-                    // Determine if fully or partially refunded
-                    const isFullyRefunded = charge.amount_refunded === charge.amount
+                    if (
+                      payment.providerData &&
+                      typeof payment.providerData === 'object' &&
+                      !Array.isArray(payment.providerData) &&
+                      payment.providerData.eventId === event.id
+                    ) {
+                      return webhookResponses.success()
+                    }
 
-                    const providerData: ProviderData<Stripe.Charge> = {
-                      raw: charge,
+                    // Map Stripe status to our status
+                    let status: Payment['status'] = 'pending'
+
+                    if (paymentIntent.status === 'succeeded') {
+                      status = 'succeeded'
+                    } else if (paymentIntent.status === 'canceled') {
+                      status = 'canceled'
+                    } else if (
+                      paymentIntent.status === 'requires_payment_method' ||
+                      paymentIntent.status === 'requires_confirmation' ||
+                      paymentIntent.status === 'requires_action'
+                    ) {
+                      status = 'pending'
+                    } else if (paymentIntent.status === 'processing') {
+                      status = 'processing'
+                    } else {
+                      status = 'failed'
+                    }
+
+                    // Update the payment status and provider data
+                    const providerData: ProviderData<Stripe.PaymentIntent> = {
+                      eventId: event.id,
+                      raw: paymentIntent,
                       timestamp: new Date().toISOString(),
-                      provider: 'stripe'
+                      provider: 'stripe',
                     }
                     const updateSuccess = await updatePaymentStatus(
                       payload,
                       payment.id,
-                      isFullyRefunded ? 'refunded' : 'partially_refunded',
+                      status,
                       providerData,
-                      pluginConfig
+                      pluginConfig,
                     )
 
-                    if (!updateSuccess) {
-                      const logger = createContextLogger(payload, 'Stripe Webhook')
-                      logger.warn(`Failed to update refund status for payment ${payment.id}`)
+                    // If payment is successful and update succeeded, update the invoice
+                    if (status === 'succeeded' && updateSuccess) {
+                      await updateInvoiceOnPaymentSuccess(
+                        payload,
+                        payment,
+                        pluginConfig,
+                      )
+                    } else if (!updateSuccess) {
+                      const logger = createContextLogger(
+                        payload,
+                        'Stripe Webhook',
+                      )
+                      logger.warn(
+                        `Failed to update payment ${payment.id}, skipping invoice update`,
+                      )
                     }
+                    break
                   }
-                  break
+
+                  case 'charge.refunded': {
+                    const charge = event.data.object
+
+                    // Find the payment by charge ID or payment intent
+                    let payment: Payment | null = null
+
+                    // First try to find by payment intent ID
+                    if (charge.payment_intent) {
+                      payment = await findPaymentByProviderId(
+                        payload,
+                        charge.payment_intent as string,
+                        pluginConfig,
+                      )
+                    }
+
+                    // If not found, try charge ID
+                    if (!payment) {
+                      payment = await findPaymentByProviderId(
+                        payload,
+                        charge.id,
+                        pluginConfig,
+                      )
+                    }
+
+                    if (payment) {
+                      if (
+                        payment.providerData &&
+                        typeof payment.providerData === 'object' &&
+                        !Array.isArray(payment.providerData) &&
+                        payment.providerData.eventId === event.id
+                      ) {
+                        return webhookResponses.success()
+                      }
+
+                      // Determine if fully or partially refunded
+                      const isFullyRefunded =
+                        charge.amount_refunded === charge.amount
+
+                      const providerData: ProviderData<Stripe.Charge> = {
+                        eventId: event.id,
+                        raw: charge,
+                        timestamp: new Date().toISOString(),
+                        provider: 'stripe',
+                      }
+                      const updateSuccess = await updatePaymentStatus(
+                        payload,
+                        payment.id,
+                        isFullyRefunded ? 'refunded' : 'partially_refunded',
+                        providerData,
+                        pluginConfig,
+                      )
+
+                      if (!updateSuccess) {
+                        const logger = createContextLogger(
+                          payload,
+                          'Stripe Webhook',
+                        )
+                        logger.warn(
+                          `Failed to update refund status for payment ${payment.id}`,
+                        )
+                      }
+                    }
+                    break
+                  }
+
+                  default:
+                    // Unhandled event type
+                    logWebhookEvent(
+                      'Stripe',
+                      `Unhandled event type: ${event.type}`,
+                      undefined,
+                      req.payload,
+                    )
                 }
 
-                default:
-                  // Unhandled event type
-                  logWebhookEvent('Stripe', `Unhandled event type: ${event.type}`, undefined, req.payload)
+                return webhookResponses.success()
+              } catch (error) {
+                return handleWebhookError(
+                  'Stripe',
+                  error,
+                  undefined,
+                  req.payload,
+                )
               }
-
-              return webhookResponses.success()
-            } catch (error) {
-              return handleWebhookError('Stripe', error, undefined, req.payload)
-            }
-            }
-          }
+            },
+          },
         ]
       }
     },
@@ -205,7 +290,9 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
       // Log webhook registration status
       if (!stripeConfig.webhookSecret) {
         const logger = createContextLogger(payload, 'Stripe Provider')
-        logger.warn('Webhook endpoint not registered - webhookSecret not configured')
+        logger.warn(
+          'Webhook endpoint not registered - webhookSecret not configured',
+        )
       }
     },
     initPayment: async (payload, payment) => {
@@ -219,7 +306,9 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
 
       // Validate amount
       if (!isValidAmount(payment.amount)) {
-        throw new Error('Invalid amount: must be a non-negative integer within reasonable limits')
+        throw new Error(
+          'Invalid amount: must be a non-negative integer within reasonable limits',
+        )
       }
 
       // Validate currency code
@@ -245,10 +334,10 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
         metadata: {
           payloadPaymentId: payment.id?.toString() || '',
           ...(typeof payment.metadata === 'object' &&
-              payment.metadata !== null &&
-              !Array.isArray(payment.metadata)
-              ? payment.metadata
-              : {})
+          payment.metadata !== null &&
+          !Array.isArray(payment.metadata)
+            ? payment.metadata
+            : {}),
         } as Stripe.MetadataParam,
         automatic_payment_methods: {
           enabled: true,
@@ -260,7 +349,7 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
       const providerData: ProviderData<Stripe.PaymentIntent> = {
         raw: { ...paymentIntent, client_secret: paymentIntent.client_secret },
         timestamp: new Date().toISOString(),
-        provider: 'stripe'
+        provider: 'stripe',
       }
       payment.providerData = providerData
 

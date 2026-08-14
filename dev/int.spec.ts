@@ -2,9 +2,11 @@ import type { Payload } from 'payload'
 
 import config from '@payload-config'
 import { getPayload } from 'payload'
-import { afterAll, beforeAll, describe, expect, test } from 'vitest'
+import type { Config } from 'payload'
+import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest'
 
 import type { Payment } from '../src/index'
+import { stripeProvider } from '../src/providers/stripe'
 
 let payload: Payload
 
@@ -27,7 +29,9 @@ describe('billing plugin integration', () => {
   test('honours the extend option on the invoices collection', () => {
     // dev/payload.config.ts passes collections.invoices.extend adding a customMessage field
     const fields = payload.collections['invoices'].config.fields
-    expect(fields.some((field) => 'name' in field && field.name === 'customMessage')).toBe(true)
+    expect(
+      fields.some((field) => 'name' in field && field.name === 'customMessage'),
+    ).toBe(true)
   })
 
   test('creating a payment runs the test provider and stores its session data', async () => {
@@ -88,5 +92,119 @@ describe('billing plugin integration', () => {
         } as any,
       }),
     ).rejects.toThrow(/not found/i)
+  })
+
+  test('caps refunds at the captured amount', async () => {
+    const payment = await payload.create({
+      collection: 'payments',
+      data: {
+        provider: 'test',
+        amount: 1000,
+        currency: 'EUR',
+        status: 'succeeded',
+      } as any,
+    })
+
+    await payload.create({
+      collection: 'refunds',
+      data: {
+        providerId: `refund_${payment.id}_1`,
+        payment: payment.id,
+        amount: 600,
+        currency: 'EUR',
+        status: 'succeeded',
+      } as any,
+    })
+
+    await expect(
+      payload.create({
+        collection: 'refunds',
+        data: {
+          providerId: `refund_${payment.id}_2`,
+          payment: payment.id,
+          amount: 401,
+          currency: 'EUR',
+          status: 'pending',
+        } as any,
+      }),
+    ).rejects.toThrow(/cannot exceed/i)
+  })
+})
+
+describe('Stripe webhook contract', () => {
+  const buildHandler = () => {
+    const provider = stripeProvider({
+      secretKey: 'sk_test_fake',
+      webhookSecret: 'whsec_test',
+    })
+    const config = { collections: [] } as unknown as Config
+    provider.onConfig(config, {})
+    return config.endpoints?.find(
+      (endpoint) => endpoint.path === '/payload-billing/stripe/webhook',
+    )?.handler
+  }
+
+  test('rejects a missing or invalid signature before touching storage', async () => {
+    const handler = buildHandler()
+    expect(handler).toBeDefined()
+
+    const update = vi.fn()
+    const fakePayload = {
+      logger: { error: vi.fn(), info: vi.fn(), warn: vi.fn(), debug: vi.fn() },
+      update,
+      [Symbol.for('@xtr-dev/payload-billing/stripe')]: {
+        webhooks: {
+          constructEvent: vi.fn(() => {
+            throw new Error('bad signature')
+          }),
+        },
+      },
+    }
+    const request = (signature?: string) => ({
+      headers: new Headers(signature ? { 'stripe-signature': signature } : {}),
+      payload: fakePayload,
+      text: async () => '{}',
+    })
+
+    expect((await handler!(request() as any)).status).toBe(400)
+    expect((await handler!(request('wrong') as any)).status).toBe(400)
+    expect(update).not.toHaveBeenCalled()
+  })
+
+  test('deduplicates a replayed verified event', async () => {
+    const handler = buildHandler()
+    const payment: Record<string, any> = {
+      id: 42,
+      providerId: 'pi_test',
+      status: 'pending',
+      version: 1,
+    }
+    const update = vi.fn(async ({ data }: any) => Object.assign(payment, data))
+    const fakePayload = {
+      db: { beginTransaction: vi.fn(async () => null) },
+      find: vi.fn(async () => ({ docs: [payment] })),
+      findByID: vi.fn(async () => payment),
+      logger: { error: vi.fn(), info: vi.fn(), warn: vi.fn(), debug: vi.fn() },
+      update,
+      [Symbol.for('@xtr-dev/payload-billing/stripe')]: {
+        webhooks: {
+          constructEvent: vi.fn(() => ({
+            id: 'evt_replayed',
+            type: 'payment_intent.succeeded',
+            data: { object: { id: 'pi_test', status: 'succeeded' } },
+          })),
+        },
+      },
+    }
+    const request = () => ({
+      headers: new Headers({ 'stripe-signature': 'valid' }),
+      payload: fakePayload,
+      text: async () => '{}',
+    })
+
+    expect((await handler!(request() as any)).status).toBe(200)
+    expect((await handler!(request() as any)).status).toBe(200)
+    expect(update).toHaveBeenCalledTimes(1)
+    expect(payment.providerData.eventId).toBe('evt_replayed')
   })
 })

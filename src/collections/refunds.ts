@@ -1,14 +1,22 @@
 import type { AccessArgs, CollectionConfig } from 'payload'
-import type { BillingPluginConfig} from '../plugin/config';
+import type { BillingPluginConfig } from '../plugin/config'
 import { defaults } from '../plugin/config'
 import { extractSlug } from '../plugin/utils'
-import type { Payment } from '../plugin/types/index'
+import type { Payment, Refund } from '../plugin/types/index'
 import { createContextLogger } from '../utils/logger'
 
-export function createRefundsCollection(pluginConfig: BillingPluginConfig): CollectionConfig {
+export function createRefundsCollection(
+  pluginConfig: BillingPluginConfig,
+): CollectionConfig {
   // Get slugs for relationships - these need to be determined before building fields
-  const paymentsSlug = extractSlug(pluginConfig.collections?.payments, defaults.paymentsCollection)
-  const refundsSlug = extractSlug(pluginConfig.collections?.refunds, defaults.refundsCollection)
+  const paymentsSlug = extractSlug(
+    pluginConfig.collections?.payments,
+    defaults.paymentsCollection,
+  )
+  const refundsSlug = extractSlug(
+    pluginConfig.collections?.refunds,
+    defaults.refundsCollection,
+  )
 
   const baseConfig: CollectionConfig = {
     slug: refundsSlug,
@@ -19,7 +27,14 @@ export function createRefundsCollection(pluginConfig: BillingPluginConfig): Coll
       update: ({ req: { user } }: AccessArgs) => !!user,
     },
     admin: {
-      defaultColumns: ['id', 'payment', 'amount', 'currency', 'status', 'createdAt'],
+      defaultColumns: [
+        'id',
+        'payment',
+        'amount',
+        'currency',
+        'status',
+        'createdAt',
+      ],
       group: 'Billing',
       useAsTitle: 'id',
     },
@@ -116,33 +131,47 @@ export function createRefundsCollection(pluginConfig: BillingPluginConfig): Coll
       afterChange: [
         async ({ doc, operation, req }) => {
           if (operation === 'create') {
-            const logger = createContextLogger(req.payload, 'Refunds Collection')
+            const logger = createContextLogger(
+              req.payload,
+              'Refunds Collection',
+            )
             logger.info(`Refund created: ${doc.id} for payment: ${doc.payment}`)
 
             // Update the related payment's refund relationship
             try {
-              const payment = await req.payload.findByID({
-                id: typeof doc.payment === 'string' ? doc.payment : doc.payment.id,
+              const payment = (await req.payload.findByID({
+                id:
+                  typeof doc.payment === 'string'
+                    ? doc.payment
+                    : doc.payment.id,
                 collection: paymentsSlug,
-              }) as Payment
+              })) as Payment
 
-              const refundIds = Array.isArray(payment.refunds) ? payment.refunds : []
+              const refundIds = Array.isArray(payment.refunds)
+                ? payment.refunds
+                : []
               await req.payload.update({
-                id: typeof doc.payment === 'string' ? doc.payment : doc.payment.id,
+                id:
+                  typeof doc.payment === 'string'
+                    ? doc.payment
+                    : doc.payment.id,
                 collection: paymentsSlug,
                 data: {
                   refunds: [...refundIds, doc.id],
                 },
               })
             } catch (error) {
-              const logger = createContextLogger(req.payload, 'Refunds Collection')
+              const logger = createContextLogger(
+                req.payload,
+                'Refunds Collection',
+              )
               logger.error(`Failed to update payment refunds: ${error}`)
             }
           }
         },
       ],
       beforeChange: [
-        ({ data, operation }) => {
+        async ({ data, operation, req }) => {
           if (operation === 'create') {
             // Validate amount format
             if (data.amount && !Number.isInteger(data.amount)) {
@@ -155,6 +184,50 @@ export function createRefundsCollection(pluginConfig: BillingPluginConfig): Coll
               if (!/^[A-Z]{3}$/.test(data.currency)) {
                 throw new Error('Currency must be a 3-letter ISO code')
               }
+            }
+
+            const paymentId =
+              typeof data.payment === 'object' ? data.payment?.id : data.payment
+            if (!paymentId) {
+              throw new Error('Payment is required')
+            }
+
+            const payment = (await req.payload.findByID({
+              collection: paymentsSlug,
+              id: paymentId,
+            })) as Payment
+
+            if (
+              !['succeeded', 'partially_refunded', 'refunded'].includes(
+                payment.status,
+              )
+            ) {
+              throw new Error('Only captured payments can be refunded')
+            }
+
+            if (data.currency !== payment.currency) {
+              throw new Error('Refund currency must match the payment currency')
+            }
+
+            const existingRefunds = await req.payload.find({
+              collection: refundsSlug,
+              pagination: false,
+              where: {
+                and: [
+                  { payment: { equals: paymentId } },
+                  { status: { not_in: ['failed', 'canceled'] } },
+                ],
+              },
+            })
+            const refundedAmount = (existingRefunds.docs as Refund[]).reduce(
+              (total, refund) => total + refund.amount,
+              0,
+            )
+
+            if (refundedAmount + data.amount > payment.amount) {
+              throw new Error(
+                'Refund total cannot exceed the captured payment amount',
+              )
             }
           }
         },

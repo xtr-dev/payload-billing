@@ -43,7 +43,7 @@
     "prepublishOnly": "pnpm clean && pnpm build",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "test:int": "vitest",
+    "test:int": "vitest run dev/int.spec.ts",
     "typecheck": "tsc --noEmit",
     "release": "changeset publish"
   },

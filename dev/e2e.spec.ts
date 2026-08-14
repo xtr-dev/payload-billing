@@ -1,15 +1,48 @@
 import { expect, test } from '@playwright/test'
 
-// this is an example Playwright e2e test
-test('should render admin panel logo', async ({ page }) => {
-  await page.goto('/admin')
+test('test checkout renders provider choices and processes a successful payment', async ({
+  page,
+}) => {
+  await page.route('**/api/payload-billing/test/config', (route) =>
+    route.fulfill({
+      json: {
+        enabled: true,
+        scenarios: [
+          {
+            id: 'instant-success',
+            name: 'Instant Success',
+            description: 'Payment succeeds immediately',
+            outcome: 'paid',
+          },
+        ],
+        methods: [{ id: 'ideal', name: 'iDEAL', icon: 'bank' }],
+        testModeIndicators: {
+          showWarningBanners: true,
+          showTestBadges: true,
+          consoleWarnings: false,
+        },
+        defaultDelay: 0,
+        customUiRoute: '/test-payment',
+      },
+    }),
+  )
+  await page.route('**/api/payload-billing/test/process', (route) =>
+    route.fulfill({
+      json: { success: true, delay: 1 },
+    }),
+  )
+  await page.route('**/api/payload-billing/test/status/**', (route) =>
+    route.fulfill({
+      json: { status: 'paid' },
+    }),
+  )
 
-  // login
-  await page.fill('#field-email', 'dev@payloadcms.com')
-  await page.fill('#field-password', 'test')
-  await page.click('.form-submit button')
-
-  // should show dashboard
-  await expect(page).toHaveTitle(/Dashboard/)
-  await expect(page.locator('.graphic-icon')).toBeVisible()
+  await page.goto('/test-payment/test_pay_e2e')
+  await expect(
+    page.getByText('TEST MODE - This is a simulated payment'),
+  ).toBeVisible()
+  await page.getByRole('button', { name: /iDEAL/ }).click()
+  await page.getByRole('button', { name: /Instant Success/ }).click()
+  await page.getByRole('button', { name: 'Process Test Payment' }).click()
+  await expect(page.getByText('Payment successful!')).toBeVisible()
 })

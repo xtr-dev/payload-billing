@@ -984,7 +984,7 @@ type CollectionExtension = string | {
 }
 ```
 
-Setting `disabled: true` returns the host configuration unchanged: no billing collections, endpoints, hooks, or admin views are registered.
+Setting `disabled: true` keeps the billing collection schemas registered to preserve stored billing data, but hides their admin views and skips their hooks, endpoints, and provider wiring.
 
 ### Provider Types
 

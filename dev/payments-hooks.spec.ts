@@ -34,7 +34,7 @@ const initializeBilling = async (
   payload: any,
   providers: PaymentProvider[],
 ) => {
-  const config = billingPlugin({ providers })({})
+  const config = billingPlugin({ providers })({} as any)
   await config.onInit!(payload)
 }
 

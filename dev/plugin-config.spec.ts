@@ -84,6 +84,7 @@ describe('billingPlugin', () => {
     const fakePayload = {} as Payload
     const config = makeConfig({
       onInit: async () => {
+        expect(useBillingPlugin(fakePayload)).toBeUndefined()
         order.push('host')
       },
     })

@@ -207,4 +207,71 @@ describe('Stripe webhook contract', () => {
     expect(update).toHaveBeenCalledTimes(1)
     expect(payment.providerData.eventId).toBe('evt_replayed')
   })
+
+  test('does not reprocess a stale event redelivered after a later event', async () => {
+    // Regression: dedup used to compare against only the most recent
+    // eventId, so an older event redelivered after a newer one had already
+    // been applied (succeeded -> refunded -> succeeded replayed) would
+    // revert the payment status. See fcwzoku.
+    const handler = buildHandler()
+    const payment: Record<string, any> = {
+      id: 42,
+      providerId: 'pi_test',
+      status: 'pending',
+      version: 1,
+    }
+    const update = vi.fn(async ({ data }: any) => Object.assign(payment, data))
+    const events = [
+      {
+        id: 'evt_succeeded',
+        type: 'payment_intent.succeeded',
+        data: { object: { id: 'pi_test', status: 'succeeded' } },
+      },
+      {
+        id: 'evt_refunded',
+        type: 'charge.refunded',
+        data: {
+          object: {
+            id: 'ch_test',
+            payment_intent: 'pi_test',
+            amount: 1000,
+            amount_refunded: 1000,
+          },
+        },
+      },
+      {
+        id: 'evt_succeeded', // stale redelivery of the first event
+        type: 'payment_intent.succeeded',
+        data: { object: { id: 'pi_test', status: 'succeeded' } },
+      },
+    ]
+    let call = 0
+    const fakePayload = {
+      db: { beginTransaction: vi.fn(async () => null) },
+      find: vi.fn(async () => ({ docs: [payment] })),
+      findByID: vi.fn(async () => payment),
+      logger: { error: vi.fn(), info: vi.fn(), warn: vi.fn(), debug: vi.fn() },
+      update,
+      [Symbol.for('@xtr-dev/payload-billing/stripe')]: {
+        webhooks: {
+          constructEvent: vi.fn(() => events[call++]),
+        },
+      },
+    }
+    const request = () => ({
+      headers: new Headers({ 'stripe-signature': 'valid' }),
+      payload: fakePayload,
+      text: async () => '{}',
+    })
+
+    await handler!(request() as any)
+    expect(payment.status).toBe('succeeded')
+
+    await handler!(request() as any)
+    expect(payment.status).toBe('refunded')
+
+    await handler!(request() as any)
+    expect(payment.status).toBe('refunded')
+    expect(update).toHaveBeenCalledTimes(2)
+  })
 })

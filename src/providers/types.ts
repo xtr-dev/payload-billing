@@ -19,6 +19,14 @@ export type PaymentProvider = {
  */
 export type ProviderData<T = unknown> = {
   eventId?: string
+  /**
+   * Ids of webhook events already applied to this payment, most recent last.
+   * `eventId` alone only catches a back-to-back replay of the same event; a
+   * redelivery of an older event after a newer one has already been applied
+   * (e.g. a succeeded event replayed after a later refund event) needs the
+   * full history to be recognised as already-processed.
+   */
+  processedEventIds?: string[]
   raw: T
   timestamp: string
   provider: string

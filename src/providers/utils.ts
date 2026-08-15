@@ -49,6 +49,61 @@ export async function findPaymentByProviderId(
   return payments.docs.length > 0 ? payments.docs[0] as Payment : null
 }
 
+// Bound the history so a long-lived payment's providerData can't grow without limit
+const MAX_PROCESSED_EVENT_IDS = 25
+
+/**
+ * Check whether a webhook event has already been applied to a payment.
+ * Compares against the full processed-event history, not just the most
+ * recent `eventId` - a single scalar only catches a back-to-back replay of
+ * the same event and misses an older event redelivered after a newer one
+ * has already been processed.
+ */
+export function hasProcessedEvent(
+  providerData: unknown,
+  eventId: string
+): boolean {
+  if (
+    !providerData ||
+    typeof providerData !== 'object' ||
+    Array.isArray(providerData)
+  ) {
+    return false
+  }
+
+  const data = providerData as ProviderData<unknown>
+  if (data.eventId === eventId) {
+    return true
+  }
+
+  return Array.isArray(data.processedEventIds) && data.processedEventIds.includes(eventId)
+}
+
+/**
+ * Merge a newly-processed event id into the existing history, carrying
+ * forward the previous `eventId` (for providerData written before this
+ * history existed) and capping the length so it can't grow forever.
+ */
+export function appendProcessedEventId(
+  providerData: unknown,
+  eventId: string
+): string[] {
+  const existing =
+    providerData &&
+    typeof providerData === 'object' &&
+    !Array.isArray(providerData)
+      ? (providerData as ProviderData<unknown>)
+      : undefined
+
+  const history = [
+    ...(Array.isArray(existing?.processedEventIds) ? existing!.processedEventIds : []),
+    ...(existing?.eventId ? [existing.eventId] : []),
+    eventId,
+  ]
+
+  return Array.from(new Set(history)).slice(-MAX_PROCESSED_EVENT_IDS)
+}
+
 /**
  * Update payment status and provider data with optimistic locking
  */

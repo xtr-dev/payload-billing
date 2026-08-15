@@ -10,6 +10,8 @@ import {
   updateInvoiceOnPaymentSuccess,
   handleWebhookError,
   logWebhookEvent,
+  hasProcessedEvent,
+  appendProcessedEventId,
 } from './utils'
 import { isValidAmount, isValidCurrencyCode } from './currency'
 import { createContextLogger } from '../utils/logger'
@@ -129,12 +131,7 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
                       return webhookResponses.success() // Still return 200 to acknowledge receipt
                     }
 
-                    if (
-                      payment.providerData &&
-                      typeof payment.providerData === 'object' &&
-                      !Array.isArray(payment.providerData) &&
-                      payment.providerData.eventId === event.id
-                    ) {
+                    if (hasProcessedEvent(payment.providerData, event.id)) {
                       return webhookResponses.success()
                     }
 
@@ -160,6 +157,10 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
                     // Update the payment status and provider data
                     const providerData: ProviderData<Stripe.PaymentIntent> = {
                       eventId: event.id,
+                      processedEventIds: appendProcessedEventId(
+                        payment.providerData,
+                        event.id,
+                      ),
                       raw: paymentIntent,
                       timestamp: new Date().toISOString(),
                       provider: 'stripe',
@@ -216,12 +217,7 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
                     }
 
                     if (payment) {
-                      if (
-                        payment.providerData &&
-                        typeof payment.providerData === 'object' &&
-                        !Array.isArray(payment.providerData) &&
-                        payment.providerData.eventId === event.id
-                      ) {
+                      if (hasProcessedEvent(payment.providerData, event.id)) {
                         return webhookResponses.success()
                       }
 
@@ -231,6 +227,10 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
 
                       const providerData: ProviderData<Stripe.Charge> = {
                         eventId: event.id,
+                        processedEventIds: appendProcessedEventId(
+                          payment.providerData,
+                          event.id,
+                        ),
                         raw: charge,
                         timestamp: new Date().toISOString(),
                         provider: 'stripe',

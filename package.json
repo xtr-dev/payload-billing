@@ -19,6 +19,16 @@
       "import": "./src/exports/rsc.tsx",
       "types": "./src/exports/rsc.tsx",
       "default": "./src/exports/rsc.tsx"
+    },
+    "./stripe": {
+      "import": "./src/exports/stripe.ts",
+      "types": "./src/exports/stripe.ts",
+      "default": "./src/exports/stripe.ts"
+    },
+    "./mollie": {
+      "import": "./src/exports/mollie.ts",
+      "types": "./src/exports/mollie.ts",
+      "default": "./src/exports/mollie.ts"
     }
   },
   "main": "./src/index.ts",
@@ -139,6 +149,16 @@
         "import": "./dist/exports/rsc.js",
         "types": "./dist/exports/rsc.d.ts",
         "default": "./dist/exports/rsc.js"
+      },
+      "./stripe": {
+        "import": "./dist/exports/stripe.js",
+        "types": "./dist/exports/stripe.d.ts",
+        "default": "./dist/exports/stripe.js"
+      },
+      "./mollie": {
+        "import": "./dist/exports/mollie.js",
+        "types": "./dist/exports/mollie.d.ts",
+        "default": "./dist/exports/mollie.js"
       }
     },
     "main": "./dist/index.js",

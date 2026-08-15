@@ -11,7 +11,7 @@ describe('billingPlugin disabled configuration', () => {
     const config = {
       collections: [hostCollection],
       onInit: existingOnInit,
-    } as Config
+    } as unknown as Config
 
     const result = billingPlugin({
       disabled: true,
@@ -35,6 +35,15 @@ describe('billingPlugin disabled configuration', () => {
       expect(collection.admin?.hidden).toBe(true)
       expect(collection.endpoints).toEqual([])
       expect(collection.hooks).toEqual({})
+      expect(collection.access).toBeDefined()
+
+      for (const operation of ['create', 'delete', 'read', 'update'] as const) {
+        const access = collection.access?.[operation]
+        expect(typeof access).toBe('function')
+        if (typeof access === 'function') {
+          expect(access({} as never)).toBe(false)
+        }
+      }
     }
 
     expect(result.onInit).toBe(existingOnInit)
@@ -61,6 +70,7 @@ describe('billingPlugin disabled configuration', () => {
     expect(payments?.fields.some(field => 'name' in field && field.name === 'reference')).toBe(true)
     expect(payments?.endpoints).toEqual([])
     expect(payments?.hooks).toEqual({})
+    expect(payments?.access?.create?.({} as never)).toBe(false)
     expect(payments?.admin?.hidden).toBe(true)
   })
 })

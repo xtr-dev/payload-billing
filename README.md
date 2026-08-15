@@ -949,7 +949,7 @@ type BillingPluginConfig = {
 }
 ```
 
-Setting `disabled: true` keeps the billing collection schemas registered to preserve stored billing data, but hides their admin views and skips their hooks, endpoints, and provider wiring.
+Setting `disabled: true` keeps the billing collection schemas registered to preserve stored billing data, but denies all collection access, hides their admin views, and skips their hooks, endpoints, and provider wiring.
 
 ### Provider Types
 

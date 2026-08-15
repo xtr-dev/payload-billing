@@ -169,9 +169,8 @@ export function createPaymentsCollection(pluginConfig: BillingPluginConfig): Col
         async ({ doc, operation, req, previousDoc }) => {
           const logger = createContextLogger(req.payload, 'Payments Collection')
 
-          // Only process when payment status changes to a successful state
-          const successStatuses = ['paid', 'succeeded']
-          const paymentSucceeded = successStatuses.includes(doc.status)
+          // Only process when payment status changes to the persisted successful state.
+          const paymentSucceeded = doc.status === 'succeeded'
           const statusChanged = operation === 'update' && previousDoc && previousDoc.status !== doc.status
 
           if (paymentSucceeded && (operation === 'create' || statusChanged)) {

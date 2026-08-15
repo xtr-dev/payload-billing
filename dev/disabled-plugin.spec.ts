@@ -106,10 +106,10 @@ describe('billingPlugin disabled configuration', () => {
     } as unknown as Config)
 
     const sanitized = await sanitizeConfig({
+      ...result,
       admin: { user: 'users' },
       secret: 'test',
       db: stubDb as Config['db'],
-      ...result,
     } as Config)
 
     for (const slug of ['payments', 'invoices', 'refunds']) {

@@ -51,6 +51,7 @@ export async function POST(request: Request) {
     const invoice = await payload.create({
       collection: 'invoices',
       data: {
+        number: `INV-${Date.now()}`, // Matches the fallback format the invoices collection's beforeChange hook generates
         payment: payment.id, // Link to the payment
         customerInfo: {
           name: customerName,

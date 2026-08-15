@@ -1013,7 +1013,8 @@ function generateTestPaymentUI(
                 if (result.success) {
                     status.className = 'status processing';
                     status.style.display = 'block';
-                    status.innerHTML = \`<span class="loading"></span>Processing payment with \${result.scenario}...\`;
+                    status.innerHTML = '<span class="loading"></span>';
+                    status.appendChild(document.createTextNode(\`Processing payment with \${result.scenario}...\`));
 
                     // Poll for status updates
                     setTimeout(() => pollStatus(), result.delay || 1000);

@@ -50,6 +50,9 @@ export async function POST(request: Request) {
     // The invoice's afterChange hook will automatically link the payment back to the invoice
     const invoice = await payload.create({
       collection: 'invoices',
+      // `number` is omitted here: the invoices beforeChange hook generates it
+      // for create operations, but the generated create type still marks the
+      // required field as required upfront - same as dev/seed.ts.
       data: {
         payment: payment.id, // Link to the payment
         customerInfo: {
@@ -74,7 +77,7 @@ export async function POST(request: Request) {
         ],
         taxAmount: 0,
         status: 'open',
-      },
+      } as any,
     })
 
     return Response.json({

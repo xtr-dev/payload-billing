@@ -513,7 +513,7 @@ export const testProvider = (testConfig: TestProviderConfig) => {
                 const paymentsConfig = pluginConfig.collections?.payments
                 const paymentSlug = typeof paymentsConfig === 'string' ? paymentsConfig : (paymentsConfig?.slug || 'payments')
                 const result = await req.payload.find({
-                  collection: paymentSlug,
+                  collection: paymentSlug as CollectionSlug,
                   where: {
                     providerId: {
                       equals: paymentId

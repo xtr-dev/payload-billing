@@ -21,7 +21,7 @@ const buildHandler = () => {
   return handler
 }
 
-const buildRequest = (signature?: string) => {
+const buildRequest = (signature?: string, body: string = '{}') => {
   const payment = { id: 1, providerId: 'pi_test', status: 'pending' }
   const find = vi.fn(async () => ({ docs: [payment] }))
   const findByID = vi.fn(async () => payment)
@@ -54,7 +54,7 @@ const buildRequest = (signature?: string) => {
     request: {
       headers: new Headers(signature ? { 'stripe-signature': signature } : {}),
       payload,
-      text: async () => '{}',
+      text: async () => body,
     },
   }
 }
@@ -78,6 +78,36 @@ describe('Stripe webhook signature verification', () => {
   test('rejects an invalid signature without changing a payment', async () => {
     const handler = buildHandler()
     const { payment, request, storageCalls } = buildRequest('forged-signature')
+    const originalPayment = structuredClone(payment)
+
+    const response = await handler(request as any)
+
+    expect(response.status).toBeGreaterThanOrEqual(400)
+    expect(response.status).toBeLessThan(500)
+    expect(payment).toEqual(originalPayment)
+    expect(storageCalls.find).not.toHaveBeenCalled()
+    expect(storageCalls.findByID).not.toHaveBeenCalled()
+    expect(storageCalls.update).not.toHaveBeenCalled()
+  })
+
+  test('rejects an absent signature with an empty body without changing a payment', async () => {
+    const handler = buildHandler()
+    const { payment, request, storageCalls } = buildRequest(undefined, '')
+    const originalPayment = structuredClone(payment)
+
+    const response = await handler(request as any)
+
+    expect(response.status).toBeGreaterThanOrEqual(400)
+    expect(response.status).toBeLessThan(500)
+    expect(payment).toEqual(originalPayment)
+    expect(storageCalls.find).not.toHaveBeenCalled()
+    expect(storageCalls.findByID).not.toHaveBeenCalled()
+    expect(storageCalls.update).not.toHaveBeenCalled()
+  })
+
+  test('rejects a present signature with an empty body without changing a payment', async () => {
+    const handler = buildHandler()
+    const { payment, request, storageCalls } = buildRequest('forged-signature', '')
     const originalPayment = structuredClone(payment)
 
     const response = await handler(request as any)

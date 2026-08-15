@@ -37,7 +37,7 @@ describe('billingPlugin disabled configuration', () => {
       expect(collection.hooks).toEqual({})
       expect(collection.access).toBeDefined()
 
-      for (const operation of ['create', 'delete', 'read', 'update'] as const) {
+      for (const operation of ['create', 'delete', 'read', 'readVersions', 'unlock', 'update'] as const) {
         const access = collection.access?.[operation]
         expect(typeof access).toBe('function')
         if (typeof access === 'function') {

@@ -21,6 +21,8 @@ const disableCollectionBehavior = (collection: CollectionConfig): CollectionConf
     create: () => false,
     delete: () => false,
     read: () => false,
+    readVersions: () => false,
+    unlock: () => false,
     update: () => false,
   },
   admin: {

@@ -29,8 +29,8 @@ jobs:
       - name: Run tests
         run: pnpm test
 
-      - name: Run build
-        run: pnpm build
+      - name: Verify packed exports
+        run: pnpm test:pack
 
       - name: Get package version
         id: package-version

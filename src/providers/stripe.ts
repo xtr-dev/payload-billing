@@ -77,7 +77,11 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
               try {
                 event = stripe.webhooks.constructEvent(body, signature, stripeConfig.webhookSecret!)
               } catch (err) {
-                return handleWebhookError('Stripe', err, 'Signature verification failed', req.payload)
+                // A present-but-invalid signature is a rejected request, not a processing
+                // error - it must answer 4xx (r9iov30), not the 200 handleWebhookError
+                // uses for genuine processing failures after verification has passed.
+                const message = err instanceof Error ? err.message : String(err)
+                return webhookResponses.error(`Signature verification failed: ${message}`, 400, req.payload)
               }
 
               // Handle different event types

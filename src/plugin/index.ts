@@ -18,6 +18,7 @@ export const useBillingPlugin = (payload: Payload) => singleton.get(payload) as 
 const disableCollectionBehavior = (collection: CollectionConfig): CollectionConfig => ({
   ...collection,
   access: {
+    admin: () => false,
     create: () => false,
     delete: () => false,
     read: () => false,
@@ -29,7 +30,7 @@ const disableCollectionBehavior = (collection: CollectionConfig): CollectionConf
     ...collection.admin,
     hidden: true,
   },
-  endpoints: [],
+  endpoints: false,
   hooks: {},
 })
 

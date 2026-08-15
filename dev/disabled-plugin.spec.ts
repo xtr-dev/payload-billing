@@ -1,6 +1,11 @@
+import { sanitizeConfig } from 'payload'
 import { describe, expect, it, vi } from 'vitest'
 import type { CollectionConfig, Config } from 'payload'
 import { billingPlugin } from '../src/plugin/index'
+
+// sanitizeConfig only needs enough of a db adapter to satisfy its shape checks;
+// it never calls into it for this synchronous sanitization pass.
+const stubDb = { defaultIDType: 'text', init: () => ({}) } as any
 
 describe('billingPlugin disabled configuration', () => {
   it('keeps collection schemas while disabling behavior and admin views', () => {
@@ -33,11 +38,11 @@ describe('billingPlugin disabled configuration', () => {
     for (const collection of result.collections?.slice(1) || []) {
       expect(collection.fields.length).toBeGreaterThan(0)
       expect(collection.admin?.hidden).toBe(true)
-      expect(collection.endpoints).toEqual([])
+      expect(collection.endpoints).toBe(false)
       expect(collection.hooks).toEqual({})
       expect(collection.access).toBeDefined()
 
-      for (const operation of ['create', 'delete', 'read', 'readVersions', 'unlock', 'update'] as const) {
+      for (const operation of ['admin', 'create', 'delete', 'read', 'readVersions', 'unlock', 'update'] as const) {
         const access = collection.access?.[operation]
         expect(typeof access).toBe('function')
         if (typeof access === 'function') {
@@ -68,9 +73,49 @@ describe('billingPlugin disabled configuration', () => {
 
     const payments = result.collections?.find(collection => collection.slug === 'charges')
     expect(payments?.fields.some(field => 'name' in field && field.name === 'reference')).toBe(true)
-    expect(payments?.endpoints).toEqual([])
+    expect(payments?.endpoints).toBe(false)
     expect(payments?.hooks).toEqual({})
     expect(payments?.access?.create?.({} as never)).toBe(false)
     expect(payments?.admin?.hidden).toBe(true)
+  })
+
+  it('registers no endpoints and no admin access once Payload sanitizes an auth- and upload-enabled extension', async () => {
+    const result = billingPlugin({
+      collections: {
+        payments: {
+          slug: 'payments',
+          // Mirrors the scenario that motivated this follow-up: a host extends the
+          // generated collection with `auth`, which is how login/refresh/reset-password
+          // endpoints and admin access get added by sanitizeCollection.
+          extend: collection => ({
+            ...collection,
+            auth: true,
+          }),
+        },
+        invoices: {
+          slug: 'invoices',
+          extend: collection => ({
+            ...collection,
+            upload: true,
+          }),
+        },
+      },
+      disabled: true,
+    })({
+      collections: [{ slug: 'users', auth: true, fields: [] }],
+    } as unknown as Config)
+
+    const sanitized = await sanitizeConfig({
+      admin: { user: 'users' },
+      secret: 'test',
+      db: stubDb as Config['db'],
+      ...result,
+    } as Config)
+
+    for (const slug of ['payments', 'invoices', 'refunds']) {
+      const collection = sanitized.collections.find(c => c.slug === slug)
+      expect(collection?.endpoints).toBe(false)
+      expect(collection?.access?.admin?.({} as never)).toBe(false)
+    }
   })
 })

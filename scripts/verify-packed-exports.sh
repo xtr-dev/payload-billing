@@ -12,6 +12,7 @@ react_tarball="$consumer_directory/$(npm_config_cache="$consumer_directory/npm-c
 PACKAGE_TARBALL="$package_tarball" node --input-type=module --eval '
   import { readFile } from "node:fs/promises"
   import { execFileSync } from "node:child_process"
+  import semver from "semver"
 
   const packageJson = JSON.parse(
     execFileSync("tar", ["-xOf", process.env.PACKAGE_TARBALL, "package/package.json"]),
@@ -21,7 +22,7 @@ PACKAGE_TARBALL="$package_tarball" node --input-type=module --eval '
   if (!packageJson.peerDependencies?.react) {
     throw new Error("The published package must declare its React runtime import as a peer dependency")
   }
-  if (!reactPackageJson.version.startsWith("19.")) {
+  if (!semver.satisfies(reactPackageJson.version, packageJson.peerDependencies.react)) {
     throw new Error(`The React fixture ${reactPackageJson.version} does not satisfy ${packageJson.peerDependencies.react}`)
   }
 '

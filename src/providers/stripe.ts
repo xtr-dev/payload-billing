@@ -76,8 +76,8 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
               let event: Stripe.Event
               try {
                 event = stripe.webhooks.constructEvent(body, signature, stripeConfig.webhookSecret!)
-              } catch (err) {
-                return handleWebhookError('Stripe', err, 'Signature verification failed', req.payload)
+              } catch {
+                return webhookResponses.error('Invalid webhook signature', 400, req.payload)
               }
 
               // Handle different event types

@@ -951,7 +951,7 @@ const campaignPayments = await payload.find({
 
 Webhook endpoints:
 - Return HTTP 200 for successfully handled events so providers do not retry them
-- Return HTTP 400 only when required data is missing outright (for example, a Stripe request with no `stripe-signature` header); a request whose signature is present but fails verification still returns HTTP 200 with `{ received: false, error: 'Processing error' }`, since no record is touched and the provider should not retry it
+- Return HTTP 400 only when a Stripe request has no `stripe-signature` header; every other failure to process a webhook — a missing or empty body, an unrecognized Mollie payment, or a signature that fails verification — still returns HTTP 200 (`{ received: true }` or `{ received: false, error: 'Processing error' }`), since no record is touched and the provider should not retry it
 - Validate signatures (Stripe) or payment IDs (Mollie)
 - Use optimistic locking to prevent concurrent update conflicts
 - Log detailed errors internally but return generic responses

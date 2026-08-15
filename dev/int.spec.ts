@@ -208,7 +208,7 @@ describe('Stripe webhook contract', () => {
     expect(payment.providerData.eventId).toBe('evt_replayed')
   })
 
-  test('does not reprocess a stale event redelivered after a later event', async () => {
+  test('does not forget a stale event after 25 later handled events', async () => {
     // Regression: dedup used to compare against only the most recent
     // eventId, so an older event redelivered after a newer one had already
     // been applied (succeeded -> refunded -> succeeded replayed) would
@@ -221,12 +221,18 @@ describe('Stripe webhook contract', () => {
       version: 1,
     }
     const update = vi.fn(async ({ data }: any) => Object.assign(payment, data))
+    const laterSucceededEvents = Array.from({ length: 24 }, (_, index) => ({
+      id: `evt_later_${index + 1}`,
+      type: 'payment_intent.succeeded',
+      data: { object: { id: 'pi_test', status: 'succeeded' } },
+    }))
     const events = [
       {
         id: 'evt_succeeded',
         type: 'payment_intent.succeeded',
         data: { object: { id: 'pi_test', status: 'succeeded' } },
       },
+      ...laterSucceededEvents,
       {
         id: 'evt_refunded',
         type: 'charge.refunded',
@@ -264,14 +270,17 @@ describe('Stripe webhook contract', () => {
       text: async () => '{}',
     })
 
-    await handler!(request() as any)
-    expect(payment.status).toBe('succeeded')
+    for (let index = 0; index < 25; index++) {
+      await handler!(request() as any)
+      expect(payment.status).toBe('succeeded')
+    }
 
     await handler!(request() as any)
     expect(payment.status).toBe('refunded')
 
     await handler!(request() as any)
     expect(payment.status).toBe('refunded')
-    expect(update).toHaveBeenCalledTimes(2)
+    expect(update).toHaveBeenCalledTimes(26)
+    expect(payment.providerData.processedEventIds).toHaveLength(26)
   })
 })

@@ -49,9 +49,6 @@ export async function findPaymentByProviderId(
   return payments.docs.length > 0 ? payments.docs[0] as Payment : null
 }
 
-// Bound the history so a long-lived payment's providerData can't grow without limit
-const MAX_PROCESSED_EVENT_IDS = 25
-
 /**
  * Check whether a webhook event has already been applied to a payment.
  * Compares against the full processed-event history, not just the most
@@ -82,7 +79,9 @@ export function hasProcessedEvent(
 /**
  * Merge a newly-processed event id into the existing history, carrying
  * forward the previous `eventId` (for providerData written before this
- * history existed) and capping the length so it can't grow forever.
+ * history existed). Event ids are retained for the lifetime of the payment:
+ * providers may redeliver an event after any number of later events, so a
+ * bounded recent-event cache cannot provide idempotency.
  */
 export function appendProcessedEventId(
   providerData: unknown,
@@ -101,7 +100,7 @@ export function appendProcessedEventId(
     eventId,
   ]
 
-  return Array.from(new Set(history)).slice(-MAX_PROCESSED_EVENT_IDS)
+  return Array.from(new Set(history))
 }
 
 /**

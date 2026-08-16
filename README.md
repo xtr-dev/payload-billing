@@ -545,7 +545,7 @@ Track refunds associated with payments.
   providerId?: string                   // Provider's refund ID
   amount: number                        // Refund amount in cents
   currency: string                      // ISO 4217 currency code
-  status: 'pending' | 'succeeded' | 'failed' | 'canceled'
+  status: 'pending' | 'processing' | 'succeeded' | 'failed' | 'canceled'
   reason?: 'duplicate' | 'fraudulent' | 'requested_by_customer' | 'other'
   description?: string
   metadata?: Record<string, any>

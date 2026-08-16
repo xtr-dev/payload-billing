@@ -19,13 +19,17 @@ const symbol = Symbol.for('@xtr-dev/payload-billing/stripe')
 export interface StripeProviderConfig {
   secretKey: string
   webhookSecret?: string
-  apiVersion?: Stripe.StripeConfig['apiVersion']
+  // string, not Stripe.StripeConfig['apiVersion']: that type is a single literal tied to
+  // whichever version the installed stripe SDK release happens to pin as "latest", so it
+  // breaks on every SDK bump that changes the pin rather than only on ones that matter here.
+  apiVersion?: string
   returnUrl?: string
   webhookUrl?: string
 }
 
-// Default API version for consistency
-const DEFAULT_API_VERSION: Stripe.StripeConfig['apiVersion'] = '2025-08-27.basil'
+// Pinned independently of the installed SDK's "latest" version so upgrading stripe doesn't
+// silently change what API version this plugin talks to.
+const DEFAULT_API_VERSION = '2025-08-27.basil'
 
 export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
   // Validate required configuration at initialization
@@ -198,7 +202,9 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
     onInit: async (payload: Payload) => {
       const { default: Stripe } = await import('stripe')
       const stripe = new Stripe(stripeConfig.secretKey, {
-        apiVersion: stripeConfig.apiVersion || DEFAULT_API_VERSION,
+        // Cast needed because the SDK's apiVersion type only accepts its own "latest" literal;
+        // Stripe's own docs say to pin an explicit version this way (stripe.com/docs/api/versioning).
+        apiVersion: (stripeConfig.apiVersion || DEFAULT_API_VERSION) as Stripe.StripeConfig['apiVersion'],
       })
       singleton.set(payload, stripe)
 

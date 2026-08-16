@@ -94,6 +94,56 @@ describe('billing plugin integration', () => {
     ).rejects.toThrow(/not found/i)
   })
 
+  test('refuses a refund against an uncaptured payment', async () => {
+    const payment = await payload.create({
+      collection: 'payments',
+      data: {
+        provider: 'test',
+        amount: 1000,
+        currency: 'EUR',
+        status: 'pending',
+      } as any,
+    })
+
+    await expect(
+      payload.create({
+        collection: 'refunds',
+        data: {
+          providerId: `refund_${payment.id}_1`,
+          payment: payment.id,
+          amount: 500,
+          currency: 'EUR',
+          status: 'pending',
+        } as any,
+      }),
+    ).rejects.toThrow(/captured/i)
+  })
+
+  test('refuses a refund whose currency does not match the payment', async () => {
+    const payment = await payload.create({
+      collection: 'payments',
+      data: {
+        provider: 'test',
+        amount: 1000,
+        currency: 'EUR',
+        status: 'succeeded',
+      } as any,
+    })
+
+    await expect(
+      payload.create({
+        collection: 'refunds',
+        data: {
+          providerId: `refund_${payment.id}_1`,
+          payment: payment.id,
+          amount: 500,
+          currency: 'USD',
+          status: 'pending',
+        } as any,
+      }),
+    ).rejects.toThrow(/currency/i)
+  })
+
   test('caps refunds at the captured amount', async () => {
     const payment = await payload.create({
       collection: 'payments',

@@ -42,6 +42,32 @@ describe('Stripe webhook signature verification', () => {
     expect(response.status).toBe(400)
   })
 
+  test('missing signature header and empty body answers 400, not 200', async () => {
+    const handler = getWebhookHandler('whsec_test')
+    const payload = makeFakePayload(() => {
+      throw new Error('constructEvent should not be called without a signature')
+    })
+
+    const response = await handler(makeRequest(payload, '', {}))
+
+    expect(response.status).toBe(400)
+    const data = await response.json()
+    expect(data.received).not.toBe(true)
+  })
+
+  test('present signature with empty body answers 400', async () => {
+    const handler = getWebhookHandler('whsec_test')
+    const payload = makeFakePayload(() => {
+      throw new Error('constructEvent should not be called with an empty body')
+    })
+
+    const response = await handler(
+      makeRequest(payload, '', { 'stripe-signature': 'some-signature' })
+    )
+
+    expect(response.status).toBe(400)
+  })
+
   test('present but invalid signature answers 4xx, not 200', async () => {
     const handler = getWebhookHandler('whsec_test')
     const payload = makeFakePayload(() => {

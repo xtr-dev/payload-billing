@@ -498,7 +498,7 @@ Generate and manage invoices with line items and customer information.
     description: string
     quantity: number
     unitAmount: number                  // In cents
-    amount: number                      // Auto-calculated (quantity × unitAmount)
+    totalAmount: number                 // Auto-calculated (quantity × unitAmount)
   }>
   subtotal: number                      // Auto-calculated sum of items
   taxAmount?: number
@@ -525,7 +525,7 @@ draft → open → paid
 
 **Automatic Behaviors:**
 - Invoice number auto-generated on creation
-- Item amounts calculated from quantity × unitAmount
+- Item totalAmount calculated from quantity × unitAmount
 - Subtotal calculated from sum of item amounts
 - Total amount calculated as subtotal + taxAmount
 - `paidAt` timestamp set when status becomes 'paid'

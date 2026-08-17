@@ -61,7 +61,12 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
                   return webhookResponses.missingBody()
                 }
               } catch (error) {
-                return handleWebhookError('Stripe', error, 'Failed to read request body', req.payload)
+                // A read failure means the signature was never checked, so this is not
+                // a verified-and-then-failed processing error - it must not go through
+                // handleWebhookError, which always answers 200. Answering non-2xx here
+                // lets Stripe retry instead of treating a transient read failure as delivered.
+                const message = error instanceof Error ? error.message : String(error)
+                return webhookResponses.error(`Failed to read request body: ${message}`, 400, req.payload)
               }
 
               const signature = req.headers.get('stripe-signature')

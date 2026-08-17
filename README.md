@@ -996,7 +996,7 @@ type CustomerInfoExtractor = (
   phone?: string
   company?: string
   taxId?: string
-  billingAddress: Address
+  billingAddress?: Address
 }
 
 type Address = {

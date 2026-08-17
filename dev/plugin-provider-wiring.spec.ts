@@ -6,9 +6,13 @@ import type { PaymentProvider } from '../src/providers/types'
 
 describe('billingPlugin provider wiring', () => {
   test('passes configuration to providers, initializes them, and retains their config', async () => {
+    let collectionSlugsAtOnConfig: unknown[] | undefined
     const providerA: PaymentProvider = {
       key: 'stub',
       onConfig: vi.fn((config) => {
+        collectionSlugsAtOnConfig = config.collections?.map(
+          (collection: { slug: string }) => collection.slug,
+        )
         config.endpoints = [
           ...(config.endpoints || []),
           { path: '/stub', method: 'get', handler: () => new Response() },
@@ -26,6 +30,14 @@ describe('billingPlugin provider wiring', () => {
 
     expect(providerA.onConfig).toHaveBeenCalledTimes(1)
     expect(providerA.onConfig).toHaveBeenCalledWith(resultConfig, pluginConfig)
+    // Proves ordering: this snapshot was taken *inside* the onConfig mock, before
+    // it ran any further, so it reflects config.collections as it stood when the
+    // provider was invoked -- unlike comparing against resultConfig after the
+    // fact, which only shows the final, fully-mutated object regardless of when
+    // onConfig actually ran relative to collection assembly.
+    expect(collectionSlugsAtOnConfig).toEqual(
+      expect.arrayContaining(['posts', 'payments', 'invoices', 'refunds']),
+    )
     expect(resultConfig.endpoints?.map((endpoint) => endpoint.path)).toContain(
       '/stub',
     )

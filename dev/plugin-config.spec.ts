@@ -14,6 +14,11 @@ describe('billingPlugin onInit chaining', () => {
     const calls: string[] = []
     const baseConfig = makeConfig({
       onInit: async () => {
+        // Forces a microtask suspension so the test can tell an awaited
+        // incomingOnInit apart from a fire-and-forget call: without this
+        // yield, both orderings produce the same synchronous call sequence
+        // regardless of whether src/plugin/index.ts awaits the promise.
+        await Promise.resolve()
         calls.push('host')
       },
     })

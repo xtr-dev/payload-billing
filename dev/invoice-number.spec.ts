@@ -18,6 +18,9 @@ describe('Invoice number generation', () => {
   test('auto-generates a number in the INV-<unix-ms-timestamp> form when none is provided', async () => {
     const before = Date.now()
 
+    // number, status and currency are omitted on purpose: this test asserts that the
+    // beforeValidate hook fills `number` in, so the generated `Invoice` type (which marks
+    // them required) doesn't match what a caller actually has to pass.
     const invoice = await payload.create({
       collection: 'invoices',
       data: {
@@ -38,7 +41,7 @@ describe('Invoice number generation', () => {
             unitAmount: 1000,
           },
         ],
-      },
+      } as any,
     })
 
     const after = Date.now()

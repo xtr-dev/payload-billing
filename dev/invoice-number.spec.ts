@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'vitest'
 let payload: Payload
 
 afterAll(async () => {
-  await payload.db.destroy()
+  await payload.db.destroy?.()
 })
 
 beforeAll(async () => {

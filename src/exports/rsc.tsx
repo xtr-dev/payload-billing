@@ -5,6 +5,10 @@
 
 import React from 'react'
 
+import { generateInvoiceNumber } from '../utils/invoiceNumber'
+
+export { generateInvoiceNumber }
+
 // Server component that can fetch data during server-side rendering
 interface BillingServerStatsProps {
   payloadInstance?: unknown
@@ -46,12 +50,6 @@ export const BillingServerStats: React.FC<BillingServerStatsProps> = ({
 }
 
 // Server-side utility functions
-export const generateInvoiceNumber = () => {
-  const timestamp = Date.now()
-  const random = Math.random().toString(36).substring(2, 8).toUpperCase()
-  return `INV-${timestamp}-${random}`
-}
-
 export const calculateInvoiceTotal = (items: Array<{
   quantity: number
   unitAmount: number

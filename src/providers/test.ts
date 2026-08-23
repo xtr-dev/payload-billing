@@ -709,6 +709,25 @@ async function processTestPayment(
   }
 }
 
+// Escapes a value for interpolation into HTML text or attribute context. The checkout
+// page interpolates the payment description and config-supplied scenario fields, so a
+// description like `Bolts <3" & washers` must render as text rather than markup.
+function escapeHtml(value: unknown): string {
+  return String(value).replace(/[&<>"']/g, c => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string
+  ))
+}
+
+// Serializes a value for interpolation into an inline <script> block. JSON.stringify
+// emits its own quotes and escapes any inside the value (an apostrophe in a redirectUrl
+// was a parse error that silently killed every handler on the page). It leaves `<`
+// intact, though, and the HTML parser ends a script block at `</script>` even inside a
+// string literal — so replace `<` with the escape sequence \u003c, which the JS parser
+// reads as the same character.
+function jsString(value: unknown): string {
+  return JSON.stringify(String(value)).replace(/</g, '\\u003c')
+}
+
 // Helper function to generate test payment UI
 function generateTestPaymentUI(
   session: TestPaymentSession,
@@ -726,7 +745,7 @@ function generateTestPaymentUI(
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Test Payment - ${payment.description || 'Payment'}</title>
+    <title>Test Payment - ${escapeHtml(payment.description || 'Payment')}</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -910,8 +929,8 @@ function generateTestPaymentUI(
                 Test Payment Checkout
                 ${testModeIndicators.showTestBadges !== false ? '<span class="test-badge">Test</span>' : ''}
             </div>
-            <div class="amount">${payment.currency?.toUpperCase()} ${payment.amount ? (payment.amount / 100).toFixed(2) : '0.00'}</div>
-            ${payment.description ? `<div class="description">${payment.description}</div>` : ''}
+            <div class="amount">${escapeHtml(payment.currency?.toUpperCase())} ${payment.amount ? (payment.amount / 100).toFixed(2) : '0.00'}</div>
+            ${payment.description ? `<div class="description">${escapeHtml(payment.description)}</div>` : ''}
         </div>
 
         <div class="content">
@@ -935,9 +954,9 @@ function generateTestPaymentUI(
                 </div>
                 <div class="scenarios">
                     ${scenarios.map(scenario => `
-                        <div class="scenario" data-scenario="${scenario.id}">
-                            <div class="scenario-name">${scenario.name}</div>
-                            <div class="scenario-desc">${scenario.description}</div>
+                        <div class="scenario" data-scenario="${escapeHtml(scenario.id)}">
+                            <div class="scenario-name">${escapeHtml(scenario.name)}</div>
+                            <div class="scenario-desc">${escapeHtml(scenario.description)}</div>
                         </div>
                     `).join('')}
                 </div>
@@ -993,7 +1012,7 @@ function generateTestPaymentUI(
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        paymentId: '${session.id}',
+                        paymentId: ${jsString(session.id)},
                         scenarioId: selectedScenario,
                         method: selectedMethod
                     })
@@ -1022,7 +1041,7 @@ function generateTestPaymentUI(
 
         async function pollStatus() {
             try {
-                const response = await fetch('/api/payload-billing/test/status/${session.id}');
+                const response = await fetch('/api/payload-billing/test/status/' + encodeURIComponent(${jsString(session.id)}));
                 const result = await response.json();
 
                 const status = document.getElementById('status');
@@ -1032,7 +1051,7 @@ function generateTestPaymentUI(
                     status.className = 'status success';
                     status.textContent = '✅ Payment successful! Redirecting...';
                     setTimeout(() => {
-                        window.location.href = '${redirectUrl}';
+                        window.location.href = ${jsString(redirectUrl)};
                     }, 2000);
                 } else if (result.status === 'failed' || result.status === 'cancelled' || result.status === 'expired') {
                     status.className = 'status error';

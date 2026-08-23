@@ -77,7 +77,8 @@ The test provider requires no additional dependencies.
 
 ```typescript
 import { buildConfig } from 'payload'
-import { billingPlugin, stripeProvider } from '@xtr-dev/payload-billing'
+import { billingPlugin } from '@xtr-dev/payload-billing'
+import { stripeProvider } from '@xtr-dev/payload-billing/stripe'
 
 export default buildConfig({
   // ... your config
@@ -131,7 +132,7 @@ Full-featured credit card processing with support for multiple payment methods, 
 **Configuration:**
 
 ```typescript
-import { stripeProvider } from '@xtr-dev/payload-billing'
+import { stripeProvider } from '@xtr-dev/payload-billing/stripe'
 
 stripeProvider({
   secretKey: string          // Required: Stripe secret key (sk_test_... or sk_live_...)
@@ -162,7 +163,7 @@ European payment service provider supporting iDEAL, SEPA, Bancontact, and other 
 **Configuration:**
 
 ```typescript
-import { mollieProvider } from '@xtr-dev/payload-billing'
+import { mollieProvider } from '@xtr-dev/payload-billing/mollie'
 
 mollieProvider({
   apiKey: string           // Required: Mollie API key (test_... or live_...)
@@ -266,7 +267,8 @@ testProvider({
 Minimal configuration with a single provider:
 
 ```typescript
-import { billingPlugin, stripeProvider } from '@xtr-dev/payload-billing'
+import { billingPlugin } from '@xtr-dev/payload-billing'
+import { stripeProvider } from '@xtr-dev/payload-billing/stripe'
 
 billingPlugin({
   providers: [
@@ -283,6 +285,10 @@ billingPlugin({
 Use multiple payment providers simultaneously:
 
 ```typescript
+import { billingPlugin, testProvider } from '@xtr-dev/payload-billing'
+import { stripeProvider } from '@xtr-dev/payload-billing/stripe'
+import { mollieProvider } from '@xtr-dev/payload-billing/mollie'
+
 billingPlugin({
   providers: [
     stripeProvider({
@@ -476,7 +482,7 @@ Generate and manage invoices with line items and customer information.
 ```typescript
 {
   id: string | number
-  number: string                        // Auto-generated (INV-YYYYMMDD-XXXX)
+  number: string                        // Auto-generated (INV-<unix-ms-timestamp>, e.g. INV-1755289904123)
   customer?: string                     // Customer relationship (if configured)
   customerInfo: {
     name: string
@@ -1081,6 +1087,8 @@ const createPayment = async (
 
 1. **Always use webhook secrets in production:**
    ```typescript
+   import { stripeProvider } from '@xtr-dev/payload-billing/stripe'
+
    stripeProvider({
      secretKey: process.env.STRIPE_SECRET_KEY!,
      webhookSecret: process.env.STRIPE_WEBHOOK_SECRET!  // Required

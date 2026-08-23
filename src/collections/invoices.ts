@@ -25,7 +25,7 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
       name: 'number',
       type: 'text',
       admin: {
-        description: 'Invoice number (e.g., INV-001)',
+        description: 'Invoice number (auto-generated as INV-<unix-ms-timestamp>, e.g. INV-1755289904123, unless set explicitly)',
       },
       index: true,
       required: true,

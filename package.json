@@ -51,7 +51,7 @@
     "lint": "eslint",
     "lint:fix": "eslint ./src --fix",
     "prepublishOnly": "pnpm clean && pnpm build",
-    "test": "echo 'Tests disabled for now'",
+    "test": "vitest run",
     "test:e2e": "playwright test",
     "test:int": "vitest",
     "typecheck": "tsc --noEmit",

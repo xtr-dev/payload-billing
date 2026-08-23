@@ -1,7 +1,9 @@
 import type { Payment } from '../plugin/types/payments'
 import type { PaymentProvider, ProviderData } from '../plugin/types/index'
 import type { BillingPluginConfig } from '../plugin/config'
-import type { CollectionSlug, Payload } from 'payload'
+import type { Payload } from 'payload'
+import { defaults } from '../plugin/config'
+import { extractSlug } from '../plugin/utils'
 import { handleWebhookError, logWebhookEvent } from './utils'
 import { isValidAmount, isValidCurrencyCode } from './currency'
 import { createContextLogger } from '../utils/logger'
@@ -63,14 +65,6 @@ function validatePaymentId(paymentId: string): { isValid: boolean; error?: strin
   return { isValid: true }
 }
 
-// Utility function to safely extract collection name
-function getPaymentsCollectionName(pluginConfig: BillingPluginConfig): string {
-  if (typeof pluginConfig.collections?.payments === 'string') {
-    return pluginConfig.collections.payments
-  }
-  return 'payments'
-}
-
 // Enhanced error handling utility for database operations
 async function updatePaymentInDatabase(
   payload: Payload,
@@ -80,9 +74,9 @@ async function updatePaymentInDatabase(
   pluginConfig: BillingPluginConfig
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const paymentsCollection = getPaymentsCollectionName(pluginConfig)
+    const paymentsCollection = extractSlug(pluginConfig.collections?.payments, defaults.paymentsCollection)
     const payments = await payload.find({
-      collection: paymentsCollection as any, // PayloadCMS collection type constraint
+      collection: paymentsCollection,
       where: { providerId: { equals: sessionId } },
       limit: 1
     })
@@ -92,7 +86,7 @@ async function updatePaymentInDatabase(
     }
 
     await payload.update({
-      collection: paymentsCollection as any, // PayloadCMS collection type constraint
+      collection: paymentsCollection,
       id: payments.docs[0].id,
       data: {
         status,
@@ -276,10 +270,9 @@ export const testProvider = (testConfig: TestProviderConfig) => {
             // If not in memory, fetch from database
             if (!session && req.payload) {
               try {
-                const paymentsConfig = pluginConfig.collections?.payments
-                const paymentSlug = typeof paymentsConfig === 'string' ? paymentsConfig : (paymentsConfig?.slug || 'payments')
+                const paymentSlug = extractSlug(pluginConfig.collections?.payments, defaults.paymentsCollection)
                 const result = await req.payload.find({
-                  collection: paymentSlug as CollectionSlug,
+                  collection: paymentSlug,
                   where: {
                     providerId: {
                       equals: paymentId
@@ -373,10 +366,9 @@ export const testProvider = (testConfig: TestProviderConfig) => {
               // If not in memory, fetch from database
               if (!session && req.payload) {
                 try {
-                  const paymentsConfig = pluginConfig.collections?.payments
-                const paymentSlug = typeof paymentsConfig === 'string' ? paymentsConfig : (paymentsConfig?.slug || 'payments')
+                  const paymentSlug = extractSlug(pluginConfig.collections?.payments, defaults.paymentsCollection)
                   const result = await req.payload.find({
-                    collection: paymentSlug as CollectionSlug,
+                    collection: paymentSlug,
                     where: {
                       providerId: {
                         equals: paymentId
@@ -510,8 +502,7 @@ export const testProvider = (testConfig: TestProviderConfig) => {
             // If not in memory, fetch from database
             if (!session && req.payload) {
               try {
-                const paymentsConfig = pluginConfig.collections?.payments
-                const paymentSlug = typeof paymentsConfig === 'string' ? paymentsConfig : (paymentsConfig?.slug || 'payments')
+                const paymentSlug = extractSlug(pluginConfig.collections?.payments, defaults.paymentsCollection)
                 const result = await req.payload.find({
                   collection: paymentSlug,
                   where: {

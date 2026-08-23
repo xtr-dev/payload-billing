@@ -238,10 +238,10 @@ describe('/payload-billing/test/status/:id and /payload-billing/test/payment/:id
   })
 
   it('status: strips the query string before looking up the session', async () => {
-    // Both handlers extract the id by splitting the raw URL on '/' and take the last segment
-    // (test.ts:249-250, 483-484); a well-formed-but-unknown id would 404 whether or not the
-    // query string was stripped, so this drives a real session through instead — only correct
-    // stripping finds it.
+    // The status handler extracts the id by splitting the raw URL on '/' then on '?'
+    // (test.ts around the status handler). A well-formed-but-unknown id would 404 whether
+    // or not the query string was stripped, so this drives a real session through instead —
+    // only correct stripping finds it.
     const provider = testProvider({ enabled: true })!
     const { '/payload-billing/test/status/:id': statusHandler } = endpointsFor(provider)
     const payment = provider.initPayment(null as any, { amount: 500, currency: 'EUR' }) as Payment
@@ -253,6 +253,27 @@ describe('/payload-billing/test/status/:id and /payload-billing/test/payment/:id
 
     expect(response.status).toBe(200)
     expect(body.status).toBe('pending')
+  })
+
+  it('payment: strips the query string before looking up the session', async () => {
+    // /payment/:id copies the same split-on-'/' then split-on-'?' extraction (test.ts around
+    // the payment handler, not a shared helper). Its 404 for a well-formed unknown id still
+    // 404s if '?foo=bar' is left on, because validatePaymentId only checks the test_pay_
+    // prefix. A real session looked up as `${providerId}?foo=bar` is the matching pin —
+    // only correct stripping finds it and returns the HTML checkout page.
+    const provider = testProvider({ enabled: true })!
+    const { '/payload-billing/test/payment/:id': paymentHandler } = endpointsFor(provider)
+    const payment = provider.initPayment(null as any, { amount: 500, currency: 'EUR' }) as Payment
+
+    const response = await paymentHandler({
+      url: `/api/payload-billing/test/payment/${payment.providerId}?foo=bar`,
+    } as any)
+    const html = await response.text()
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('Content-Type')).toBe('text/html')
+    expect(html).toContain(`paymentId: '${payment.providerId}'`)
+    expect(html).not.toContain(`${payment.providerId}?foo=bar`)
   })
 })
 

@@ -4,7 +4,7 @@ import type { Id } from './id'
 export interface Invoice<TCustomer = unknown> {
   id: Id;
   /**
-   * Invoice number (e.g., INV-001)
+   * Invoice number (auto-generated as INV-<unix-ms-timestamp>, e.g. INV-1755289904123, unless set explicitly)
    */
   number: string;
   /**

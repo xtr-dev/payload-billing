@@ -482,7 +482,7 @@ Generate and manage invoices with line items and customer information.
 ```typescript
 {
   id: string | number
-  number: string                        // Auto-generated (INV-YYYYMMDD-XXXX)
+  number: string                        // Auto-generated (INV-<unix-ms-timestamp>, e.g. INV-1755289904123)
   customer?: string                     // Customer relationship (if configured)
   customerInfo: {
     name: string

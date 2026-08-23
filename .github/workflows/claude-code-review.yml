@@ -35,7 +35,7 @@ jobs:
       # Without pnpm and node_modules on the runner, the lint/typecheck/test
       # tools below cannot run and the review is limited to reading the diff.
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
 
       - name: Setup Node.js
         uses: actions/setup-node@v6

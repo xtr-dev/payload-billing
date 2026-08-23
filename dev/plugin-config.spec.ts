@@ -75,13 +75,24 @@ describe('billingPlugin config transform', () => {
     expect(fieldNames).toContain('providerId')
   })
 
-  test('disabled is a true no-op: collections and onInit identity are untouched', () => {
+  test('disabled keeps billing collections and does not wrap onInit', () => {
     const onInit = async () => {}
     const config = makeConfig({ collections: [{ slug: 'posts', fields: [] }], onInit })
 
     const result = billingPlugin({ disabled: true })(config)
 
-    expect(result.collections).toHaveLength(1)
+    expect(result.collections?.map((collection) => collection.slug)).toEqual([
+      'posts',
+      'payments',
+      'invoices',
+      'refunds',
+    ])
+    for (const slug of ['payments', 'invoices', 'refunds']) {
+      const collection = findCollection(result, slug)
+      expect((collection?.fields as any[]).length).toBeGreaterThan(0)
+      expect(collection?.hooks).toEqual({})
+      expect(collection?.endpoints).toBe(false)
+    }
     expect(result.onInit).toBe(onInit)
   })
 

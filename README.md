@@ -945,8 +945,11 @@ type BillingPluginConfig = {
   }
   customerRelationSlug?: string
   customerInfoExtractor?: CustomerInfoExtractor
+  disabled?: boolean
 }
 ```
+
+Setting `disabled: true` keeps the billing collection schemas registered to preserve stored billing data, but denies all collection access, hides their admin views, and skips their hooks, endpoints, and provider wiring.
 
 ### Provider Types
 

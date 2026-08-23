@@ -30,6 +30,20 @@ jobs:
         with:
           fetch-depth: 1
 
+      # The runner has no pnpm and no node_modules, so without these steps every
+      # pnpm command Claude is allowed to run fails before it starts.
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
       - name: Run Claude Code
         id: claude
         uses: anthropics/claude-code-action@v1
@@ -39,5 +53,5 @@ jobs:
           # Everything else (model, turns, tools, system prompt) goes through
           # claude_args using Claude Code CLI flag syntax.
           claude_args: |
-            --allowedTools "Bash(pnpm install),Bash(pnpm build),Bash(pnpm lint),Bash(pnpm lint:fix),Bash(pnpm typecheck),Bash(pnpm test:int)"
-            --append-system-prompt "This is a PayloadCMS plugin (pnpm + TypeScript). Keep the public API in src/index.ts and src/exports/* stable, add a changeset for user-facing changes, and run pnpm typecheck and pnpm lint before finishing."
+            --allowedTools "Bash(pnpm install),Bash(pnpm build),Bash(pnpm lint),Bash(pnpm lint:fix),Bash(pnpm typecheck),Bash(pnpm test)"
+            --append-system-prompt "This is a PayloadCMS plugin (pnpm + TypeScript); dependencies are already installed on the runner. Keep the public API in src/index.ts and src/exports/* stable. Run pnpm typecheck, pnpm lint and pnpm test before finishing. Note that pnpm test:int runs vitest in watch mode and will hang in CI - use pnpm test instead. Any PR to main must bump the version in package.json, or the PR Version Check workflow fails."

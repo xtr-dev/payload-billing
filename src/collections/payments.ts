@@ -4,6 +4,7 @@ import { defaults } from '../plugin/config'
 import { extractSlug } from '../plugin/utils'
 import type { Payment } from '../plugin/types/payments'
 import { initProviderPayment } from './hooks'
+import { isValidCurrencyCode } from '../providers/currency'
 import { createContextLogger } from '../utils/logger'
 
 export function createPaymentsCollection(pluginConfig: BillingPluginConfig): CollectionConfig {
@@ -207,11 +208,11 @@ export function createPaymentsCollection(pluginConfig: BillingPluginConfig): Col
               throw new Error('Amount must be an integer (in cents)')
             }
 
-            // Validate currency format
+            // Normalize and validate the ISO 4217 currency code
             if (data.currency) {
               data.currency = data.currency.toUpperCase()
-              if (!/^[A-Z]{3}$/.test(data.currency)) {
-                throw new Error('Currency must be a 3-letter ISO code')
+              if (!isValidCurrencyCode(data.currency)) {
+                throw new Error('Currency must be a valid ISO 4217 code')
               }
             }
 

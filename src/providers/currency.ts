@@ -33,6 +33,26 @@ const THREE_DECIMAL_CURRENCIES = new Set([
   'TND', // Tunisian Dinar
 ])
 
+// ISO 4217 List One (Current Currency & Funds), published 2026-01-01 by the
+// ISO 4217 Maintenance Agency: https://www.six-group.com/en/products-services/financial-information/market-reference-data/data-standards.html
+const ISO_4217_CURRENCY_CODES = new Set([
+  'AED', 'AFN', 'ALL', 'AMD', 'AOA', 'ARS', 'AUD', 'AWG', 'AZN', 'BAM', 'BBD', 'BDT',
+  'BHD', 'BIF', 'BMD', 'BND', 'BOB', 'BOV', 'BRL', 'BSD', 'BTN', 'BWP', 'BYN', 'BZD',
+  'CAD', 'CDF', 'CHE', 'CHF', 'CHW', 'CLF', 'CLP', 'CNY', 'COP', 'COU', 'CRC', 'CUP',
+  'CVE', 'CZK', 'DJF', 'DKK', 'DOP', 'DZD', 'EGP', 'ERN', 'ETB', 'EUR', 'FJD', 'FKP',
+  'GBP', 'GEL', 'GHS', 'GIP', 'GMD', 'GNF', 'GTQ', 'GYD', 'HKD', 'HNL', 'HTG', 'HUF',
+  'IDR', 'ILS', 'INR', 'IQD', 'IRR', 'ISK', 'JMD', 'JOD', 'JPY', 'KES', 'KGS', 'KHR',
+  'KMF', 'KPW', 'KRW', 'KWD', 'KYD', 'KZT', 'LAK', 'LBP', 'LKR', 'LRD', 'LSL', 'LYD',
+  'MAD', 'MDL', 'MGA', 'MKD', 'MMK', 'MNT', 'MOP', 'MRU', 'MUR', 'MVR', 'MWK', 'MXN',
+  'MXV', 'MYR', 'MZN', 'NAD', 'NGN', 'NIO', 'NOK', 'NPR', 'NZD', 'OMR', 'PAB', 'PEN',
+  'PGK', 'PHP', 'PKR', 'PLN', 'PYG', 'QAR', 'RON', 'RSD', 'RUB', 'RWF', 'SAR', 'SBD',
+  'SCR', 'SDG', 'SEK', 'SGD', 'SHP', 'SLE', 'SOS', 'SRD', 'SSP', 'STN', 'SVC', 'SYP',
+  'SZL', 'THB', 'TJS', 'TMT', 'TND', 'TOP', 'TRY', 'TTD', 'TWD', 'TZS', 'UAH', 'UGX',
+  'USD', 'USN', 'UYI', 'UYU', 'UYW', 'UZS', 'VED', 'VES', 'VND', 'VUV', 'WST', 'XAD',
+  'XAF', 'XAG', 'XAU', 'XBA', 'XBB', 'XBC', 'XBD', 'XCD', 'XCG', 'XDR', 'XOF', 'XPD',
+  'XPF', 'XPT', 'XSU', 'XTS', 'XUA', 'XXX', 'YER', 'ZAR', 'ZMW', 'ZWG',
+])
+
 /**
  * Convert amount from smallest unit to decimal for display
  * @param amount - Amount in smallest unit (e.g., cents for USD)
@@ -76,12 +96,12 @@ export function getCurrencyDecimals(currency: string): number {
 }
 
 /**
- * Validate currency code format
+ * Validate a currency code against ISO 4217's current currency and fund list.
  * @param currency - Currency code to validate
- * @returns True if valid ISO 4217 format
+ * @returns True if the code is a current ISO 4217 code
  */
 export function isValidCurrencyCode(currency: string): boolean {
-  return /^[A-Z]{3}$/.test(currency.toUpperCase())
+  return ISO_4217_CURRENCY_CODES.has(currency.toUpperCase())
 }
 
 /**

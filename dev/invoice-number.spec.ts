@@ -1,8 +1,18 @@
 import type { Payload } from 'payload'
 
+import { generateInvoiceNumber } from '../src/utils/invoiceNumber'
 import config from '@payload-config'
 import { getPayload } from 'payload'
-import { afterAll, beforeAll, describe, expect, test } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest'
+
+vi.mock('../src/utils/invoiceNumber', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/utils/invoiceNumber')>()
+
+  return {
+    ...actual,
+    generateInvoiceNumber: vi.fn(actual.generateInvoiceNumber),
+  }
+})
 
 let payload: Payload
 
@@ -12,6 +22,10 @@ afterAll(async () => {
 
 beforeAll(async () => {
   payload = await getPayload({ config })
+})
+
+beforeEach(() => {
+  vi.clearAllMocks()
 })
 
 describe('Invoice number generation', () => {
@@ -46,6 +60,8 @@ describe('Invoice number generation', () => {
 
     const after = Date.now()
 
+    expect(generateInvoiceNumber).toHaveBeenCalledTimes(1)
+    expect(invoice.number).toBe(vi.mocked(generateInvoiceNumber).mock.results[0]?.value)
     expect(invoice.number).toMatch(/^INV-\d+$/)
 
     const timestamp = Number(invoice.number.slice('INV-'.length))

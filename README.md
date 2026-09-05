@@ -120,7 +120,7 @@ const payment = await payload.create({
 
 ### Stripe
 
-Full-featured credit card processing with support for multiple payment methods, subscriptions, and refunds.
+Full-featured credit card processing with support for multiple payment methods and refunds.
 
 **Features:**
 - Credit/debit cards, digital wallets (Apple Pay, Google Pay)

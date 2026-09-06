@@ -10,6 +10,7 @@ import type {
 import type { BillingPluginConfig} from '../plugin/config';
 import { defaults } from '../plugin/config'
 import { extractSlug } from '../plugin/utils'
+import { generateInvoiceNumber } from '../utils/invoiceNumber'
 import { createContextLogger } from '../utils/logger'
 import type { Invoice } from '../plugin/types/index'
 
@@ -424,8 +425,7 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
           if (operation === 'create') {
             // Generate invoice number if not provided
             if (!data.number) {
-              const timestamp = Date.now()
-              data.number = `INV-${timestamp}`
+              data.number = generateInvoiceNumber()
             }
 
             // Validate currency format

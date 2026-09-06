@@ -6,7 +6,6 @@ consumer_directory="$(mktemp -d -t payload-billing-esm-XXXXXX)"
 trap 'rm -rf "$consumer_directory"' EXIT
 
 package_tarball="$(pnpm pack --pack-destination "$consumer_directory" | tail -n 1)"
-zod_tarball="$consumer_directory/$(npm_config_cache="$consumer_directory/npm-cache" npm pack --silent --pack-destination "$consumer_directory" ./node_modules/zod | tail -n 1)"
 react_tarball="$consumer_directory/$(npm_config_cache="$consumer_directory/npm-cache" npm pack --silent --pack-destination "$consumer_directory" ./node_modules/react | tail -n 1)"
 
 PACKAGE_TARBALL="$package_tarball" node --input-type=module --eval '
@@ -35,8 +34,7 @@ npm_config_cache="$consumer_directory/npm-cache" npm install \
   --ignore-scripts \
   --legacy-peer-deps \
   "$package_tarball" \
-  "$react_tarball" \
-  "$zod_tarball"
+  "$react_tarball"
 
 node --input-type=module --eval '
   import { readFile } from "node:fs/promises"

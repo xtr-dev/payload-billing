@@ -353,11 +353,9 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
         async ({ data, operation, req, originalDoc }) => {
           const logger = createContextLogger(req.payload, 'Invoices Collection')
 
-          // Validate that paid invoice has a settled linked payment
-          // This guards both: transitioning to paid, and adding/updating payment on an already-paid invoice
-          const isOrWillBePaid = data.status === 'paid' || (originalDoc?.status === 'paid' && data.status === undefined)
-          const hasPayment = data.payment || (originalDoc && originalDoc.payment)
-          if (isOrWillBePaid && hasPayment) {
+          // Validate that paid invoice transition has a settled linked payment
+          const statusChangingToPaid = data.status === 'paid' && (operation === 'create' || !originalDoc || originalDoc.status !== 'paid')
+          if (statusChangingToPaid) {
             const paymentId = data.payment || (originalDoc && originalDoc.payment)
             if (paymentId) {
               try {
@@ -366,7 +364,7 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
                   id: typeof paymentId === 'object' ? paymentId.id : paymentId,
                 })
 
-                const settledStatuses = ['paid', 'succeeded']
+                const settledStatuses = ['paid', 'succeeded', 'refunded', 'partially_refunded']
                 if (!settledStatuses.includes(linkedPayment.status)) {
                   throw new Error(`Cannot mark invoice as paid when linked payment status is '${linkedPayment.status}'`)
                 }
@@ -376,6 +374,31 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
                 }
                 logger.error(`Failed to validate linked payment: ${String(error)}`)
                 throw new Error('Failed to validate linked payment status')
+              }
+            }
+          }
+
+          // Reject attaching a pending/failed payment to an already-paid invoice
+          const paymentIdChanging = data.payment && (!originalDoc || data.payment !== originalDoc.payment)
+          if (originalDoc?.status === 'paid' && paymentIdChanging) {
+            const paymentId = data.payment
+            if (paymentId) {
+              try {
+                const linkedPayment = await req.payload.findByID({
+                  collection: paymentsSlug as CollectionSlug,
+                  id: typeof paymentId === 'object' ? paymentId.id : paymentId,
+                })
+
+                const settledStatuses = ['paid', 'succeeded', 'refunded', 'partially_refunded']
+                if (!settledStatuses.includes(linkedPayment.status)) {
+                  throw new Error(`Cannot attach payment with status '${linkedPayment.status}' to a paid invoice`)
+                }
+              } catch (error) {
+                if (error instanceof Error && error.message.includes('Cannot attach')) {
+                  throw error
+                }
+                logger.error(`Failed to validate attached payment: ${String(error)}`)
+                throw new Error('Failed to validate attached payment status')
               }
             }
           }

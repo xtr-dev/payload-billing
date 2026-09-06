@@ -535,7 +535,6 @@ draft → open → paid
 - Subtotal calculated from sum of item amounts
 - Total amount calculated as subtotal + taxAmount
 - `paidAt` timestamp set when status becomes 'paid'
-- Linked payment updated when invoice marked as paid
 - Customer info auto-populated if extractor configured
 
 ### Refunds

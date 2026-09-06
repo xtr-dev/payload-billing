@@ -317,7 +317,7 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
     fields,
     hooks: {
       afterChange: [
-        async ({ doc, operation, req, previousDoc }) => {
+        async ({ doc, operation, req }) => {
           const logger = createContextLogger(req.payload, 'Invoices Collection')
 
           if (operation === 'create') {

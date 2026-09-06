@@ -233,7 +233,7 @@ export interface Payment {
 export interface Invoice {
   id: number;
   /**
-   * Invoice number (e.g., INV-001)
+   * Invoice number (auto-generated as INV-<unix-ms-timestamp>, e.g. INV-1755289904123, unless set explicitly)
    */
   number: string;
   /**

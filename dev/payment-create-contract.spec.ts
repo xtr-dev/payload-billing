@@ -1,6 +1,7 @@
 import type { Payload } from 'payload'
 
 import { sqliteAdapter } from '@payloadcms/db-sqlite'
+import { rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { buildConfig, getPayload } from 'payload'
@@ -70,7 +71,16 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
-  await payload.db.destroy?.()
+  try {
+    await payload.db.destroy?.()
+  } finally {
+    // Sidecar wal/shm files are created by the sqlite adapter; leave none of this run's files in os.tmpdir().
+    await Promise.all([
+      rm(sqlitePath, { force: true }),
+      rm(`${sqlitePath}-wal`, { force: true }),
+      rm(`${sqlitePath}-shm`, { force: true }),
+    ])
+  }
 })
 
 describe('billingPlugin + testProvider payment create', () => {

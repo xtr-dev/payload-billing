@@ -347,39 +347,6 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
             }
           }
 
-          // If invoice status changes to paid, ensure linked payment is also marked as paid
-          const statusChanged = operation === 'update' && previousDoc && previousDoc.status !== doc.status
-          if (statusChanged && doc.status === 'paid' && doc.payment) {
-            try {
-              const paymentId = typeof doc.payment === 'object' ? doc.payment.id : doc.payment
-
-              // Fetch the payment to check its status
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              const payment = await req.payload.findByID({
-                collection: paymentsSlug as CollectionSlug,
-                id: paymentId,
-              }) as any
-
-              // Only update if payment is not already in a successful state
-              if (payment && !['paid', 'succeeded'].includes(payment.status)) {
-                logger.info(`Invoice ${doc.id} marked as paid, updating payment ${paymentId}`)
-
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                await req.payload.update({
-                  collection: paymentsSlug as CollectionSlug,
-                  id: paymentId,
-                  data: {
-                    status: 'succeeded',
-                  } as any,
-                })
-
-                logger.info(`Payment ${paymentId} marked as succeeded`)
-              }
-            } catch (error) {
-              logger.error(`Failed to update payment status: ${String(error)}`)
-              // Don't throw - invoice update is already complete
-            }
-          }
         },
       ] satisfies CollectionAfterChangeHook<Invoice>[],
       beforeChange: [

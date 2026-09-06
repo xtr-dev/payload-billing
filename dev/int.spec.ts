@@ -4,7 +4,7 @@ import config from '@payload-config'
 import { getPayload } from 'payload'
 import { afterAll, beforeAll, describe, expect, test } from 'vitest'
 
-import type { Payment } from '../src/index'
+import type { Invoice, Payment } from '../src/index'
 
 let payload: Payload
 
@@ -187,7 +187,7 @@ describe('billing plugin integration', () => {
     })
 
     // Should allow updating other fields on a paid invoice even when payment is refunded
-    const updated = await payload.update({
+    const updated = (await payload.update({
       collection: 'invoices',
       id: invoice.id,
       data: {
@@ -196,9 +196,9 @@ describe('billing plugin integration', () => {
           email: 'updated@example.com',
         },
       } as any,
-    })
+    })) as unknown as Invoice
 
-    expect(updated.customerInfo.name).toBe('Updated name')
+    expect(updated.customerInfo?.name).toBe('Updated name')
     expect(updated.status).toBe('paid')
   })
 
@@ -347,7 +347,7 @@ describe('billing plugin integration', () => {
       data: { status: 'pending' },
     })
 
-    const updated = await payload.update({
+    const updated = (await payload.update({
       collection: 'invoices',
       id: invoice.id,
       data: {
@@ -357,11 +357,15 @@ describe('billing plugin integration', () => {
           email: 'resave@example.com',
         },
       } as any,
-    })
+    })) as unknown as Invoice
 
-    expect(updated.customerInfo.name).toBe('Same payment re-save')
+    expect(updated.customerInfo?.name).toBe('Same payment re-save')
     expect(updated.status).toBe('paid')
-    expect(typeof updated.payment === 'object' ? updated.payment.id : updated.payment).toBe(payment.id)
+    expect(
+      updated.payment != null && typeof updated.payment === 'object'
+        ? updated.payment.id
+        : updated.payment,
+    ).toBe(payment.id)
   })
 
   test.each(['refunded', 'partially_refunded'] as const)('attaching a %s payment to a paid invoice is allowed', async (status) => {
@@ -414,13 +418,17 @@ describe('billing plugin integration', () => {
       } as any,
     })
 
-    const updated = await payload.update({
+    const updated = (await payload.update({
       collection: 'invoices',
       id: invoice.id,
       data: { payment: refundedPayment.id },
-    })
+    })) as unknown as Invoice
 
     // Payment relationship is returned as full object; check the id property
-    expect(typeof updated.payment === 'object' ? updated.payment.id : updated.payment).toBe(refundedPayment.id)
+    expect(
+      updated.payment != null && typeof updated.payment === 'object'
+        ? updated.payment.id
+        : updated.payment,
+    ).toBe(refundedPayment.id)
   })
 })

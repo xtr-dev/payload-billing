@@ -1,7 +1,9 @@
 import type { Payment } from '../plugin/types/payments'
 import type { PaymentProvider, ProviderData } from '../plugin/types/index'
 import type { BillingPluginConfig } from '../plugin/config'
-import type { CollectionSlug, Payload } from 'payload'
+import type { Payload } from 'payload'
+import { defaults } from '../plugin/config'
+import { extractSlug } from '../plugin/utils'
 import { handleWebhookError, logWebhookEvent } from './utils'
 import { isValidAmount, isValidCurrencyCode } from './currency'
 import { createContextLogger } from '../utils/logger'
@@ -63,14 +65,6 @@ function validatePaymentId(paymentId: string): { isValid: boolean; error?: strin
   return { isValid: true }
 }
 
-// Utility function to safely extract collection name
-function getPaymentsCollectionName(pluginConfig: BillingPluginConfig): string {
-  if (typeof pluginConfig.collections?.payments === 'string') {
-    return pluginConfig.collections.payments
-  }
-  return 'payments'
-}
-
 // Enhanced error handling utility for database operations
 async function updatePaymentInDatabase(
   payload: Payload,
@@ -80,9 +74,9 @@ async function updatePaymentInDatabase(
   pluginConfig: BillingPluginConfig
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const paymentsCollection = getPaymentsCollectionName(pluginConfig)
+    const paymentsCollection = extractSlug(pluginConfig.collections?.payments, defaults.paymentsCollection)
     const payments = await payload.find({
-      collection: paymentsCollection as any, // PayloadCMS collection type constraint
+      collection: paymentsCollection,
       where: { providerId: { equals: sessionId } },
       limit: 1
     })
@@ -92,7 +86,7 @@ async function updatePaymentInDatabase(
     }
 
     await payload.update({
-      collection: paymentsCollection as any, // PayloadCMS collection type constraint
+      collection: paymentsCollection,
       id: payments.docs[0].id,
       data: {
         status,
@@ -276,10 +270,9 @@ export const testProvider = (testConfig: TestProviderConfig) => {
             // If not in memory, fetch from database
             if (!session && req.payload) {
               try {
-                const paymentsConfig = pluginConfig.collections?.payments
-                const paymentSlug = typeof paymentsConfig === 'string' ? paymentsConfig : (paymentsConfig?.slug || 'payments')
+                const paymentSlug = extractSlug(pluginConfig.collections?.payments, defaults.paymentsCollection)
                 const result = await req.payload.find({
-                  collection: paymentSlug as CollectionSlug,
+                  collection: paymentSlug,
                   where: {
                     providerId: {
                       equals: paymentId
@@ -373,10 +366,9 @@ export const testProvider = (testConfig: TestProviderConfig) => {
               // If not in memory, fetch from database
               if (!session && req.payload) {
                 try {
-                  const paymentsConfig = pluginConfig.collections?.payments
-                const paymentSlug = typeof paymentsConfig === 'string' ? paymentsConfig : (paymentsConfig?.slug || 'payments')
+                  const paymentSlug = extractSlug(pluginConfig.collections?.payments, defaults.paymentsCollection)
                   const result = await req.payload.find({
-                    collection: paymentSlug as CollectionSlug,
+                    collection: paymentSlug,
                     where: {
                       providerId: {
                         equals: paymentId
@@ -510,8 +502,7 @@ export const testProvider = (testConfig: TestProviderConfig) => {
             // If not in memory, fetch from database
             if (!session && req.payload) {
               try {
-                const paymentsConfig = pluginConfig.collections?.payments
-                const paymentSlug = typeof paymentsConfig === 'string' ? paymentsConfig : (paymentsConfig?.slug || 'payments')
+                const paymentSlug = extractSlug(pluginConfig.collections?.payments, defaults.paymentsCollection)
                 const result = await req.payload.find({
                   collection: paymentSlug,
                   where: {
@@ -718,6 +709,25 @@ async function processTestPayment(
   }
 }
 
+// Escapes a value for interpolation into HTML text or attribute context. The checkout
+// page interpolates the payment description and config-supplied scenario fields, so a
+// description like `Bolts <3" & washers` must render as text rather than markup.
+function escapeHtml(value: unknown): string {
+  return String(value).replace(/[&<>"']/g, c => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string
+  ))
+}
+
+// Serializes a value for interpolation into an inline <script> block. JSON.stringify
+// emits its own quotes and escapes any inside the value (an apostrophe in a redirectUrl
+// was a parse error that silently killed every handler on the page). It leaves `<`
+// intact, though, and the HTML parser ends a script block at `</script>` even inside a
+// string literal — so replace `<` with the escape sequence \u003c, which the JS parser
+// reads as the same character.
+function jsString(value: unknown): string {
+  return JSON.stringify(String(value)).replace(/</g, '\\u003c')
+}
+
 // Helper function to generate test payment UI
 function generateTestPaymentUI(
   session: TestPaymentSession,
@@ -735,7 +745,7 @@ function generateTestPaymentUI(
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Test Payment - ${payment.description || 'Payment'}</title>
+    <title>Test Payment - ${escapeHtml(payment.description || 'Payment')}</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -919,8 +929,8 @@ function generateTestPaymentUI(
                 Test Payment Checkout
                 ${testModeIndicators.showTestBadges !== false ? '<span class="test-badge">Test</span>' : ''}
             </div>
-            <div class="amount">${payment.currency?.toUpperCase()} ${payment.amount ? (payment.amount / 100).toFixed(2) : '0.00'}</div>
-            ${payment.description ? `<div class="description">${payment.description}</div>` : ''}
+            <div class="amount">${escapeHtml(payment.currency?.toUpperCase())} ${payment.amount ? (payment.amount / 100).toFixed(2) : '0.00'}</div>
+            ${payment.description ? `<div class="description">${escapeHtml(payment.description)}</div>` : ''}
         </div>
 
         <div class="content">
@@ -944,9 +954,9 @@ function generateTestPaymentUI(
                 </div>
                 <div class="scenarios">
                     ${scenarios.map(scenario => `
-                        <div class="scenario" data-scenario="${scenario.id}">
-                            <div class="scenario-name">${scenario.name}</div>
-                            <div class="scenario-desc">${scenario.description}</div>
+                        <div class="scenario" data-scenario="${escapeHtml(scenario.id)}">
+                            <div class="scenario-name">${escapeHtml(scenario.name)}</div>
+                            <div class="scenario-desc">${escapeHtml(scenario.description)}</div>
                         </div>
                     `).join('')}
                 </div>
@@ -1002,7 +1012,7 @@ function generateTestPaymentUI(
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        paymentId: '${session.id}',
+                        paymentId: ${jsString(session.id)},
                         scenarioId: selectedScenario,
                         method: selectedMethod
                     })
@@ -1031,7 +1041,7 @@ function generateTestPaymentUI(
 
         async function pollStatus() {
             try {
-                const response = await fetch('/api/payload-billing/test/status/${session.id}');
+                const response = await fetch('/api/payload-billing/test/status/' + encodeURIComponent(${jsString(session.id)}));
                 const result = await response.json();
 
                 const status = document.getElementById('status');
@@ -1041,7 +1051,7 @@ function generateTestPaymentUI(
                     status.className = 'status success';
                     status.textContent = '✅ Payment successful! Redirecting...';
                     setTimeout(() => {
-                        window.location.href = '${redirectUrl}';
+                        window.location.href = ${jsString(redirectUrl)};
                     }, 2000);
                 } else if (result.status === 'failed' || result.status === 'cancelled' || result.status === 'expired') {
                     status.className = 'status error';

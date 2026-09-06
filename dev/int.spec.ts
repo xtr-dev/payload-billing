@@ -310,6 +310,7 @@ describe('billing plugin integration', () => {
       data: { payment: refundedPayment.id },
     })
 
-    expect(updated.payment).toBe(refundedPayment.id)
+    // Payment relationship is returned as full object; check the id property
+    expect(typeof updated.payment === 'object' ? updated.payment.id : updated.payment).toBe(refundedPayment.id)
   })
 })

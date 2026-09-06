@@ -1,0 +1,742 @@
+
+> @xtr-dev/payload-billing@0.1.31 test /home/bastiaan/Desktop/npm-xtr-dev/wandel-private/workspace/repos/payload-billing/worktrees/w0-20260906T121758-b5c0
+> vitest run
+
+
+ RUN  v3.2.4 /home/bastiaan/Desktop/npm-xtr-dev/wandel-private/workspace/repos/payload-billing/worktrees/w0-20260906T121758-b5c0
+
+stdout | dev/test-provider.spec.ts > /payload-billing/test/process > accepts a valid scenario, returning the scenario delay
+[BILLING INFO] [Test Provider Webhook] Payment test_pay_1788697150282_3mm9disji processed with outcome: paid 
+
+ ❯ dev/test-provider.spec.ts (31 tests | 1 failed) 894ms
+   ✓ testProvider factory > returns undefined when disabled, which is how a user turns it off in production 2ms
+   ✓ initPayment validation > requires amount 43ms
+   ✓ initPayment validation > requires currency 0ms
+   ✓ initPayment validation > rejects a fractional amount 0ms
+   ✓ initPayment validation > rejects a negative amount 0ms
+   ✓ initPayment validation > rejects a currency that is not a 3-letter code 0ms
+   ✓ initPayment validation > accepts a lowercase currency code, since isValidCurrencyCode uppercases before matching 1ms
+   ✓ initPayment validation > accepts a zero amount, since the guard is == null and isValidAmount(0) is true 0ms
+   ✓ initPayment writes back > sets providerId, checkoutUrl and providerData on the payment it was given 1ms
+   ✓ checkoutUrl construction > uses customUiRoute directly when configured 0ms
+   ✓ checkoutUrl construction > falls back to the built-in /api endpoint when customUiRoute is unset 0ms
+   ✓ baseUrl precedence > prefers testConfig.baseUrl over every env var 0ms
+   ✓ baseUrl precedence > prefers NEXT_PUBLIC_SERVER_URL over the remaining env vars 0ms
+   ✓ baseUrl precedence > prefers PAYLOAD_PUBLIC_SERVER_URL over SERVER_URL 0ms
+   ✓ baseUrl precedence > falls back to SERVER_URL when it is the only one set 29ms
+   ✓ baseUrl precedence > falls back to http://localhost:3000 when nothing is set 0ms
+   ✓ /payload-billing/test/config > defaults testModeIndicators to true and defaultDelay to 1000 185ms
+   ✓ /payload-billing/test/config > lets showWarningBanners: false survive, which ?? permits and || would silently flip back to true 1ms
+   ✓ /payload-billing/test/status/:id and /payload-billing/test/payment/:id > status: returns 404 for an unknown but well-formed id 1ms
+   ✓ /payload-billing/test/status/:id and /payload-billing/test/payment/:id > status: returns 400 for an id missing the test_pay_ prefix 60ms
+   ✓ /payload-billing/test/status/:id and /payload-billing/test/payment/:id > payment: returns 404 for an unknown but well-formed id 1ms
+   ✓ /payload-billing/test/status/:id and /payload-billing/test/payment/:id > payment: returns 400 for an id missing the test_pay_ prefix 1ms
+   ✓ /payload-billing/test/status/:id and /payload-billing/test/payment/:id > status: strips the query string before looking up the session 1ms
+   × /payload-billing/test/status/:id and /payload-billing/test/payment/:id > payment: strips the query string before looking up the session 384ms
+     → expected '<!DOCTYPE html>\n<html lang="en">\n<h…' to contain 'paymentId: \'test_pay_1788697149898_b…'
+   ✓ /payload-billing/test/process > rejects a non-object body 2ms
+   ✓ /payload-billing/test/process > rejects a missing paymentId 1ms
+   ✓ /payload-billing/test/process > rejects a missing scenarioId 1ms
+   ✓ /payload-billing/test/process > rejects a missing method 0ms
+   ✓ /payload-billing/test/process > rejects a method outside the five valid payment methods 0ms
+   ✓ /payload-billing/test/process > rejects an unknown scenarioId for an existing session 0ms
+   ✓ /payload-billing/test/process > accepts a valid scenario, returning the scenario delay 136ms
+[⣷] Pulling schema from database...
+[2K[1G[✓] Pulling schema from database...
+[14:19:20] [32mINFO[39m: [36mSeeding billing sample data...[39m
+ ✓ dev/invoice-number.spec.ts (1 test) 4066ms
+[14:19:20] [32mINFO[39m: [36mNo customers collection found, will use direct customer info in invoices[39m
+[14:19:20] [32mINFO[39m: [36mSeeding invoices...[39m
+[14:19:20] [32mINFO[39m: [36mLogger initialized with level: info[39m
+    plugin: "@xtr-dev/payload-billing"
+[14:19:20] [32mINFO[39m: [36m[Invoices Collection] Invoice created: INV-1788697160138[39m
+    plugin: "@xtr-dev/payload-billing"
+[14:19:20] [32mINFO[39m: [36m[Invoices Collection] Invoice created: INV-1788697160173[39m
+    plugin: "@xtr-dev/payload-billing"
+[14:19:20] [32mINFO[39m: [36m✅ Billing sample data seeded successfully![39m
+[14:19:20] [32mINFO[39m: [36m[Test Provider Webhook] Test payment provider initialized[39m
+    plugin: "@xtr-dev/payload-billing"
+[14:19:20] [33mWARN[39m: [36m[Test Provider] 🧪 Payment system is running in test mode[39m
+    plugin: "@xtr-dev/payload-billing"
+[14:19:20] [32mINFO[39m: [36m[Invoices Collection] Invoice created: INV-1788697160211[39m
+    plugin: "@xtr-dev/payload-billing"
+[⣷] Pulling schema from database...
+[2K[1G[✓] Pulling schema from database...
+stdout | dev/test-provider-slug.spec.ts > process handler updates the renamed payments collection
+[BILLING INFO] [Test Provider Webhook] Payment test_pay_verify1 processed with outcome: paid 
+
+[14:19:21] [32mINFO[39m: [36mSeeding billing sample data...[39m
+ ✓ dev/test-provider-slug.spec.ts (1 test) 314ms
+   ✓ process handler updates the renamed payments collection  306ms
+ ❯ dev/int.spec.ts (12 tests | 2 failed) 6206ms
+   ✓ billing plugin integration > registers the payments, invoices and refunds collections 1ms
+   ✓ billing plugin integration > honours the extend option on the invoices collection 0ms
+   ✓ billing plugin integration > creating a payment runs the test provider and stores its session data 26ms
+   ✓ billing plugin integration > uppercases the currency code before storing it 40ms
+   ✓ billing plugin integration > refuses a fractional amount 2ms
+   ✓ billing plugin integration > refuses a provider that is not registered 1ms
+   ✓ billing plugin integration > marking an invoice paid is rejected when linked payment is pending  346ms
+   ✓ billing plugin integration > marking an invoice paid is rejected when linked payment is failed 293ms
+   ✓ billing plugin integration > updating an already-paid invoice is allowed when payment is refunded 254ms
+   ✓ billing plugin integration > attaching a pending payment to an already-paid invoice is rejected 283ms
+   × billing plugin integration > attaching a refunded payment to a paid invoice is allowed 359ms
+     → expected { id: 9, provider: 'test', …(8) } to be 9 // Object.is equality
+   × billing plugin integration > attaching a partially_refunded payment to a paid invoice is allowed 246ms
+     → expected { id: 11, provider: 'test', …(8) } to be 11 // Object.is equality
+[14:19:21] [32mINFO[39m: [36mNo customers collection found, will use direct customer info in invoices[39m
+[14:19:21] [32mINFO[39m: [36mSeeding invoices...[39m
+[14:19:21] [32mINFO[39m: [36mLogger initialized with level: info[39m
+    plugin: "@xtr-dev/payload-billing"
+[14:19:21] [32mINFO[39m: [36m[Invoices Collection] Invoice created: INV-1788697161834[39m
+    plugin: "@xtr-dev/payload-billing"
+[14:19:21] [32mINFO[39m: [36m[Invoices Collection] Invoice created: INV-1788697161930[39m
+    plugin: "@xtr-dev/payload-billing"
+[14:19:21] [32mINFO[39m: [36m✅ Billing sample data seeded successfully![39m
+[14:19:21] [32mINFO[39m: [36m[Test Provider Webhook] Test payment provider initialized[39m
+    plugin: "@xtr-dev/payload-billing"
+[14:19:21] [33mWARN[39m: [36m[Test Provider] 🧪 Payment system is running in test mode[39m
+    plugin: "@xtr-dev/payload-billing"
+[14:19:22] [32mINFO[39m: [36m[Invoices Collection] Invoice created: INV-1788697162102[39m
+    plugin: "@xtr-dev/payload-billing"
+[14:19:22] [32mINFO[39m: [36m[Invoices Collection] Linking payment 3 back to invoice 6[39m
+    plugin: "@xtr-dev/payload-billing"
+[14:19:22] [32mINFO[39m: [36m[Invoices Collection] Payment 3 linked to invoice 6[39m
+    plugin: "@xtr-dev/payload-billing"
+[14:19:22] [32mINFO[39m: [36m[Invoices Collection] Invoice created: INV-1788697162454[39m
+    plugin: "@xtr-dev/payload-billing"
+[14:19:22] [32mINFO[39m: [36m[Invoices Collection] Linking payment 4 back to invoice 7[39m
+    plugin: "@xtr-dev/payload-billing"
+[14:19:22] [32mINFO[39m: [36m[Invoices Collection] Payment 4 linked to invoice 7[39m
+    plugin: "@xtr-dev/payload-billing"
+[14:19:22] [32mINFO[39m: [36m[Invoices Collection] Invoice created: INV-1788697162729[39m
+    plugin: "@xtr-dev/payload-billing"
+[14:19:22] [32mINFO[39m: [36m[Invoices Collection] Linking payment 5 back to invoice 8[39m
+    plugin: "@xtr-dev/payload-billing"
+[14:19:22] [32mINFO[39m: [36m[Invoices Collection] Payment 5 linked to invoice 8[39m
+    plugin: "@xtr-dev/payload-billing"
+[14:19:23] [32mINFO[39m: [36m[Invoices Collection] Invoice created: INV-1788697163040[39m
+    plugin: "@xtr-dev/payload-billing"
+[14:19:23] [32mINFO[39m: [36m[Invoices Collection] Linking payment 6 back to invoice 9[39m
+    plugin: "@xtr-dev/payload-billing"
+[14:19:23] [32mINFO[39m: [36m[Invoices Collection] Payment 6 linked to invoice 9[39m
+    plugin: "@xtr-dev/payload-billing"
+[14:19:23] [32mINFO[39m: [36m[Invoices Collection] Invoice created: INV-1788697163339[39m
+    plugin: "@xtr-dev/payload-billing"
+[14:19:23] [32mINFO[39m: [36m[Invoices Collection] Linking payment 8 back to invoice 10[39m
+    plugin: "@xtr-dev/payload-billing"
+[14:19:23] [32mINFO[39m: [36m[Invoices Collection] Payment 8 linked to invoice 10[39m
+    plugin: "@xtr-dev/payload-billing"
+[14:19:23] [32mINFO[39m: [36m[Invoices Collection] Invoice created: INV-1788697163673[39m
+    plugin: "@xtr-dev/payload-billing"
+[14:19:23] [32mINFO[39m: [36m[Invoices Collection] Linking payment 10 back to invoice 11[39m
+    plugin: "@xtr-dev/payload-billing"
+[14:19:23] [32mINFO[39m: [36m[Invoices Collection] Payment 10 linked to invoice 11[39m
+    plugin: "@xtr-dev/payload-billing"
+ ✓ dev/test-provider-ui-escape.spec.ts (2 tests) 253ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  dev/int.spec.ts > billing plugin integration > attaching a refunded payment to a paid invoice is allowed
+AssertionError: expected { id: 9, provider: 'test', …(8) } to be 9 // Object.is equality
+
+[32m- Expected:[39m 
+9
+
+[31m+ Received:[39m 
+{
+  "amount": 500,
+  "checkoutUrl": "http://localhost:3000/test-payment/test_pay_1788697163263_f9gftpy9j",
+  "currency": "EUR",
+  "description": null,
+  "id": 9,
+  "metadata": null,
+  "provider": "test",
+  "providerData": {
+    "provider": "test",
+    "raw": {
+      "amount": 500,
+      "currency": "EUR",
+      "id": "test_pay_1788697163263_f9gftpy9j",
+      "methods": [
+        {
+          "icon": "🏦",
+          "id": "ideal",
+          "name": "iDEAL",
+        },
+        {
+          "icon": "💳",
+          "id": "creditcard",
+          "name": "Credit Card",
+        },
+        {
+          "icon": "🅿️",
+          "id": "paypal",
+          "name": "PayPal",
+        },
+        {
+          "icon": "🍎",
+          "id": "applepay",
+          "name": "Apple Pay",
+        },
+        {
+          "icon": "🏛️",
+          "id": "banktransfer",
+          "name": "Bank Transfer",
+        },
+      ],
+      "paymentUrl": "http://localhost:3000/test-payment/test_pay_1788697163263_f9gftpy9j",
+      "scenarios": [
+        {
+          "description": "Payment succeeds immediately",
+          "id": "instant-success",
+          "name": "Instant Success",
+        },
+        {
+          "description": "Payment succeeds after a delay",
+          "id": "delayed-success",
+          "name": "Delayed Success",
+        },
+        {
+          "description": "User cancels the payment",
+          "id": "cancelled-payment",
+          "name": "Cancelled Payment",
+        },
+        {
+          "description": "Payment is declined by the provider",
+          "id": "declined-payment",
+          "name": "Declined Payment",
+        },
+        {
+          "description": "Payment expires before completion",
+          "id": "expired-payment",
+          "name": "Expired Payment",
+        },
+        {
+          "description": "Payment remains in pending state",
+          "id": "pending-payment",
+          "name": "Pending Payment",
+        },
+      ],
+      "status": "pending",
+      "testMode": true,
+    },
+    "timestamp": "2026-09-06T12:19:23.263Z",
+  },
+  "providerId": "test_pay_1788697163263_f9gftpy9j",
+  "status": "refunded",
+}
+
+ ❯ dev/int.spec.ts:313:29
+    311|     })
+    312| 
+    313|     expect(updated.payment).toBe(refundedPayment.id)
+       |                             ^
+    314|   })
+    315| })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  dev/int.spec.ts > billing plugin integration > attaching a partially_refunded payment to a paid invoice is allowed
+AssertionError: expected { id: 11, provider: 'test', …(8) } to be 11 // Object.is equality
+
+[32m- Expected:[39m 
+11
+
+[31m+ Received:[39m 
+{
+  "amount": 500,
+  "checkoutUrl": "http://localhost:3000/test-payment/test_pay_1788697163615_dcwt1j8hj",
+  "currency": "EUR",
+  "description": null,
+  "id": 11,
+  "metadata": null,
+  "provider": "test",
+  "providerData": {
+    "provider": "test",
+    "raw": {
+      "amount": 500,
+      "currency": "EUR",
+      "id": "test_pay_1788697163615_dcwt1j8hj",
+      "methods": [
+        {
+          "icon": "🏦",
+          "id": "ideal",
+          "name": "iDEAL",
+        },
+        {
+          "icon": "💳",
+          "id": "creditcard",
+          "name": "Credit Card",
+        },
+        {
+          "icon": "🅿️",
+          "id": "paypal",
+          "name": "PayPal",
+        },
+        {
+          "icon": "🍎",
+          "id": "applepay",
+          "name": "Apple Pay",
+        },
+        {
+          "icon": "🏛️",
+          "id": "banktransfer",
+          "name": "Bank Transfer",
+        },
+      ],
+      "paymentUrl": "http://localhost:3000/test-payment/test_pay_1788697163615_dcwt1j8hj",
+      "scenarios": [
+        {
+          "description": "Payment succeeds immediately",
+          "id": "instant-success",
+          "name": "Instant Success",
+        },
+        {
+          "description": "Payment succeeds after a delay",
+          "id": "delayed-success",
+          "name": "Delayed Success",
+        },
+        {
+          "description": "User cancels the payment",
+          "id": "cancelled-payment",
+          "name": "Cancelled Payment",
+        },
+        {
+          "description": "Payment is declined by the provider",
+          "id": "declined-payment",
+          "name": "Declined Payment",
+        },
+        {
+          "description": "Payment expires before completion",
+          "id": "expired-payment",
+          "name": "Expired Payment",
+        },
+        {
+          "description": "Payment remains in pending state",
+          "id": "pending-payment",
+          "name": "Pending Payment",
+        },
+      ],
+      "status": "pending",
+      "testMode": true,
+    },
+    "timestamp": "2026-09-06T12:19:23.615Z",
+  },
+  "providerId": "test_pay_1788697163615_dcwt1j8hj",
+  "status": "partially_refunded",
+}
+
+ ❯ dev/int.spec.ts:313:29
+    311|     })
+    312| 
+    313|     expect(updated.payment).toBe(refundedPayment.id)
+       |                             ^
+    314|   })
+    315| })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  dev/test-provider.spec.ts > /payload-billing/test/status/:id and /payload-billing/test/payment/:id > payment: strips the query string before looking up the session
+AssertionError: expected '<!DOCTYPE html>\n<html lang="en">\n<h…' to contain 'paymentId: \'test_pay_1788697149898_b…'
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- paymentId: 'test_pay_1788697149898_b7gqqnrb3'[39m
+[31m+ <!DOCTYPE html>[39m
+[31m+ <html lang="en">[39m
+[31m+ <head>[39m
+[31m+     <meta charset="UTF-8">[39m
+[31m+     <meta name="viewport" content="width=device-width, initial-scale=1.0">[39m
+[31m+     <title>Test Payment - Payment</title>[39m
+[31m+     <style>[39m
+[31m+         * { box-sizing: border-box; margin: 0; padding: 0; }[39m
+[31m+         body {[39m
+[31m+             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;[39m
+[31m+             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);[39m
+[31m+             min-height: 100vh;[39m
+[31m+             padding: 20px;[39m
+[31m+         }[39m
+[31m+         .container {[39m
+[31m+             max-width: 600px;[39m
+[31m+             margin: 0 auto;[39m
+[31m+             background: white;[39m
+[31m+             border-radius: 12px;[39m
+[31m+             box-shadow: 0 20px 40px rgba(0,0,0,0.1);[39m
+[31m+             overflow: hidden;[39m
+[31m+         }[39m
+[31m+         [39m
+[31m+         .test-banner {[39m
+[31m+             background: linear-gradient(90deg, #ff6b6b, #ffa726);[39m
+[31m+             color: white;[39m
+[31m+             padding: 12px 20px;[39m
+[31m+             text-align: center;[39m
+[31m+             font-weight: 600;[39m
+[31m+             font-size: 14px;[39m
+[31m+         }[39m
+[31m+         [39m
+[31m+         .header {[39m
+[31m+             background: #f8f9fa;[39m
+[31m+             padding: 30px 40px 20px;[39m
+[31m+             border-bottom: 1px solid #e9ecef;[39m
+[31m+         }[39m
+[31m+         .title {[39m
+[31m+             font-size: 24px;[39m
+[31m+             font-weight: 700;[39m
+[31m+             color: #2c3e50;[39m
+[31m+             margin-bottom: 8px;[39m
+[31m+         }[39m
+[31m+         .amount {[39m
+[31m+             font-size: 32px;[39m
+[31m+             font-weight: 800;[39m
+[31m+             color: #27ae60;[39m
+[31m+             margin-bottom: 16px;[39m
+[31m+         }[39m
+[31m+         .description {[39m
+[31m+             color: #6c757d;[39m
+[31m+             font-size: 16px;[39m
+[31m+             line-height: 1.5;[39m
+[31m+         }[39m
+[31m+         .content { padding: 40px; }[39m
+[31m+         .section { margin-bottom: 30px; }[39m
+[31m+         .section-title {[39m
+[31m+             font-size: 18px;[39m
+[31m+             font-weight: 600;[39m
+[31m+             color: #2c3e50;[39m
+[31m+             margin-bottom: 16px;[39m
+[31m+             display: flex;[39m
+[31m+             align-items: center;[39m
+[31m+             gap: 8px;[39m
+[31m+         }[39m
+[31m+         .payment-methods {[39m
+[31m+             display: grid;[39m
+[31m+             grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));[39m
+[31m+             gap: 12px;[39m
+[31m+             margin-bottom: 20px;[39m
+[31m+         }[39m
+[31m+         .method {[39m
+[31m+             border: 2px solid #e9ecef;[39m
+[31m+             border-radius: 8px;[39m
+[31m+             padding: 16px 12px;[39m
+[31m+             text-align: center;[39m
+[31m+             cursor: pointer;[39m
+[31m+             transition: all 0.2s;[39m
+[31m+             background: white;[39m
+[31m+         }[39m
+[31m+         .method:hover {[39m
+[31m+             border-color: #007bff;[39m
+[31m+             background: #f8f9ff;[39m
+[31m+         }[39m
+[31m+         .method.selected {[39m
+[31m+             border-color: #007bff;[39m
+[31m+             background: #007bff;[39m
+[31m+             color: white;[39m
+[31m+         }[39m
+[31m+         .method-icon { font-size: 24px; margin-bottom: 8px; }[39m
+[31m+         .method-name { font-size: 12px; font-weight: 500; }[39m
+[31m+         .scenarios {[39m
+[31m+             display: grid;[39m
+[31m+             gap: 12px;[39m
+[31m+             margin-bottom: 20px;[39m
+[31m+         }[39m
+[31m+         .scenario {[39m
+[31m+             border: 2px solid #e9ecef;[39m
+[31m+             border-radius: 8px;[39m
+[31m+             padding: 16px;[39m
+[31m+             cursor: pointer;[39m
+[31m+             transition: all 0.2s;[39m
+[31m+             background: white;[39m
+[31m+         }[39m
+[31m+         .scenario:hover {[39m
+[31m+             border-color: #28a745;[39m
+[31m+             background: #f8fff9;[39m
+[31m+         }[39m
+[31m+         .scenario.selected {[39m
+[31m+             border-color: #28a745;[39m
+[31m+             background: #28a745;[39m
+[31m+             color: white;[39m
+[31m+         }[39m
+[31m+         .scenario-name { font-weight: 600; margin-bottom: 4px; }[39m
+[31m+         .scenario-desc { font-size: 14px; opacity: 0.8; }[39m
+[31m+         .process-btn {[39m
+[31m+             width: 100%;[39m
+[31m+             background: linear-gradient(135deg, #007bff, #0056b3);[39m
+[31m+             color: white;[39m
+[31m+             border: none;[39m
+[31m+             padding: 16px;[39m
+[31m+             border-radius: 8px;[39m
+[31m+             font-size: 16px;[39m
+[31m+             font-weight: 600;[39m
+[31m+             cursor: pointer;[39m
+[31m+             transition: all 0.2s;[39m
+[31m+             margin-top: 20px;[39m
+[31m+         }[39m
+[31m+         .process-btn:hover:not(:disabled) {[39m
+[31m+             transform: translateY(-2px);[39m
+[31m+             box-shadow: 0 8px 20px rgba(0,123,255,0.3);[39m
+[31m+         }[39m
+[31m+         .process-btn:disabled {[39m
+[31m+             opacity: 0.6;[39m
+[31m+             cursor: not-allowed;[39m
+[31m+             transform: none;[39m
+[31m+         }[39m
+[31m+         .status {[39m
+[31m+             text-align: center;[39m
+[31m+             padding: 20px;[39m
+[31m+             border-radius: 8px;[39m
+[31m+             margin-top: 20px;[39m
+[31m+             font-weight: 600;[39m
+[31m+         }[39m
+[31m+         .status.processing { background: #fff3cd; color: #856404; }[39m
+[31m+         .status.success { background: #d4edda; color: #155724; }[39m
+[31m+         .status.error { background: #f8d7da; color: #721c24; }[39m
+[31m+         .loading {[39m
+[31m+             display: inline-block;[39m
+[31m+             width: 20px;[39m
+[31m+             height: 20px;[39m
+[31m+             border: 3px solid #f3f3f3;[39m
+[31m+             border-top: 3px solid #007bff;[39m
+[31m+             border-radius: 50%;[39m
+[31m+             animation: spin 1s linear infinite;[39m
+[31m+             margin-right: 10px;[39m
+[31m+         }[39m
+[31m+         @keyframes spin {[39m
+[31m+             0% { transform: rotate(0deg); }[39m
+[31m+             100% { transform: rotate(360deg); }[39m
+[31m+         }[39m
+[31m+         [39m
+[31m+         .test-badge {[39m
+[31m+             display: inline-block;[39m
+[31m+             background: #6c757d;[39m
+[31m+             color: white;[39m
+[31m+             padding: 4px 8px;[39m
+[31m+             border-radius: 4px;[39m
+[31m+             font-size: 12px;[39m
+[31m+             font-weight: 600;[39m
+[31m+             text-transform: uppercase;[39m
+[31m+             margin-left: 8px;[39m
+[31m+         }[39m
+[31m+         [39m
+[31m+     </style>[39m
+[31m+ </head>[39m
+[31m+ <body>[39m
+[31m+     <div class="container">[39m
+[31m+         [39m
+[31m+         <div class="test-banner">[39m
+[31m+             🧪 TEST MODE - This is a simulated payment for development purposes[39m
+[31m+         </div>[39m
+[31m+         [39m
+[31m+[39m
+[31m+         <div class="header">[39m
+[31m+             <div class="title">[39m
+[31m+                 Test Payment Checkout[39m
+[31m+                 <span class="test-badge">Test</span>[39m
+[31m+             </div>[39m
+[31m+             <div class="amount">EUR 5.00</div>[39m
+[31m+             [39m
+[31m+         </div>[39m
+[31m+[39m
+[31m+         <div class="content">[39m
+[31m+             <div class="section">[39m
+[31m+                 <div class="section-title">[39m
+[31m+                     💳 Select Payment Method[39m
+[31m+                 </div>[39m
+[31m+                 <div class="payment-methods">[39m
+[31m+                     [39m
+[31m+                         <div class="method" data-method="ideal">[39m
+[31m+                             <div class="method-icon">🏦</div>[39m
+[31m+                             <div class="method-name">iDEAL</div>[39m
+[31m+                         </div>[39m
+[31m+                     [39m
+[31m+                         <div class="method" data-method="creditcard">[39m
+[31m+                             <div class="method-icon">💳</div>[39m
+[31m+                             <div class="method-name">Credit Card</div>[39m
+[31m+                         </div>[39m
+[31m+                     [39m
+[31m+                         <div class="method" data-method="paypal">[39m
+[31m+                             <div class="method-icon">🅿️</div>[39m
+[31m+                             <div class="method-name">PayPal</div>[39m
+[31m+                         </div>[39m
+[31m+                     [39m
+[31m+                         <div class="method" data-method="applepay">[39m
+[31m+                             <div class="method-icon">🍎</div>[39m
+[31m+                             <div class="method-name">Apple Pay</div>[39m
+[31m+                         </div>[39m
+[31m+                     [39m
+[31m+                         <div class="method" data-method="banktransfer">[39m
+[31m+                             <div class="method-icon">🏛️</div>[39m
+[31m+                             <div class="method-name">Bank Transfer</div>[39m
+[31m+                         </div>[39m
+[31m+                     [39m
+[31m+                 </div>[39m
+[31m+             </div>[39m
+[31m+[39m
+[31m+             <div class="section">[39m
+[31m+                 <div class="section-title">[39m
+[31m+                     🎭 Select Test Scenario[39m
+[31m+                 </div>[39m
+[31m+                 <div class="scenarios">[39m
+[31m+                     [39m
+[31m+                         <div class="scenario" data-scenario="instant-success">[39m
+[31m+                             <div class="scenario-name">Instant Success</div>[39m
+[31m+                             <div class="scenario-desc">Payment succeeds immediately</div>[39m
+[31m+                         </div>[39m
+[31m+                     [39m
+[31m+                         <div class="scenario" data-scenario="delayed-success">[39m
+[31m+                             <div class="scenario-name">Delayed Success</div>[39m
+[31m+                             <div class="scenario-desc">Payment succeeds after a delay</div>[39m
+[31m+                         </div>[39m
+[31m+                     [39m
+[31m+                         <div class="scenario" data-scenario="cancelled-payment">[39m
+[31m+                             <div class="scenario-name">Cancelled Payment</div>[39m
+[31m+                             <div class="scenario-desc">User cancels the payment</div>[39m
+[31m+                         </div>[39m
+[31m+                     [39m
+[31m+                         <div class="scenario" data-scenario="declined-payment">[39m
+[31m+                             <div class="scenario-name">Declined Payment</div>[39m
+[31m+                             <div class="scenario-desc">Payment is declined by the provider</div>[39m
+[31m+                         </div>[39m
+[31m+                     [39m
+[31m+                         <div class="scenario" data-scenario="expired-payment">[39m
+[31m+                             <div class="scenario-name">Expired Payment</div>[39m
+[31m+                             <div class="scenario-desc">Payment expires before completion</div>[39m
+[31m+                         </div>[39m
+[31m+                     [39m
+[31m+                         <div class="scenario" data-scenario="pending-payment">[39m
+[31m+                             <div class="scenario-name">Pending Payment</div>[39m
+[31m+                             <div class="scenario-desc">Payment remains in pending state</div>[39m
+[31m+                         </div>[39m
+[31m+                     [39m
+[31m+                 </div>[39m
+[31m+             </div>[39m
+[31m+[39m
+[31m+             <button class="process-btn" id="processBtn" disabled>[39m
+[31m+                 Process Test Payment[39m
+[31m+             </button>[39m
+[31m+[39m
+[31m+             <div id="status" class="status" style="display: none;"></div>[39m
+[31m+         </div>[39m
+[31m+     </div>[39m
+[31m+[39m
+[31m+     <script>[39m
+[31m+         let selectedMethod = null;[39m
+[31m+         let selectedScenario = null;[39m
+[31m+[39m
+[31m+         // Payment method selection[39m
+[31m+         document.querySelectorAll('.method').forEach(method => {[39m
+[31m+             method.addEventListener('click', () => {[39m
+[31m+                 document.querySelectorAll('.method').forEach(m => m.classList.remove('selected'));[39m
+[31m+                 method.classList.add('selected');[39m
+[31m+                 selectedMethod = method.dataset.method;[39m
+[31m+                 updateProcessButton();[39m
+[31m+             });[39m
+[31m+         });[39m
+[31m+[39m
+[31m+         // Scenario selection[39m
+[31m+         document.querySelectorAll('.scenario').forEach(scenario => {[39m
+[31m+             scenario.addEventListener('click', () => {[39m
+[31m+                 document.querySelectorAll('.scenario').forEach(s => s.classList.remove('selected'));[39m
+[31m+                 scenario.classList.add('selected');[39m
+[31m+                 selectedScenario = scenario.dataset.scenario;[39m
+[31m+                 updateProcessButton();[39m
+[31m+             });[39m
+[31m+         });[39m
+[31m+[39m
+[31m+         function updateProcessButton() {[39m
+[31m+             const btn = document.getElementById('processBtn');[39m
+[31m+             btn.disabled = !selectedMethod || !selectedScenario;[39m
+[31m+         }[39m
+[31m+[39m
+[31m+         // Process payment[39m
+[31m+         document.getElementById('processBtn').addEventListener('click', async () => {[39m
+[31m+             const btn = document.getElementById('processBtn');[39m
+[31m+             const status = document.getElementById('status');[39m
+[31m+[39m
+[31m+             btn.disabled = true;[39m
+[31m+             btn.innerHTML = '<span class="loading"></span>Processing...';[39m
+[31m+[39m
+[31m+             try {[39m
+[31m+                 const response = await fetch('/api/payload-billing/test/process', {[39m
+[31m+                     method: 'POST',[39m
+[31m+                     headers: { 'Content-Type': 'application/json' },[39m
+[31m+                     body: JSON.stringify({[39m
+[31m+                         paymentId: "test_pay_1788697149898_b7gqqnrb3",[39m
+[31m+                         scenarioId: selectedScenario,[39m
+[31m+                         method: selectedMethod[39m
+[31m+                     })[39m
+[31m+                 });[39m
+[31m+[39m
+[31m+                 const result = await response.json();[39m
+[31m+[39m
+[31m+                 if (result.success) {[39m
+[31m+                     status.className = 'status processing';[39m
+[31m+                     status.style.display = 'block';[39m
+[31m+                     status.innerHTML = `<span class="loading"></span>Processing payment with ${result.scenario}...`;[39m
+[31m+[39m
+[31m+                     // Poll for status updates[39m
+[31m+                     setTimeout(() => pollStatus(), result.delay || 1000);[39m
+[31m+                 } else {[39m
+[31m+                     throw new Error(result.error || 'Failed to process payment');[39m
+[31m+                 }[39m
+[31m+             } catch (error) {[39m
+[31m+                 status.className = 'status error';[39m
+[31m+                 status.style.display = 'block';[39m
+[31m+                 status.textContent = 'Error: ' + error.message;[39m
+[31m+                 btn.disabled = false;[39m
+[31m+                 btn.textContent = 'Process Test Payment';[39m
+[31m+             }[39m
+[31m+         });[39m
+[31m+[39m
+[31m+         async function pollStatus() {[39m
+[31m+             try {[39m
+[31m+                 const response = await fetch('/api/payload-billing/test/status/' + encodeURIComponent("test_pay_1788697149898_b7gqqnrb3"));[39m
+[31m+                 const result = await response.json();[39m
+[31m+[39m
+[31m+                 const status = document.getElementById('status');[39m
+[31m+                 const btn = document.getElementById('processBtn');[39m
+[31m+[39m
+[31m+                 if (result.status === 'paid') {[39m
+[31m+                     status.className = 'status success';[39m
+[31m+                     status.textContent = '✅ Payment successful! Redirecting...';[39m
+[31m+                     setTimeout(() => {[39m
+[31m+                         window.location.href = "http://localhost:3000/payment/success";[39m
+[31m+                     }, 2000);[39m
+[31m+                 } else if (result.status === 'failed' || result.status === 'cancelled' || result.status === 'expired') {[39m
+[31m+                     status.className = 'status error';[39m
+[31m+                     status.textContent = `❌ Payment ${result.status}`;[39m
+[31m+                     btn.disabled = false;[39m
+[31m+                     btn.textContent = 'Try Again';[39m
+[31m+                 } else if (result.status === 'pending') {[39m
+[31m+                     status.className = 'status processing';[39m
+[31m+                     status.innerHTML = '<span class="loading"></span>Payment is still pending...';[39m
+[31m+                     setTimeout(() => pollStatus(), 2000);[39m
+[31m+                 }[39m
+[31m+             } catch (error) {[39m
+[31m+                 console.error('[Test Provider] Failed to poll status:', error);[39m
+[31m+             }[39m
+[31m+         }[39m
+[31m+[39m
+[31m+         [39m
+[31m+         console.warn('[Test Provider] 🧪 TEST MODE: This is a simulated payment interface for development purposes');[39m
+[31m+         [39m
+[31m+     </script>[39m
+[31m+ </body>[39m
+[31m+ </html>[39m
+
+ ❯ dev/test-provider.spec.ts:275:18
+    273|     expect(response.status).toBe(200)
+    274|     expect(response.headers.get('Content-Type')).toBe('text/html')
+    275|     expect(html).toContain(`paymentId: '${payment.providerId}'`)
+       |                  ^
+    276|     expect(html).not.toContain(`${payment.providerId}?foo=bar`)
+    277|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  2 failed | 3 passed (5)
+      Tests  3 failed | 44 passed (47)
+   Start at  14:19:06
+   Duration  17.16s (transform 1.08s, setup 0ms, collect 14.82s, tests 11.73s, environment 1ms, prepare 2.62s)
+
+ ELIFECYCLE  Test failed. See above for more details.

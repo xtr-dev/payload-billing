@@ -59,4 +59,41 @@ describe('billingPlugin provider wiring', () => {
       providerConfig: { stub: providerA },
     })
   })
+
+  test('calls onConfig in registration order after collections are assembled, skipping providers without it', () => {
+    const onConfigOrder: string[] = []
+    const slugsAtCall: Record<string, unknown[] | undefined> = {}
+
+    const withOnConfig = (key: string): PaymentProvider => ({
+      key,
+      onConfig: vi.fn((config: Config) => {
+        onConfigOrder.push(key)
+        slugsAtCall[key] = config.collections?.map(
+          (collection: { slug: string }) => collection.slug,
+        )
+      }),
+      initPayment: () => ({}),
+    })
+
+    const first = withOnConfig('first')
+    const skipped: PaymentProvider = {
+      key: 'skipped',
+      initPayment: () => ({}),
+    }
+    const second = withOnConfig('second')
+    const pluginConfig = { providers: [first, skipped, second] }
+    const baseConfig = {
+      collections: [{ slug: 'posts', fields: [] }],
+    } as unknown as Config
+
+    billingPlugin(pluginConfig)(baseConfig)
+
+    expect(first.onConfig).toHaveBeenCalledTimes(1)
+    expect(second.onConfig).toHaveBeenCalledTimes(1)
+    expect(onConfigOrder).toEqual(['first', 'second'])
+    expect(slugsAtCall.first).toEqual(
+      expect.arrayContaining(['posts', 'payments', 'invoices', 'refunds']),
+    )
+    expect(slugsAtCall.second).toEqual(slugsAtCall.first)
+  })
 })

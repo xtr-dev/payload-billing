@@ -2,7 +2,7 @@
 
 [![npm version](https://badge.fury.io/js/@xtr-dev%2Fpayload-billing.svg)](https://badge.fury.io/js/@xtr-dev%2Fpayload-billing)
 
-A comprehensive billing and payment provider plugin for PayloadCMS 3.x with support for Stripe, Mollie, and local testing. Features automatic payment/invoice synchronization, webhook processing, and flexible customer data management.
+A comprehensive billing and payment provider plugin for PayloadCMS 3.x with support for Stripe, Mollie, and local testing. Features automatic invoice updates from successful payments, webhook processing, and flexible customer data management.
 
 ⚠️ **Pre-release Warning**: This package is in active development (v0.1.x). Breaking changes may occur before v1.0.0. Not recommended for production use.
 
@@ -37,7 +37,7 @@ A comprehensive billing and payment provider plugin for PayloadCMS 3.x with supp
 - 💳 **Multiple Payment Providers** - Stripe, Mollie, and Test provider support
 - 🧾 **Invoice Management** - Generate invoices with line items, tax calculation, and automatic numbering
 - 👥 **Flexible Customer Data** - Use relationships to existing collections or embedded customer info
-- 🔄 **Automatic Synchronization** - Payment and invoice statuses sync bidirectionally
+- 🔄 **Automatic Synchronization** - Successful payments automatically mark their linked invoice as paid
 - 🪝 **Secure Webhooks** - Production-ready webhook handling with signature verification
 - 🔗 **Bidirectional Relations** - Payment-invoice-refund relationships automatically maintained
 - 🎨 **Collection Extension** - Add custom fields and hooks to all collections
@@ -535,7 +535,6 @@ draft → open → paid
 - Subtotal calculated from sum of item amounts
 - Total amount calculated as subtotal + taxAmount
 - `paidAt` timestamp set when status becomes 'paid'
-- Linked payment updated when invoice marked as paid
 - Customer info auto-populated if extractor configured
 
 ### Refunds

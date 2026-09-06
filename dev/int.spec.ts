@@ -89,4 +89,338 @@ describe('billing plugin integration', () => {
       }),
     ).rejects.toThrow(/not found/i)
   })
+
+  test.each(['pending', 'failed'] as const)('marking an invoice paid is rejected when linked payment is %s', async (status) => {
+    const payment = await payload.create({
+      collection: 'payments',
+      data: {
+        provider: 'test',
+        amount: 500,
+        currency: 'EUR',
+      } as any,
+    })
+
+    if (status === 'failed') {
+      await payload.update({
+        collection: 'payments',
+        id: payment.id,
+        data: { status },
+      })
+    }
+
+    const invoice = await payload.create({
+      collection: 'invoices',
+      data: {
+        customerInfo: {
+          name: 'Invoice status test',
+          email: 'invoice-status@example.com',
+        },
+        billingAddress: {
+          line1: '1 Example Street',
+          city: 'Example City',
+          postalCode: '1234AB',
+          country: 'NL',
+        },
+        items: [{
+          description: 'Test item',
+          quantity: 1,
+          unitAmount: 500,
+        }],
+        payment: payment.id,
+      } as any,
+    })
+
+    await expect(
+      payload.update({
+        collection: 'invoices',
+        id: invoice.id,
+        data: { status: 'paid' },
+      })
+    ).rejects.toThrow(/Cannot mark invoice as paid when linked payment status/)
+
+    const linkedPayment = await payload.findByID({
+      collection: 'payments',
+      id: payment.id,
+    })
+
+    expect(linkedPayment.status).toBe(status)
+  })
+
+  test('updating an already-paid invoice is allowed when payment is refunded', async () => {
+    const payment = await payload.create({
+      collection: 'payments',
+      data: {
+        provider: 'test',
+        amount: 500,
+        currency: 'EUR',
+        status: 'succeeded',
+      } as any,
+    })
+
+    const invoice = await payload.create({
+      collection: 'invoices',
+      data: {
+        status: 'paid',
+        customerInfo: {
+          name: 'Invoice refund test',
+          email: 'invoice-refund@example.com',
+        },
+        billingAddress: {
+          line1: '1 Example Street',
+          city: 'Example City',
+          postalCode: '1234AB',
+          country: 'NL',
+        },
+        items: [{
+          description: 'Test item',
+          quantity: 1,
+          unitAmount: 500,
+        }],
+        payment: payment.id,
+      } as any,
+    })
+
+    await payload.update({
+      collection: 'payments',
+      id: payment.id,
+      data: { status: 'refunded' },
+    })
+
+    // Should allow updating other fields on a paid invoice even when payment is refunded
+    const updated = await payload.update({
+      collection: 'invoices',
+      id: invoice.id,
+      data: {
+        customerInfo: {
+          name: 'Updated name',
+          email: 'updated@example.com',
+        },
+      } as any,
+    })
+
+    expect(updated.customerInfo.name).toBe('Updated name')
+    expect(updated.status).toBe('paid')
+  })
+
+  test.each(['pending', 'failed'] as const)('creating a paid invoice is rejected when linked payment is %s', async (status) => {
+    const payment = await payload.create({
+      collection: 'payments',
+      data: {
+        provider: 'test',
+        amount: 500,
+        currency: 'EUR',
+      } as any,
+    })
+
+    if (status === 'failed') {
+      await payload.update({
+        collection: 'payments',
+        id: payment.id,
+        data: { status },
+      })
+    }
+
+    await expect(
+      payload.create({
+        collection: 'invoices',
+        data: {
+          status: 'paid',
+          customerInfo: {
+            name: 'Invoice create-as-paid test',
+            email: 'invoice-create-paid@example.com',
+          },
+          billingAddress: {
+            line1: '1 Example Street',
+            city: 'Example City',
+            postalCode: '1234AB',
+            country: 'NL',
+          },
+          items: [{
+            description: 'Test item',
+            quantity: 1,
+            unitAmount: 500,
+          }],
+          payment: payment.id,
+        } as any,
+      }),
+    ).rejects.toThrow(/Cannot mark invoice as paid when linked payment status/)
+  })
+
+  test.each(['pending', 'failed'] as const)('attaching a %s payment to an already-paid invoice is rejected', async (status) => {
+    const settledPayment = await payload.create({
+      collection: 'payments',
+      data: {
+        provider: 'test',
+        amount: 500,
+        currency: 'EUR',
+        status: 'succeeded',
+      } as any,
+    })
+
+    const unsettledPayment = await payload.create({
+      collection: 'payments',
+      data: {
+        provider: 'test',
+        amount: 300,
+        currency: 'EUR',
+      } as any,
+    })
+
+    if (status === 'failed') {
+      await payload.update({
+        collection: 'payments',
+        id: unsettledPayment.id,
+        data: { status },
+      })
+    }
+
+    const invoice = await payload.create({
+      collection: 'invoices',
+      data: {
+        status: 'paid',
+        customerInfo: {
+          name: 'Invoice attach test',
+          email: 'invoice-attach@example.com',
+        },
+        billingAddress: {
+          line1: '1 Example Street',
+          city: 'Example City',
+          postalCode: '1234AB',
+          country: 'NL',
+        },
+        items: [{
+          description: 'Test item',
+          quantity: 1,
+          unitAmount: 500,
+        }],
+        payment: settledPayment.id,
+      } as any,
+    })
+
+    await expect(
+      payload.update({
+        collection: 'invoices',
+        id: invoice.id,
+        data: { payment: unsettledPayment.id },
+      })
+    ).rejects.toThrow(new RegExp(`Cannot attach payment with status '${status}' to a paid invoice`))
+  })
+
+  test('re-saving a paid invoice with a populated payment object does not treat it as a new attachment', async () => {
+    const payment = await payload.create({
+      collection: 'payments',
+      data: {
+        provider: 'test',
+        amount: 500,
+        currency: 'EUR',
+        status: 'succeeded',
+      } as any,
+    })
+
+    const invoice = await payload.create({
+      collection: 'invoices',
+      data: {
+        status: 'paid',
+        customerInfo: {
+          name: 'Invoice resave test',
+          email: 'invoice-resave@example.com',
+        },
+        billingAddress: {
+          line1: '1 Example Street',
+          city: 'Example City',
+          postalCode: '1234AB',
+          country: 'NL',
+        },
+        items: [{
+          description: 'Test item',
+          quantity: 1,
+          unitAmount: 500,
+        }],
+        payment: payment.id,
+      } as any,
+    })
+
+    // A later payment-status correction must not freeze an admin save that is not changing the payment id.
+    await payload.update({
+      collection: 'payments',
+      id: payment.id,
+      data: { status: 'pending' },
+    })
+
+    const updated = await payload.update({
+      collection: 'invoices',
+      id: invoice.id,
+      data: {
+        payment: { id: payment.id },
+        customerInfo: {
+          name: 'Same payment re-save',
+          email: 'resave@example.com',
+        },
+      } as any,
+    })
+
+    expect(updated.customerInfo.name).toBe('Same payment re-save')
+    expect(updated.status).toBe('paid')
+    expect(typeof updated.payment === 'object' ? updated.payment.id : updated.payment).toBe(payment.id)
+  })
+
+  test.each(['refunded', 'partially_refunded'] as const)('attaching a %s payment to a paid invoice is allowed', async (status) => {
+    const settledPayment = await payload.create({
+      collection: 'payments',
+      data: {
+        provider: 'test',
+        amount: 500,
+        currency: 'EUR',
+        status: 'succeeded',
+      } as any,
+    })
+
+    const refundedPayment = await payload.create({
+      collection: 'payments',
+      data: {
+        provider: 'test',
+        amount: 500,
+        currency: 'EUR',
+        status: 'succeeded',
+      } as any,
+    })
+
+    await payload.update({
+      collection: 'payments',
+      id: refundedPayment.id,
+      data: { status },
+    })
+
+    const invoice = await payload.create({
+      collection: 'invoices',
+      data: {
+        status: 'paid',
+        customerInfo: {
+          name: 'Invoice refund update test',
+          email: 'invoice-refund-update@example.com',
+        },
+        billingAddress: {
+          line1: '1 Example Street',
+          city: 'Example City',
+          postalCode: '1234AB',
+          country: 'NL',
+        },
+        items: [{
+          description: 'Test item',
+          quantity: 1,
+          unitAmount: 500,
+        }],
+        payment: settledPayment.id,
+      } as any,
+    })
+
+    const updated = await payload.update({
+      collection: 'invoices',
+      id: invoice.id,
+      data: { payment: refundedPayment.id },
+    })
+
+    // Payment relationship is returned as full object; check the id property
+    expect(typeof updated.payment === 'object' ? updated.payment.id : updated.payment).toBe(refundedPayment.id)
+  })
 })

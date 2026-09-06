@@ -89,4 +89,58 @@ describe('billing plugin integration', () => {
       }),
     ).rejects.toThrow(/not found/i)
   })
+
+  test.each(['pending', 'failed'] as const)('marking an invoice paid does not overwrite a linked %s payment', async (status) => {
+    const payment = await payload.create({
+      collection: 'payments',
+      data: {
+        provider: 'test',
+        amount: 500,
+        currency: 'EUR',
+      } as any,
+    })
+
+    if (status === 'failed') {
+      await payload.update({
+        collection: 'payments',
+        id: payment.id,
+        data: { status },
+      })
+    }
+
+    const invoice = await payload.create({
+      collection: 'invoices',
+      data: {
+        customerInfo: {
+          name: 'Invoice status test',
+          email: 'invoice-status@example.com',
+        },
+        billingAddress: {
+          line1: '1 Example Street',
+          city: 'Example City',
+          postalCode: '1234AB',
+          country: 'NL',
+        },
+        items: [{
+          description: 'Test item',
+          quantity: 1,
+          unitAmount: 500,
+        }],
+        payment: payment.id,
+      } as any,
+    })
+
+    await payload.update({
+      collection: 'invoices',
+      id: invoice.id,
+      data: { status: 'paid' },
+    })
+
+    const linkedPayment = await payload.findByID({
+      collection: 'payments',
+      id: payment.id,
+    })
+
+    expect(linkedPayment.status).toBe(status)
+  })
 })

@@ -353,9 +353,11 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
         async ({ data, operation, req, originalDoc }) => {
           const logger = createContextLogger(req.payload, 'Invoices Collection')
 
-          // Validate that paid invoice transition has a settled linked payment
-          const statusChangingToPaid = data.status === 'paid' && (operation === 'create' || !originalDoc || originalDoc.status !== 'paid')
-          if (statusChangingToPaid) {
+          // Validate that paid invoice has a settled linked payment
+          // This guards both: transitioning to paid, and adding/updating payment on an already-paid invoice
+          const isOrWillBePaid = data.status === 'paid' || (originalDoc?.status === 'paid' && data.status === undefined)
+          const hasPayment = data.payment || (originalDoc && originalDoc.payment)
+          if (isOrWillBePaid && hasPayment) {
             const paymentId = data.payment || (originalDoc && originalDoc.payment)
             if (paymentId) {
               try {

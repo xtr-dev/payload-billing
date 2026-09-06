@@ -7,7 +7,7 @@ This is a demo application showcasing the `@xtr-dev/payload-billing` plugin for 
 - 🧪 **Test Payment Provider** with customizable scenarios
 - 💳 **Payment Management** with full CRUD operations
 - 🧾 **Invoice Generation** with line items and tax calculation
-- 🔄 **Automatic Status Sync** - payments and invoices stay in sync automatically
+- 🔄 **One-Way Status Updates** - successful payments mark linked invoices as paid; changing an invoice does not update its payment
 - 🔗 **Bidirectional Relationships** - payment/invoice links maintained by plugin hooks
 - 🎨 **Custom Payment UI** with modern design
 - 📄 **Invoice View Page** - professional printable invoice layout

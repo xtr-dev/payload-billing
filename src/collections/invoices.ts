@@ -351,6 +351,33 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
       ] satisfies CollectionAfterChangeHook<Invoice>[],
       beforeChange: [
         async ({ data, operation, req, originalDoc }) => {
+          const logger = createContextLogger(req.payload, 'Invoices Collection')
+
+          // Validate that paid invoice transition has a settled linked payment
+          const statusChangingToPaid = data.status === 'paid' && (operation === 'create' || !originalDoc || originalDoc.status !== 'paid')
+          if (statusChangingToPaid) {
+            const paymentId = data.payment || (originalDoc && originalDoc.payment)
+            if (paymentId) {
+              try {
+                const linkedPayment = await req.payload.findByID({
+                  collection: paymentsSlug as CollectionSlug,
+                  id: typeof paymentId === 'object' ? paymentId.id : paymentId,
+                })
+
+                const settledStatuses = ['paid', 'succeeded']
+                if (!settledStatuses.includes(linkedPayment.status)) {
+                  throw new Error(`Cannot mark invoice as paid when linked payment status is '${linkedPayment.status}'`)
+                }
+              } catch (error) {
+                if (error instanceof Error && error.message.includes('Cannot mark invoice')) {
+                  throw error
+                }
+                logger.error(`Failed to validate linked payment: ${String(error)}`)
+                throw new Error('Failed to validate linked payment status')
+              }
+            }
+          }
+
           // Sync customer info from relationship if extractor is provided
           if (customerRelationSlug && customerInfoExtractor && data.customer) {
             // Check if customer changed or this is a new invoice
@@ -381,8 +408,8 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
                   data.billingAddress = extractedInfo.billingAddress
                 }
               } catch (error) {
-                const logger = createContextLogger(req.payload, 'Invoices Collection')
-                logger.error(`Failed to extract customer info: ${String(error)}`)
+                const errorLogger = createContextLogger(req.payload, 'Invoices Collection')
+                errorLogger.error(`Failed to extract customer info: ${String(error)}`)
                 throw new Error('Failed to extract customer information')
               }
             }

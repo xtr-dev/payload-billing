@@ -90,7 +90,7 @@ describe('billing plugin integration', () => {
     ).rejects.toThrow(/not found/i)
   })
 
-  test.each(['pending', 'failed'] as const)('marking an invoice paid does not overwrite a linked %s payment', async (status) => {
+  test.each(['pending', 'failed'] as const)('marking an invoice paid is rejected when linked payment is %s', async (status) => {
     const payment = await payload.create({
       collection: 'payments',
       data: {
@@ -130,11 +130,13 @@ describe('billing plugin integration', () => {
       } as any,
     })
 
-    await payload.update({
-      collection: 'invoices',
-      id: invoice.id,
-      data: { status: 'paid' },
-    })
+    await expect(
+      payload.update({
+        collection: 'invoices',
+        id: invoice.id,
+        data: { status: 'paid' },
+      })
+    ).rejects.toThrow(/Cannot mark invoice as paid when linked payment status/)
 
     const linkedPayment = await payload.findByID({
       collection: 'payments',

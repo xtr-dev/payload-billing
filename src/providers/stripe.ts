@@ -50,24 +50,27 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
               const payload = req.payload
               const stripe = singleton.get(payload)
 
-              // Get the raw body for signature verification
-              let body: string
-              try {
-                if (!req.text) {
-                  return webhookResponses.missingBody()
-                }
-                body = await req.text()
-                if (!body) {
-                  return webhookResponses.missingBody()
-                }
-              } catch (error) {
-                return handleWebhookError('Stripe', error, 'Failed to read request body', req.payload)
-              }
-
+              // Check the signature header before touching the body: an absent
+              // signature must be refused with 4xx regardless of what the body
+              // contains, so this has to happen before any body-related early return.
               const signature = req.headers.get('stripe-signature')
 
               if (!signature) {
                 return webhookResponses.error('Missing webhook signature', 400, req.payload)
+              }
+
+              // Get the raw body for signature verification
+              let body: string
+              try {
+                if (!req.text) {
+                  return webhookResponses.error('Missing webhook body', 400, req.payload)
+                }
+                body = await req.text()
+                if (!body) {
+                  return webhookResponses.error('Missing webhook body', 400, req.payload)
+                }
+              } catch (error) {
+                return handleWebhookError('Stripe', error, 'Failed to read request body', req.payload)
               }
 
               // webhookSecret is guaranteed to exist since we only register this endpoint when it's configured
@@ -76,8 +79,8 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
               let event: Stripe.Event
               try {
                 event = stripe.webhooks.constructEvent(body, signature, stripeConfig.webhookSecret!)
-              } catch (err) {
-                return handleWebhookError('Stripe', err, 'Signature verification failed', req.payload)
+              } catch {
+                return webhookResponses.error('Invalid webhook signature', 400, req.payload)
               }
 
               // Handle different event types

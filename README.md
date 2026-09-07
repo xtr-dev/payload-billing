@@ -218,13 +218,15 @@ testProvider({
 
 **Default Scenarios:**
 
+`outcome` is `PaymentScenario.outcome` (`paid`, `failed`, `cancelled`, `expired`, `pending`), not `Payment.status`.
+
 | Scenario | Outcome | Delay |
 |----------|---------|-------|
-| Instant Success | `succeeded` | 0ms |
-| Delayed Success | `succeeded` | 3000ms |
-| Cancelled Payment | `canceled` | 1000ms |
+| Instant Success | `paid` | 0ms |
+| Delayed Success | `paid` | 3000ms |
+| Cancelled Payment | `cancelled` | 1000ms |
 | Declined Payment | `failed` | 2000ms |
-| Expired Payment | `canceled` | 5000ms |
+| Expired Payment | `expired` | 5000ms |
 | Pending Payment | `pending` | 1500ms |
 
 **Custom Scenarios:**

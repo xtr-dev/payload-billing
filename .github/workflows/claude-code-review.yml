@@ -2,74 +2,81 @@ name: Claude Code Review
 
 on:
   pull_request:
-    types: [opened, synchronize]
-    # Optional: Only run on specific file changes
-    # paths:
-    #   - "src/**/*.ts"
-    #   - "src/**/*.tsx"
-    #   - "src/**/*.js"
-    #   - "src/**/*.jsx"
+    types: [opened, synchronize, ready_for_review]
+
+# A new push supersedes the review that is still running for the previous head.
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 jobs:
   claude-review:
-    # Only allow bvdaakster to trigger reviews
-    if: github.event.pull_request.user.login == 'bvdaakster'
-    
+    # Only review PRs opened by the maintainers, and never drafts. The gate used
+    # to name bvdaakster alone, which silently skipped every PR authored by
+    # xtr-bas - i.e. most of them.
+    if: |
+      github.event.pull_request.draft == false &&
+      contains(fromJSON('["bvdaakster", "xtr-bas"]'), github.event.pull_request.user.login)
+
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: read
-      issues: read
+      pull-requests: write
+      issues: write
       id-token: write
-    
+      actions: read # Lets Claude read CI results on the PR
+
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 1
 
+      # Without pnpm and node_modules on the runner, the lint/typecheck/test
+      # tools below cannot run and the review is limited to reading the diff.
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
       - name: Run Claude Code Review
         id: claude-review
-        uses: anthropics/claude-code-action@beta
+        uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
-          # Optional: Specify model (defaults to Claude Sonnet 4, uncomment for Claude Opus 4.1)
-          # model: "claude-opus-4-1-20250805"
+          # Providing `prompt` puts the action in automation mode, so no
+          # @claude mention is needed. track_progress posts a tracking comment
+          # that is updated as the review runs.
+          track_progress: true
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
 
-          # Direct prompt for automated review (no @claude mention needed)
-          direct_prompt: |
-            Please review this pull request and provide feedback on:
+            Review this pull request and provide feedback on:
             - Code quality and best practices
             - Potential bugs or issues
             - Performance considerations
-            - Security concerns
+            - Security concerns, especially around payment provider integrations
+              and webhook handling
             - Test coverage
-            
+            - Whether the public API in src/index.ts and src/exports/* stays
+              backwards compatible
+            - Whether package.json has a version bump, which PR Version Check
+              requires for every PR to main
+
+            Dependencies are already installed, so you can run pnpm typecheck,
+            pnpm lint and pnpm test to check the branch. Do not run pnpm
+            test:int - it runs vitest in watch mode and hangs in CI.
+
             Be constructive and helpful in your feedback.
 
-          # Optional: Use sticky comments to make Claude reuse the same comment on subsequent pushes to the same PR
-          # use_sticky_comment: true
-          
-          # Optional: Customize review based on file types
-          # direct_prompt: |
-          #   Review this PR focusing on:
-          #   - For TypeScript files: Type safety and proper interface usage
-          #   - For API endpoints: Security, input validation, and error handling
-          #   - For React components: Performance, accessibility, and best practices
-          #   - For tests: Coverage, edge cases, and test quality
-          
-          # Optional: Different prompts for different authors
-          # direct_prompt: |
-          #   ${{ github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR' && 
-          #   'Welcome! Please review this PR from a first-time contributor. Be encouraging and provide detailed explanations for any suggestions.' ||
-          #   'Please provide a thorough code review focusing on our coding standards and best practices.' }}
-          
-          # Optional: Add specific tools for running tests or linting
-          # allowed_tools: "Bash(npm run test),Bash(npm run lint),Bash(npm run typecheck)"
-          
-          # Optional: Skip review for certain conditions
-          # if: |
-          #   !contains(github.event.pull_request.title, '[skip-review]') &&
-          #   !contains(github.event.pull_request.title, '[WIP]')
-
+          claude_args: |
+            --allowedTools "Bash(pnpm lint),Bash(pnpm typecheck),Bash(pnpm test),Bash(pnpm build)"

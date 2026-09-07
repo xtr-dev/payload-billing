@@ -302,7 +302,10 @@ describe('/payload-billing/test/status/:id and /payload-billing/test/payment/:id
 
     expect(response.status).toBe(200)
     expect(response.headers.get('Content-Type')).toBe('text/html')
-    expect(html).toContain(`paymentId: '${payment.providerId}'`)
+    // generateTestPaymentUI serializes session.id through jsString (JSON.stringify),
+    // so the inline script uses double quotes. The sibling escape spec already pins
+    // this form; a single-quoted literal here would fail against the current HTML.
+    expect(html).toContain(`paymentId: "${payment.providerId}"`)
     expect(html).not.toContain(`${payment.providerId}?foo=bar`)
   })
 })

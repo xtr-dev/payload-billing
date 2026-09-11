@@ -897,7 +897,7 @@ const campaignPayments = await payload.find({
 
 **Events Handled:**
 - `payment_intent.succeeded` → Updates payment status to `succeeded`
-- `payment_intent.failed` → Updates payment status to `failed`
+- `payment_intent.payment_failed` → Updates payment status to `failed`
 - `payment_intent.canceled` → Updates payment status to `canceled`
 - `charge.refunded` → Updates payment status to `refunded` or `partially_refunded`
 

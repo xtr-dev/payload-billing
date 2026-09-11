@@ -69,8 +69,9 @@ jobs:
             - Test coverage
             - Whether the public API in src/index.ts and src/exports/* stays
               backwards compatible
-            - Whether package.json has a version bump, which PR Version Check
-              requires for every PR to main
+            - Whether the version in package.json changes only when the PR is
+              a deliberate release; a PR that leaves it alone passes Version
+              Check, so an unexplained bump is a problem, not a requirement
 
             Dependencies are already installed, so you can run pnpm typecheck,
             pnpm lint and pnpm test to check the branch. Do not run pnpm

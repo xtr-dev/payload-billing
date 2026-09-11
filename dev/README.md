@@ -333,7 +333,7 @@ Response:
     "providerId": "test_pay_1234567890_abc123",
     "amount": 2500,
     "currency": "USD",
-    "status": "paid",
+    "status": "succeeded",
     "description": "Demo payment",
     "invoice": "invoice-id-here",
     "metadata": {

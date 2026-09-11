@@ -11,10 +11,10 @@ export function getPluginLogger(payload: Payload) {
   if (!pluginLogger && payload.logger) {
     const logLevel = process.env.PAYLOAD_BILLING_LOG_LEVEL || 'info'
 
-    pluginLogger = payload.logger.child({
-      level: logLevel,
-      plugin: '@xtr-dev/payload-billing'
-    })
+    pluginLogger = payload.logger.child(
+      { plugin: '@xtr-dev/payload-billing' },
+      { level: logLevel }
+    )
 
     // Log the configured log level on first initialization
     pluginLogger.info(`Logger initialized with level: ${logLevel}`)

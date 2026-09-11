@@ -362,7 +362,7 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
               }) as any
 
               // Only update if payment is not already in a successful state
-              if (payment && !['paid', 'succeeded'].includes(payment.status)) {
+              if (payment && payment.status !== 'succeeded') {
                 logger.info(`Invoice ${doc.id} marked as paid, updating payment ${paymentId}`)
 
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any

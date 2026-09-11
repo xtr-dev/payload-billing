@@ -1,6 +1,8 @@
 import type { Payload } from 'payload'
 
-import config from '@payload-config'
+import { rm } from 'fs/promises'
+
+import config, { vitestSqlitePath } from '@payload-config'
 import { getPayload } from 'payload'
 import { afterAll, beforeAll, describe, expect, test } from 'vitest'
 
@@ -15,6 +17,11 @@ beforeAll(async () => {
 afterAll(async () => {
   // payload@3.37 has no payload.destroy(); closing the db adapter is what releases the process
   await payload.db.destroy?.()
+  // The config gives every vitest process its own throwaway sqlite (@see vitestSqlitePath);
+  // remove it (plus any wal/shm a crashed worker left) so runs do not accumulate temp files
+  await rm(`${vitestSqlitePath()}`, { force: true })
+  await rm(`${vitestSqlitePath()}-wal`, { force: true })
+  await rm(`${vitestSqlitePath()}-shm`, { force: true })
 })
 
 describe('billing plugin integration', () => {

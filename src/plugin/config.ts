@@ -51,10 +51,6 @@ export type CollectionExtension =
 
 // Plugin configuration
 export interface BillingPluginConfig {
-  admin?: {
-    customComponents?: boolean
-    dashboard?: boolean
-  }
   collections?: {
     invoices?: CollectionExtension
     payments?: CollectionExtension

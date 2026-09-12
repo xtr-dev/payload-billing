@@ -484,14 +484,14 @@ Generate and manage invoices with line items and customer information.
   id: string | number
   number: string                        // Auto-generated (INV-<unix-ms-timestamp>, e.g. INV-1755289904123)
   customer?: string                     // Customer relationship (if configured)
-  customerInfo: {
+  customerInfo?: {
     name: string
     email: string
     phone?: string
     company?: string
     taxId?: string
   }
-  billingAddress: {
+  billingAddress?: {
     line1: string
     line2?: string
     city: string

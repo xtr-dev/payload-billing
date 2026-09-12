@@ -12,6 +12,7 @@ import { defaults } from '../plugin/config'
 import { extractSlug } from '../plugin/utils'
 import { generateInvoiceNumber } from '../utils/invoiceNumber'
 import { createContextLogger } from '../utils/logger'
+import { isValidCurrencyCode } from '../providers/currency'
 import type { Invoice } from '../plugin/types/index'
 
 export function createInvoicesCollection(pluginConfig: BillingPluginConfig): CollectionConfig {
@@ -435,11 +436,11 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
               data.number = generateInvoiceNumber()
             }
 
-            // Validate currency format
+            // Normalize and validate the ISO 4217 currency code
             if (data.currency) {
               data.currency = data.currency.toUpperCase()
-              if (!/^[A-Z]{3}$/.test(data.currency)) {
-                throw new Error('Currency must be a 3-letter ISO code')
+              if (!isValidCurrencyCode(data.currency)) {
+                throw new Error('Currency must be a valid ISO 4217 code')
               }
             }
 

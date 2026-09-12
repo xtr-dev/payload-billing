@@ -223,6 +223,10 @@ export const testProvider = (testConfig: TestProviderConfig) => {
     return
   }
 
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('testProvider cannot be enabled when NODE_ENV is production: it issues fake successful payments with no money moving. Remove testProvider({ enabled: true }) from production configuration.')
+  }
+
   const scenarios = testConfig.scenarios || DEFAULT_SCENARIOS
   const baseUrl = testConfig.baseUrl || process.env.NEXT_PUBLIC_SERVER_URL || process.env.PAYLOAD_PUBLIC_SERVER_URL || process.env.SERVER_URL || 'http://localhost:3000'
   const uiRoute = testConfig.customUiRoute || '/test-payment'

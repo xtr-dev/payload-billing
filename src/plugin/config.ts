@@ -9,16 +9,6 @@ export const defaults = {
   customerRelationSlug: 'customer'
 }
 
-// Provider configurations
-
-export interface TestProviderConfig {
-  autoComplete?: boolean
-  defaultDelay?: number
-  enabled: boolean
-  failureRate?: number
-  simulateFailures?: boolean
-}
-
 // Re-export the actual test provider config instead of duplicating
 export type { TestProviderConfig as AdvancedTestProviderConfig } from '../providers/test'
 
@@ -65,4 +55,3 @@ export interface BillingPluginConfig {
   disabled?: boolean
   providers?: (PaymentProvider | undefined | null)[]
 }
-

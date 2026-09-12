@@ -361,8 +361,15 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
                 id: paymentId,
               }) as any
 
-              // Only update if payment is not already in a successful state
-              if (payment && !['paid', 'succeeded'].includes(payment.status)) {
+              // Do not overwrite a provider-reported terminal payment status.
+              const terminalPaymentStatuses = [
+                'succeeded',
+                'failed',
+                'canceled',
+                'refunded',
+                'partially_refunded',
+              ]
+              if (payment && !terminalPaymentStatuses.includes(payment.status)) {
                 logger.info(`Invoice ${doc.id} marked as paid, updating payment ${paymentId}`)
 
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any

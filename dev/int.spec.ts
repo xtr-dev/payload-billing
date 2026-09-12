@@ -96,4 +96,50 @@ describe('billing plugin integration', () => {
       }),
     ).rejects.toThrow(/not found/i)
   })
+
+  test('links a payment back to an invoice created with payment set', async () => {
+    const payment = await payload.create({
+      collection: 'payments',
+      data: {
+        provider: 'test',
+        amount: 1000,
+        currency: 'EUR',
+      } as any,
+    })
+
+    const invoice = await payload.create({
+      collection: 'invoices',
+      data: {
+        customerInfo: {
+          name: 'Invoice payment link customer',
+          email: 'invoice-payment-link@example.com',
+        },
+        billingAddress: {
+          line1: '1 Example Street',
+          city: 'Example City',
+          postalCode: '1234AB',
+          country: 'NL',
+        },
+        items: [
+          {
+            description: 'Invoice payment link item',
+            quantity: 1,
+            unitAmount: 1000,
+          },
+        ],
+        payment: payment.id,
+      } as any,
+    })
+
+    const linkedPayment = await payload.findByID({
+      collection: 'payments',
+      id: payment.id,
+    })
+
+    expect(
+      linkedPayment.invoice && typeof linkedPayment.invoice === 'object'
+        ? linkedPayment.invoice.id
+        : linkedPayment.invoice,
+    ).toBe(invoice.id)
+  })
 })

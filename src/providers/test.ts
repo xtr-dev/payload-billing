@@ -504,7 +504,7 @@ export const testProvider = (testConfig: TestProviderConfig) => {
               try {
                 const paymentSlug = extractSlug(pluginConfig.collections?.payments, defaults.paymentsCollection)
                 const result = await req.payload.find({
-                  collection: paymentSlug,
+                  collection: paymentSlug as CollectionSlug,
                   where: {
                     providerId: {
                       equals: paymentId

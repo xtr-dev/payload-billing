@@ -21,7 +21,8 @@
     ],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@payload-config": ["./dev/payload.config.ts"]
     },
     "declaration": true,
     "outDir": "./dist"

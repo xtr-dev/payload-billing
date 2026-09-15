@@ -92,8 +92,8 @@ jobs:
       - name: Run tests
         run: pnpm test
 
-      - name: Run build
-        run: pnpm build
+      - name: Verify packed exports
+        run: pnpm test:pack
 
       - name: Abort if tag already exists
         if: steps.decide.outputs.publish == 'true'

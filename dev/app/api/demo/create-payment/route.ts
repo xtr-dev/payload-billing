@@ -54,6 +54,7 @@ export async function POST(request: Request) {
       // for create operations, but the generated create type still marks the
       // required field as required upfront - same as dev/seed.ts.
       data: {
+        number: `INV-${Date.now()}`, // Matches the fallback format the invoices collection's beforeChange hook generates
         payment: payment.id, // Link to the payment
         customerInfo: {
           name: customerName,

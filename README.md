@@ -549,8 +549,8 @@ Track refunds associated with payments.
 ```typescript
 {
   id: string | number
+  providerId: string                    // Required, unique provider refund ID
   payment: Payment | string             // Required: linked payment
-  providerId?: string                   // Provider's refund ID
   amount: number                        // Refund amount in cents
   currency: string                      // ISO 4217 currency code
   status: 'pending' | 'processing' | 'succeeded' | 'failed' | 'canceled'
@@ -769,6 +769,7 @@ await payload.update({
 const refund = await payload.create({
   collection: 'refunds',
   data: {
+    providerId: 're_provider_refund_id',
     payment: payment.id,
     amount: payment.amount,      // Full amount
     currency: payment.currency,
@@ -783,6 +784,7 @@ const refund = await payload.create({
 const partialRefund = await payload.create({
   collection: 'refunds',
   data: {
+    providerId: 're_provider_partial_refund_id',
     payment: payment.id,
     amount: 1000,               // Partial amount ($10.00)
     currency: payment.currency,

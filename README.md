@@ -1035,6 +1035,7 @@ type ProviderData<T = any> = {
 Full TypeScript support with comprehensive type definitions:
 
 ```typescript
+import type { Payload } from 'payload'
 import type {
   // Main types
   Payment,
@@ -1082,7 +1083,7 @@ const createPayment = async (
       currency,
       status: 'pending' as PaymentStatus
     }
-  })
+  }) as Payment
 }
 ```
 

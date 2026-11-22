@@ -46,6 +46,8 @@ export async function sumRefunds(
   excludeRefundId?: Refund['id'],
 ): Promise<number> {
   const refundsSlug = extractSlug(pluginConfig.collections?.refunds, defaults.refundsCollection)
+  // Reads at most 1000 refunds of one payment. A payment with more than that would be under-counted
+  // (and could be over-refunded), which is far beyond any realistic number of refunds per payment.
   const result = await payload.find({
     collection: refundsSlug,
     depth: 0,

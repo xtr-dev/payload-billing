@@ -550,7 +550,9 @@ Track refunds associated with payments.
 {
   id: string | number
   payment: Payment | string             // Required: linked payment
-  providerId?: string                   // Provider's refund ID
+  providerId?: string                   // Provider's refund ID (set when the provider accepts the refund)
+  idempotencyKey?: string               // Generated; sent to the provider so retries never pay out twice
+  failureReason?: string                // Why the provider failed/canceled the refund
   amount: number                        // Refund amount in cents
   currency: string                      // ISO 4217 currency code
   status: 'pending' | 'processing' | 'succeeded' | 'failed' | 'canceled'
@@ -568,6 +570,7 @@ Track refunds associated with payments.
   - Full refund: payment status → `refunded`
   - Partial refund: payment status → `partially_refunded`
 - Refunds tracked in payment's `refunds` array
+- A refund created without a `providerId` is **sent to the provider** (Mollie and the test provider; see [Issuing a Refund](#issuing-a-refund))
 
 ## Payment Flows
 
@@ -762,7 +765,82 @@ await payload.update({
 })
 ```
 
-### Creating a Refund
+### Issuing a Refund
+
+`refundPayment` makes the payment's provider carry out a refund (Mollie:
+`POST /v2/payments/{id}/refunds`):
+
+```typescript
+import { refundPayment } from '@xtr-dev/payload-billing'
+
+const refund = await refundPayment(payload, {
+  paymentId: payment.id,          // our payment id
+  amount: 1000,                   // cents; omit to refund what is still refundable
+  description: 'Event sold out',
+  reason: 'other',
+  idempotencyKey: `order-${order.id}-sold-out`, // optional but recommended
+})
+refund.providerId  // 're_…' from Mollie
+refund.status      // 'processing' until Mollie settles it, then 'succeeded' | 'failed'
+```
+
+- **Reserve, verify, send:** `refundPayment` first creates the refund document (a committed
+  *reservation*), then re-checks it against every other pending, processing or succeeded refund of
+  the payment, and only then calls the provider. A refund that would exceed the payment is marked
+  `failed` (`onRefundFailed` fires) and the provider is never called. Of two concurrent refunds
+  that together exceed the payment at least one always fails; in a true tie both fail, so retry
+  one. This needs no database transactions or locks, but it does need a committed write to be visible
+  to the next read: true for a single primary at read-committed or stronger, **not** for lagging
+  read replicas or Mongo reads from secondaries. If your Payload reads go to a replica, two
+  concurrent refunds can both pass verification; point Payload at the primary. The tests only cover
+  single-connection SQLite. Creating a `pending` refund document by hand **only reserves it**: send it with
+  `processRefund(payload, refund.id)` or let `processPendingRefunds` pick it up.
+- **Validation:** the payment must be `succeeded` / `partially_refunded`, and the amount may not
+  exceed what is left after pending, processing and succeeded refunds.
+- **Status:** Mollie's `queued`/`pending`/`processing` map to `processing`, `refunded` to
+  `succeeded`. Mollie calls the payment webhook when a refund changes, and the plugin syncs the
+  payment's refunds from it (refunds made in the Mollie dashboard are recorded too). Statuses only
+  move forward, so a late webhook can't undo a later state. Without webhooks, poll with
+  `syncOpenRefunds(payload)`.
+- **Payment status:** follows the succeeded refunds (`partially_refunded` / `refunded`). Mollie keeps
+  reporting such a payment as `paid`; the webhook no longer resets it to `succeeded`.
+- **Idempotency:** every refund has an `idempotencyKey` (yours, or generated) that is sent to
+  Mollie as `Idempotency-Key` and stored in the refund's metadata, and `refundPayment` with a key
+  you've used returns the existing refund. A webhook + sweep retry can't pay out twice.
+- **Provider errors:** a 4xx rejection stores the refund as `failed` with `failureReason`; a network
+  or 5xx error leaves it `pending` for `processPendingRefunds(payload)` (run it from a cron/job).
+
+**Access:** by default any authenticated user can create refunds, which now means reserving real
+payouts (or, with a `providerId`, marking a refund `succeeded`). Restrict the refunds collection
+with `collections.refunds.extend` (e.g. `access.create` limited to staff).
+
+**Hooks** (e.g. to email the buyer and alert staff). They run once per status transition, and an
+error thrown in one is logged, never rolls the refund back:
+
+```typescript
+billingPlugin({
+  hooks: {
+    onRefundSucceeded: async ({ refund, payment, payload }) => { /* email the buyer */ },
+    onRefundFailed: async ({ refund, payment, payload }) => { /* alert staff: refund.failureReason */ },
+    onRefundStatusChange: async ({ refund, previousStatus }) => {},
+  },
+})
+```
+
+`refund.metadata` is yours to fill (e.g. the line items refunded, for partial refunds) and is
+available in every hook.
+
+**Test provider:** pick the outcome per refund with `metadata: { testScenario }`:
+`refund-success` (default), `refund-processing` (settle it with
+`POST /api/payload-billing/test/refund` `{ refundId, outcome: 'succeeded' | 'failed' }`),
+`refund-failed` (provider reports it failed) and `refund-rejected` (provider rejects the request).
+
+Providers implement this with the optional `refundPayment` and `fetchRefunds` members of
+`PaymentProvider`. Stripe does not issue refunds yet: record those with a `providerId` as below.
+
+### Recording a Refund
+
+A refund that already has a `providerId` is only recorded, not sent to the provider:
 
 ```typescript
 // Full refund
@@ -772,6 +850,7 @@ const refund = await payload.create({
     payment: payment.id,
     amount: payment.amount,      // Full amount
     currency: payment.currency,
+    providerId: 're_from_provider',
     status: 'succeeded',
     reason: 'requested_by_customer',
     description: 'Customer cancelled order'
@@ -786,6 +865,7 @@ const partialRefund = await payload.create({
     payment: payment.id,
     amount: 1000,               // Partial amount ($10.00)
     currency: payment.currency,
+    providerId: 're_other_provider_id',
     status: 'succeeded',
     reason: 'requested_by_customer',
     description: 'Partial refund for damaged item'

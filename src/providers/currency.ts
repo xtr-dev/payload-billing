@@ -112,3 +112,13 @@ export function isValidCurrencyCode(currency: string): boolean {
 export function isValidAmount(amount: number): boolean {
   return Number.isInteger(amount) && amount >= 0 && amount <= 99999999999 // Max ~999 million in major units
 }
+
+/**
+ * Inverse of {@link formatAmountForProvider}: "12.50" EUR -> 1250.
+ * @param value - Decimal amount string as returned by the provider
+ * @param currency - ISO 4217 currency code
+ */
+export function parseAmountFromProvider(value: string, currency: string): number {
+  const factor = 10 ** getCurrencyDecimals(currency)
+  return Math.round(parseFloat(value) * factor)
+}

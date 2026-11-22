@@ -4,6 +4,7 @@
 // retries idempotent and fires the onRefund* hooks once per transition.
 import type { Payload } from 'payload'
 
+import { randomUUID } from 'node:crypto'
 import { rm } from 'fs/promises'
 
 import config, { vitestSqlitePath } from '@payload-config'
@@ -12,7 +13,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'vitest'
 
 import type { Payment, Refund } from '../src/index'
 
-import { processPendingRefunds, refundPayment } from '../src/index'
+import { processPendingRefunds, processRefund, refundPayment } from '../src/index'
 import { useBillingPlugin } from '../src/plugin/index'
 import { testProvider } from '../src/providers/test'
 
@@ -57,16 +58,20 @@ const reload = async (id: Payment['id']) =>
   (await payload.findByID({ id, collection: 'payments', depth: 0 })) as unknown as Payment
 
 describe('refunding through the provider', () => {
-  test('creating a pending refund sends it to the provider and stores its id', async () => {
+  test('creating a pending refund only reserves it; processRefund sends it and stores the provider id', async () => {
     const payment = await paidPayment()
-    const refund = (await payload.create({
+    const reserved = (await payload.create({
       collection: 'refunds',
       data: { amount: 5000, currency: 'EUR', payment: payment.id, status: 'pending' } as any,
     })) as unknown as Refund
+    expect(reserved.status).toBe('pending')
+    expect(reserved.providerId).toBeFalsy()
+    expect(reserved.idempotencyKey).toBeTruthy()
+    expect((await reload(payment.id)).status).toBe('succeeded')
 
+    const refund = await processRefund(payload, reserved.id)
     expect(refund.providerId).toMatch(/^test_re_/)
     expect(refund.status).toBe('succeeded')
-    expect(refund.idempotencyKey).toBeTruthy()
     expect((await reload(payment.id)).status).toBe('refunded')
   })
 
@@ -105,7 +110,7 @@ describe('refunding through the provider', () => {
     expect(refund.status).toBe('failed')
     expect(refund.failureReason).toMatch(/failed/)
     expect((await reload(payment.id)).status).toBe('succeeded')
-    expect(events).toEqual(['change:null>failed', `failed:${refund.id}`])
+    expect(events).toEqual(['change:null>pending', 'change:pending>failed', `failed:${refund.id}`])
 
     // a failed refund no longer reserves the amount: the money can be refunded again
     const again = await refundPayment(payload, { paymentId: payment.id })
@@ -131,7 +136,7 @@ describe('refunding through the provider', () => {
     })
     expect(refund.status).toBe('processing')
     expect((await reload(payment.id)).status).toBe('succeeded')
-    expect(events).toEqual(['change:null>processing'])
+    expect(events).toEqual(['change:null>pending', 'change:pending>processing'])
 
     const pluginConfig = useBillingPlugin(payload)!.config
     const endpoints: any = { endpoints: [] }
@@ -147,7 +152,12 @@ describe('refunding through the provider', () => {
     await call('failed')
     const settled = (await payload.findByID({ id: refund.id, collection: 'refunds' })) as unknown as Refund
     expect(settled.status).toBe('succeeded')
-    expect(events).toEqual(['change:null>processing', 'change:processing>succeeded', `succeeded:${refund.id}`])
+    expect(events).toEqual([
+      'change:null>pending',
+      'change:pending>processing',
+      'change:processing>succeeded',
+      `succeeded:${refund.id}`,
+    ])
   })
 
   test('retrying with the same idempotency key returns the first refund and pays out once', async () => {
@@ -176,23 +186,80 @@ describe('refunding through the provider', () => {
     ).rejects.toThrow(/different refund/)
   })
 
-  test('the sweep retries a refund left pending by a transient error without double paying', async () => {
+  test('the sweep sends reserved refunds, and a second sweep does not pay them again', async () => {
     const payment = await paidPayment()
-    // A pending refund with no provider refund, as left behind when the provider was unreachable.
-    // Created with a providerId-less, non-pending-status trick is not possible, so simulate by
-    // creating it as `canceled` (recorded, not sent) and flipping it back to pending.
-    const stuck = (await payload.create({
+    const reserved = (await payload.create({
       collection: 'refunds',
-      data: { amount: 5000, currency: 'EUR', payment: payment.id, status: 'canceled' } as any,
+      data: { amount: 5000, currency: 'EUR', payment: payment.id, status: 'pending' } as any,
     })) as unknown as Refund
-    expect(stuck.providerId).toBeFalsy()
-    await payload.update({ id: stuck.id, collection: 'refunds', data: { status: 'pending' } as any })
+    expect(reserved.providerId).toBeFalsy()
 
     const first = await processPendingRefunds(payload)
     const second = await processPendingRefunds(payload)
-    expect(first.map((r) => r.id)).toContain(stuck.id)
-    expect(first.find((r) => r.id === stuck.id)!.status).toBe('succeeded')
-    expect(second.map((r) => r.id)).not.toContain(stuck.id)
+    expect(first.find((r) => r.id === reserved.id)!.status).toBe('succeeded')
+    expect(second.map((r) => r.id)).not.toContain(reserved.id)
+  })
+
+  describe('over-refund protection (reserve, verify, send)', () => {
+    // A reservation inserted at the adapter level, skipping the collection's early check: what a
+    // concurrent request looks like, which passed that check before the other refund was written.
+    const forceReservation = async (paymentId: Payment['id'], amount: number) =>
+      (await payload.db.create({
+        collection: 'refunds',
+        data: { amount, currency: 'EUR', idempotencyKey: randomUUID(), payment: paymentId, status: 'pending' },
+      })) as unknown as Refund
+
+    test('a refund that exceeds what other refunds took is failed without calling the provider', async () => {
+      const payment = await paidPayment(5000)
+      const winner = await refundPayment(payload, { amount: 4000, paymentId: payment.id })
+      expect(winner.status).toBe('succeeded')
+
+      const loser = await forceReservation(payment.id, 4000)
+      const result = await processRefund(payload, loser.id)
+
+      expect(result.status).toBe('failed')
+      expect(result.providerId).toBeFalsy()
+      expect(result.failureReason).toMatch(/Exceeds the refundable amount/)
+      expect(events).toContain(`failed:${loser.id}`)
+      expect((await reload(payment.id)).status).toBe('partially_refunded')
+    })
+
+    test('two reservations that together exceed the payment never both reach the provider', async () => {
+      const payment = await paidPayment(5000)
+      const a = await forceReservation(payment.id, 4000)
+      const b = await forceReservation(payment.id, 4000)
+
+      const results = await Promise.all([processRefund(payload, a.id), processRefund(payload, b.id)])
+
+      const sent = results.filter((r) => r.providerId)
+      expect(sent.length).toBeLessThanOrEqual(1)
+      // at most one can pay out; failing both is the safe outcome of a true tie
+      const refunded = await payload.find({
+        collection: 'refunds',
+        where: { and: [{ payment: { equals: payment.id } }, { status: { equals: 'succeeded' } }] },
+      })
+      const total = (refunded.docs as unknown as Refund[]).reduce((sum, r) => sum + r.amount, 0)
+      expect(total).toBeLessThanOrEqual(5000)
+    })
+
+    test('concurrent refundPayment calls with different keys never refund more than the payment', async () => {
+      const payment = await paidPayment(5000)
+      const settled = await Promise.allSettled(
+        Array.from({ length: 6 }, (_, i) =>
+          refundPayment(payload, { amount: 2000, idempotencyKey: `race-${payment.id}-${i}`, paymentId: payment.id }),
+        ),
+      )
+      const all = await payload.find({
+        collection: 'refunds',
+        pagination: false,
+        where: { payment: { equals: payment.id } },
+      })
+      const reserved = (all.docs as unknown as Refund[])
+        .filter((r) => r.status !== 'failed' && r.status !== 'canceled')
+        .reduce((sum, r) => sum + r.amount, 0)
+      expect(reserved).toBeLessThanOrEqual(5000)
+      expect(settled.some((r) => r.status === 'fulfilled')).toBe(true)
+    })
   })
 
   test('a refund recorded with its own providerId is not sent to the provider again', async () => {

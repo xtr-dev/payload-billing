@@ -40,8 +40,10 @@ function assertSameRequest(existing: Refund, args: RefundPaymentArgs): Refund {
 }
 
 /**
- * Issue a refund through the payment's provider. Creates the refund document, which makes the
- * provider carry it out: the returned refund has its provider id and `processing` /
+ * Issue a refund through the payment's provider. Reserves the refund (creates its document),
+ * checks the reservation against concurrent refunds of the payment, and only then sends it to
+ * the provider. Creating a `pending` refund document by hand only reserves it; send it with
+ * {@link processRefund} or the sweep. The returned refund has its provider id and `processing` /
  * `succeeded` / `failed` status (or `pending` if the provider could not be reached, in which
  * case {@link processPendingRefunds} retries it). Rejects when the payment is not refundable
  * or the amount exceeds what is left.
@@ -56,11 +58,12 @@ export async function refundPayment(payload: Payload, args: RefundPaymentArgs): 
 
   if (args.idempotencyKey) {
     const existing = await findByKey(args.idempotencyKey)
-    if (existing) {return assertSameRequest(existing, args)}
+    if (existing) {return core.processRefund(payload, pluginConfig, assertSameRequest(existing, args).id)}
   }
 
+  let reserved: Refund
   try {
-    return (await payload.create({
+    reserved = (await payload.create({
       collection: refundsSlug,
       data: {
         amount: args.amount,
@@ -75,9 +78,11 @@ export async function refundPayment(payload: Payload, args: RefundPaymentArgs): 
   } catch (error) {
     // Two callers with the same key raced: the unique key rejected the loser, who gets the winner's refund
     const raced = args.idempotencyKey ? await findByKey(args.idempotencyKey) : null
-    if (raced) {return assertSameRequest(raced, args)}
+    if (raced) {return core.processRefund(payload, pluginConfig, assertSameRequest(raced, args).id)}
     throw error
   }
+  // The reservation has committed; now verify it against concurrent refunds and send it
+  return core.processRefund(payload, pluginConfig, reserved.id)
 }
 
 /** Retry the provider call of one refund still `pending` (see {@link core.processRefund}). */

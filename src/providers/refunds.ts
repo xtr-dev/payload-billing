@@ -43,6 +43,7 @@ export async function sumRefunds(
   pluginConfig: BillingPluginConfig,
   id: Payment['id'],
   statuses: RefundStatus[],
+  excludeRefundId?: Refund['id'],
 ): Promise<number> {
   const refundsSlug = extractSlug(pluginConfig.collections?.refunds, defaults.refundsCollection)
   const result = await payload.find({
@@ -50,17 +51,23 @@ export async function sumRefunds(
     depth: 0,
     limit: 1000,
     pagination: false,
-    where: { and: [{ payment: { equals: id } }, { status: { in: statuses } }] },
+    where: {
+      and: [
+        { payment: { equals: id } },
+        { status: { in: statuses } },
+        ...(excludeRefundId === undefined ? [] : [{ id: { not_equals: excludeRefundId } }]),
+      ],
+    },
   })
   return (result.docs as Refund[]).reduce((sum, refund) => sum + (refund.amount || 0), 0)
 }
 
 /**
- * Throws if the refund cannot be issued: payment not refundable, wrong currency, or more
- * than what is left after the refunds already pending, processing or succeeded.
+ * Early rejection when the refund cannot be issued: payment not refundable, wrong currency, or
+ * more than what is left after the refunds already pending, processing or succeeded.
  *
- * Limitation: this is check-then-create, so two concurrent refunds with different keys can both
- * pass. Mollie rejects the second (it becomes `failed`); a provider without that guard would not.
+ * This is only a fast, friendly check and is check-then-create, so it cannot stop two concurrent
+ * refunds. That is processRefund's reserve, verify, send step, which runs before any provider call.
  */
 export async function validateRefundRequest(
   payload: Payload,
@@ -145,9 +152,18 @@ export async function submitRefundToProvider(
 }
 
 /**
- * Carry out a refund document that has no provider refund yet (the sweep for refunds left
- * `pending` by a transient error). Safe to call repeatedly and concurrently: the provider
- * dedupes on the refund's idempotency key.
+ * Carry out a reserved refund: verify it against the other reservations, then send it.
+ *
+ * Over-refund protection is reserve, verify, send. The refund document (the reservation) is
+ * already committed when this runs. It counts every other pending, processing or succeeded refund
+ * of the payment; if those plus this one exceed the payment, this refund is marked `failed` and
+ * the provider is never called. Whichever of two concurrent refunds verifies later sees the
+ * other's committed reservation, so at least one always fails; if both verify after both
+ * committed, both fail (safe, retry one). Needs only that a committed write is visible to the next
+ * read, which every database provides, not transactions or row locks.
+ *
+ * Also the sweep for refunds left `pending` by a transient error. Safe to call repeatedly and
+ * concurrently: the provider dedupes on the refund's idempotency key.
  */
 export async function processRefund(
   payload: Payload,
@@ -165,6 +181,21 @@ export async function processRefund(
     collection: paymentsSlug,
     depth: 0,
   })) as Payment
+
+  const reservedByOthers = (
+    await sumRefunds(payload, pluginConfig, payment.id, RESERVING_STATUSES, refund.id)
+  )
+  if (reservedByOthers + refund.amount > payment.amount) {
+    return (await payload.update({
+      collection: refundsSlug,
+      data: {
+        failureReason: `Exceeds the refundable amount of payment ${payment.id} (other refunds reserve ${reservedByOthers} of ${payment.amount})`,
+        status: 'failed',
+      },
+      id: toPayloadId(refund.id),
+    })) as Refund
+  }
+
   const result = await submitRefundToProvider(payload, pluginConfig, payment, refund)
   return (await payload.update({
     collection: refundsSlug,

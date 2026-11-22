@@ -4,7 +4,7 @@ import { defaults } from '../plugin/config'
 import { extractSlug } from '../plugin/utils'
 import type { Payment, Refund } from '../plugin/types/index'
 import { randomUUID } from 'node:crypto'
-import { submitRefundToProvider, updatePaymentRefundStatus, validateRefundRequest } from '../providers/refunds'
+import { updatePaymentRefundStatus, validateRefundRequest } from '../providers/refunds'
 import { createContextLogger } from '../utils/logger'
 import { isValidCurrencyCode } from '../providers/currency'
 
@@ -228,8 +228,9 @@ export function createRefundsCollection(pluginConfig: BillingPluginConfig): Coll
               }
             }
 
-            // No provider refund yet: this document is the request. Validate it and have the
-            // provider carry it out, the same way creating a payment calls initPayment.
+            // No provider refund yet: this document is a reservation. Reject what clearly cannot
+            // be refunded now; the provider is called later by processRefund (refundPayment does
+            // both), because the race-safe re-check must run after this reservation has committed.
             if (!data.providerId) {
               const payment = (await req.payload.findByID({
                 collection: paymentsSlug,
@@ -241,9 +242,6 @@ export function createRefundsCollection(pluginConfig: BillingPluginConfig): Coll
               data.currency = currency
               data.idempotencyKey = data.idempotencyKey || randomUUID()
               data.status = data.status || 'pending'
-              if (data.status === 'pending') {
-                Object.assign(data, await submitRefundToProvider(req.payload, pluginConfig, payment, data as Refund))
-              }
             }
           }
         },

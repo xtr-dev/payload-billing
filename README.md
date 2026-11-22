@@ -767,9 +767,8 @@ await payload.update({
 
 ### Issuing a Refund
 
-Creating a refund without a `providerId` makes the payment's provider carry it out
-(Mollie: `POST /v2/payments/{id}/refunds`). Use the `refundPayment` helper, or create a
-`pending` refund document yourself:
+`refundPayment` makes the payment's provider carry out a refund (Mollie:
+`POST /v2/payments/{id}/refunds`):
 
 ```typescript
 import { refundPayment } from '@xtr-dev/payload-billing'
@@ -785,6 +784,14 @@ refund.providerId  // 're_…' from Mollie
 refund.status      // 'processing' until Mollie settles it, then 'succeeded' | 'failed'
 ```
 
+- **Reserve, verify, send:** `refundPayment` first creates the refund document (a committed
+  *reservation*), then re-checks it against every other pending, processing or succeeded refund of
+  the payment, and only then calls the provider. A refund that would exceed the payment is marked
+  `failed` (`onRefundFailed` fires) and the provider is never called. Of two concurrent refunds
+  that together exceed the payment at least one always fails; in a true tie both fail, so retry
+  one. This needs no database transactions or locks, only that a committed write is visible to the
+  next read. Creating a `pending` refund document by hand **only reserves it**: send it with
+  `processRefund(payload, refund.id)` or let `processPendingRefunds` pick it up.
 - **Validation:** the payment must be `succeeded` / `partially_refunded`, and the amount may not
   exceed what is left after pending, processing and succeeded refunds.
 - **Status:** Mollie's `queued`/`pending`/`processing` map to `processing`, `refunded` to
@@ -800,11 +807,9 @@ refund.status      // 'processing' until Mollie settles it, then 'succeeded' | '
 - **Provider errors:** a 4xx rejection stores the refund as `failed` with `failureReason`; a network
   or 5xx error leaves it `pending` for `processPendingRefunds(payload)` (run it from a cron/job).
 
-**Access:** by default any authenticated user can create refunds, which now means issuing real
+**Access:** by default any authenticated user can create refunds, which now means reserving real
 payouts (or, with a `providerId`, marking a refund `succeeded`). Restrict the refunds collection
-with `collections.refunds.extend` (e.g. `access.create` limited to staff). Concurrent refunds
-with different keys are validated check-then-create, so rely on the provider's own over-refund
-guard (Mollie has one) as the final backstop.
+with `collections.refunds.extend` (e.g. `access.create` limited to staff).
 
 **Hooks** (e.g. to email the buyer and alert staff). They run once per status transition, and an
 error thrown in one is logged, never rolls the refund back:

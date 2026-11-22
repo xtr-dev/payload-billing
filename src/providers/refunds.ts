@@ -161,8 +161,10 @@ export async function submitRefundToProvider(
  * of the payment; if those plus this one exceed the payment, this refund is marked `failed` and
  * the provider is never called. Whichever of two concurrent refunds verifies later sees the
  * other's committed reservation, so at least one always fails; if both verify after both
- * committed, both fail (safe, retry one). Needs only that a committed write is visible to the next
- * read, which every database provides, not transactions or row locks.
+ * committed, both fail (safe, retry one). Needs no transactions or row locks, but does need that a
+ * committed write is visible to the next read: true for a single primary at read-committed or
+ * stronger, NOT for lagging read replicas or Mongo reads from secondaries, where two refunds can
+ * both pass verification and the over-refund race is back.
  *
  * Also the sweep for refunds left `pending` by a transient error. Safe to call repeatedly and
  * concurrently: the provider dedupes on the refund's idempotency key.

@@ -789,8 +789,11 @@ refund.status      // 'processing' until Mollie settles it, then 'succeeded' | '
   the payment, and only then calls the provider. A refund that would exceed the payment is marked
   `failed` (`onRefundFailed` fires) and the provider is never called. Of two concurrent refunds
   that together exceed the payment at least one always fails; in a true tie both fail, so retry
-  one. This needs no database transactions or locks, only that a committed write is visible to the
-  next read. Creating a `pending` refund document by hand **only reserves it**: send it with
+  one. This needs no database transactions or locks, but it does need a committed write to be visible
+  to the next read: true for a single primary at read-committed or stronger, **not** for lagging
+  read replicas or Mongo reads from secondaries. If your Payload reads go to a replica, two
+  concurrent refunds can both pass verification; point Payload at the primary. The tests only cover
+  single-connection SQLite. Creating a `pending` refund document by hand **only reserves it**: send it with
   `processRefund(payload, refund.id)` or let `processPendingRefunds` pick it up.
 - **Validation:** the payment must be `succeeded` / `partially_refunded`, and the amount may not
   exceed what is left after pending, processing and succeeded refunds.

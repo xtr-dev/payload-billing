@@ -1,5 +1,4 @@
 import type {
-  AccessArgs,
   CollectionAfterChangeHook,
   CollectionBeforeChangeHook,
   CollectionBeforeValidateHook,
@@ -9,6 +8,7 @@ import type {
 } from 'payload'
 import type { BillingPluginConfig} from '../plugin/config';
 import { defaults } from '../plugin/config'
+import { resolveAccess } from './access'
 import { extractSlug } from '../plugin/utils'
 import { generateInvoiceNumber } from '../utils/invoiceNumber'
 import { createContextLogger } from '../utils/logger'
@@ -310,12 +310,7 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
 
   const baseConfig: CollectionConfig = {
     slug: invoicesSlug,
-    access: {
-      create: ({ req: { user } }: AccessArgs) => !!user,
-      delete: ({ req: { user } }: AccessArgs) => !!user,
-      read: ({ req: { user } }: AccessArgs) => !!user,
-      update: ({ req: { user } }: AccessArgs) => !!user,
-    },
+    access: resolveAccess(pluginConfig.collections?.invoices),
     admin: {
       defaultColumns: ['number', 'customerInfo.name', 'status', 'amount', 'currency', 'dueDate'],
       group: 'Billing',

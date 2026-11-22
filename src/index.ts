@@ -2,6 +2,7 @@
 export { billingPlugin } from './plugin/index'
 export type { BillingPluginConfig, CustomerInfoExtractor, AdvancedTestProviderConfig, RefundHook, RefundHookArgs } from './plugin/config'
 export type { Invoice, Payment, Refund } from './plugin/types/index'
+export type { BillingCollectionAccess } from './collections/access'
 export type { PaymentProvider, ProviderData, InitPayment, ProviderRefund, ProviderRefundRequest } from './providers/types'
 export { refundPayment, processRefund, processPendingRefunds, syncPaymentRefunds, syncOpenRefunds } from './refunds'
 

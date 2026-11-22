@@ -1,6 +1,8 @@
 import type { Payload } from 'payload'
 
-import config from '@payload-config'
+import { rm } from 'fs/promises'
+
+import config, { vitestSqlitePath } from '@payload-config'
 import { getPayload } from 'payload'
 import { afterAll, beforeAll, describe, expect, test } from 'vitest'
 
@@ -15,6 +17,11 @@ beforeAll(async () => {
 afterAll(async () => {
   // payload@3.37 has no payload.destroy(); closing the db adapter is what releases the process
   await payload.db.destroy?.()
+  // The config gives every vitest process its own throwaway sqlite (@see vitestSqlitePath);
+  // remove it (plus any wal/shm a crashed worker left) so runs do not accumulate temp files
+  await rm(`${vitestSqlitePath()}`, { force: true })
+  await rm(`${vitestSqlitePath()}-wal`, { force: true })
+  await rm(`${vitestSqlitePath()}-shm`, { force: true })
 })
 
 describe('billing plugin integration', () => {
@@ -88,5 +95,51 @@ describe('billing plugin integration', () => {
         } as any,
       }),
     ).rejects.toThrow(/not found/i)
+  })
+
+  test('links a payment back to an invoice created with payment set', async () => {
+    const payment = await payload.create({
+      collection: 'payments',
+      data: {
+        provider: 'test',
+        amount: 1000,
+        currency: 'EUR',
+      } as any,
+    })
+
+    const invoice = await payload.create({
+      collection: 'invoices',
+      data: {
+        customerInfo: {
+          name: 'Invoice payment link customer',
+          email: 'invoice-payment-link@example.com',
+        },
+        billingAddress: {
+          line1: '1 Example Street',
+          city: 'Example City',
+          postalCode: '1234AB',
+          country: 'NL',
+        },
+        items: [
+          {
+            description: 'Invoice payment link item',
+            quantity: 1,
+            unitAmount: 1000,
+          },
+        ],
+        payment: payment.id,
+      } as any,
+    })
+
+    const linkedPayment = await payload.findByID({
+      collection: 'payments',
+      id: payment.id,
+    })
+
+    expect(
+      linkedPayment.invoice && typeof linkedPayment.invoice === 'object'
+        ? linkedPayment.invoice.id
+        : linkedPayment.invoice,
+    ).toBe(invoice.id)
   })
 })

@@ -95,10 +95,15 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
                     return webhookResponses.success() // Still return 200 to acknowledge receipt
                   }
 
-                  // Map Stripe status to our status
+                  // Map Stripe status to our status. Stripe has no 'failed' PaymentIntent
+                  // status: payment_intent.payment_failed arrives with the intent back in
+                  // requires_payment_method, so the event type — not paymentIntent.status —
+                  // is what reports the failure.
                   let status: Payment['status'] = 'pending'
 
-                  if (paymentIntent.status === 'succeeded') {
+                  if (event.type === 'payment_intent.payment_failed') {
+                    status = 'failed'
+                  } else if (paymentIntent.status === 'succeeded') {
                     status = 'succeeded'
                   } else if (paymentIntent.status === 'canceled') {
                     status = 'canceled'

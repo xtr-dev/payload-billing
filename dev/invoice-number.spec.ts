@@ -1,7 +1,9 @@
 import type { Payload } from 'payload'
 
+import { rm } from 'fs/promises'
+
 import { generateInvoiceNumber } from '../src/utils/invoiceNumber'
-import config from '@payload-config'
+import config, { vitestSqlitePath } from '@payload-config'
 import { getPayload } from 'payload'
 import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest'
 
@@ -18,6 +20,11 @@ let payload: Payload
 
 afterAll(async () => {
   await payload.db.destroy?.()
+  // The config gives every vitest process its own throwaway sqlite (@see vitestSqlitePath);
+  // remove it (plus any wal/shm a crashed worker left) so runs do not accumulate temp files
+  await rm(`${vitestSqlitePath()}`, { force: true })
+  await rm(`${vitestSqlitePath()}-wal`, { force: true })
+  await rm(`${vitestSqlitePath()}-shm`, { force: true })
 })
 
 beforeAll(async () => {

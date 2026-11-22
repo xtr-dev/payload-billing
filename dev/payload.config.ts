@@ -1,5 +1,6 @@
 import { sqliteAdapter } from '@payloadcms/db-sqlite'
 import { lexicalEditor } from '@payloadcms/richtext-lexical'
+import os from 'os'
 import path from 'path'
 import { buildConfig } from 'payload'
 import sharp from 'sharp'
@@ -15,6 +16,20 @@ const dirname = path.dirname(filename)
 
 if (!process.env.ROOT_DIR) {
   process.env.ROOT_DIR = dirname
+}
+
+export const vitestSqlitePath = () =>
+  path.join(os.tmpdir(), `payload-billing-${process.pid}.sqlite`)
+
+const resolveSqliteUrl = () => {
+  // Under vitest every spec file boots this config against the same on-disk database from
+  // its own worker process, so parallel workers race on payload.sqlite (SQLITE_BUSY). Give
+  // each process its own throwaway file in the OS temp dir; `pnpm dev` (no VITEST env) keeps
+  // the persistent dev/payload.sqlite that README and DEMO_GUIDE reset by deleting it.
+  if (process.env.VITEST) {
+    return `file:${vitestSqlitePath()}`
+  }
+  return `file:${path.resolve(dirname, 'payload.sqlite')}`
 }
 
 const buildConfigWithSQLite = () => {
@@ -40,7 +55,7 @@ const buildConfigWithSQLite = () => {
     ],
     db: sqliteAdapter({
       client: {
-        url: `file:${path.resolve(dirname, 'payload.sqlite')}`,
+        url: resolveSqliteUrl(),
       },
     }),
     editor: lexicalEditor(),

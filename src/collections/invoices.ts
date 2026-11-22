@@ -12,10 +12,16 @@ import { defaults } from '../plugin/config'
 import { extractSlug } from '../plugin/utils'
 import { generateInvoiceNumber } from '../utils/invoiceNumber'
 import { createContextLogger } from '../utils/logger'
+import { isValidCurrencyCode } from '../providers/currency'
 import type { Invoice } from '../plugin/types/index'
 
 export function createInvoicesCollection(pluginConfig: BillingPluginConfig): CollectionConfig {
   const {customerRelationSlug, customerInfoExtractor} = pluginConfig
+
+  // Field.required is boolean, so Option 2's either/or cannot live here.
+  // Required only without a customer relationship (Option 3); address is
+  // included because a name/email-only create is the documented other half.
+  const customerSnapshotRequired = !customerRelationSlug
 
   // Get slugs for relationships - these need to be determined before building fields
   const paymentsSlug = extractSlug(pluginConfig.collections?.payments, defaults.paymentsCollection)
@@ -61,7 +67,7 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
             description: 'Customer name',
             readOnly: !!(customerRelationSlug && customerInfoExtractor),
           },
-          required: !customerRelationSlug || !customerInfoExtractor,
+          required: customerSnapshotRequired,
         },
         {
           name: 'email',
@@ -70,7 +76,7 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
             description: 'Customer email address',
             readOnly: !!(customerRelationSlug && customerInfoExtractor),
           },
-          required: !customerRelationSlug || !customerInfoExtractor,
+          required: customerSnapshotRequired,
         },
         {
           name: 'phone',
@@ -115,7 +121,7 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
             description: 'Address line 1',
             readOnly: !!(customerRelationSlug && customerInfoExtractor),
           },
-          required: !customerRelationSlug || !customerInfoExtractor,
+          required: customerSnapshotRequired,
         },
         {
           name: 'line2',
@@ -131,7 +137,7 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
           admin: {
             readOnly: !!(customerRelationSlug && customerInfoExtractor),
           },
-          required: !customerRelationSlug || !customerInfoExtractor,
+          required: customerSnapshotRequired,
         },
         {
           name: 'state',
@@ -148,7 +154,7 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
             description: 'Postal or ZIP code',
             readOnly: !!(customerRelationSlug && customerInfoExtractor),
           },
-          required: !customerRelationSlug || !customerInfoExtractor,
+          required: customerSnapshotRequired,
         },
         {
           name: 'country',
@@ -158,7 +164,7 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
             readOnly: !!(customerRelationSlug && customerInfoExtractor),
           },
           maxLength: 2,
-          required: !customerRelationSlug || !customerInfoExtractor,
+          required: customerSnapshotRequired,
         },
       ],
     },
@@ -361,8 +367,15 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
                 id: paymentId,
               }) as any
 
-              // Only update if payment is not already in a successful state
-              if (payment && !['paid', 'succeeded'].includes(payment.status)) {
+              // Do not overwrite a provider-reported terminal payment status.
+              const terminalPaymentStatuses = [
+                'succeeded',
+                'failed',
+                'canceled',
+                'refunded',
+                'partially_refunded',
+              ]
+              if (payment && !terminalPaymentStatuses.includes(payment.status)) {
                 logger.info(`Invoice ${doc.id} marked as paid, updating payment ${paymentId}`)
 
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -428,11 +441,11 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
               data.number = generateInvoiceNumber()
             }
 
-            // Validate currency format
+            // Normalize and validate the ISO 4217 currency code
             if (data.currency) {
               data.currency = data.currency.toUpperCase()
-              if (!/^[A-Z]{3}$/.test(data.currency)) {
-                throw new Error('Currency must be a 3-letter ISO code')
+              if (!isValidCurrencyCode(data.currency)) {
+                throw new Error('Currency must be a valid ISO 4217 code')
               }
             }
 

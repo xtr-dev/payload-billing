@@ -1,6 +1,6 @@
 import { createInvoicesCollection, createPaymentsCollection, createRefundsCollection } from '../collections/index'
 import type { BillingPluginConfig } from './config'
-import type { Config, Payload } from 'payload'
+import type { CollectionConfig, Config, Payload } from 'payload'
 import { createSingleton } from './singleton'
 import type { PaymentProvider } from '../providers/index'
 
@@ -15,17 +15,42 @@ type BillingPlugin = {
 
 export const useBillingPlugin = (payload: Payload) => singleton.get(payload) as BillingPlugin | undefined
 
-export const billingPlugin = (pluginConfig: BillingPluginConfig = {}) => (config: Config): Config => {
-  if (pluginConfig.disabled) {
-    return config
-  }
+const disableCollectionBehavior = (collection: CollectionConfig): CollectionConfig => ({
+  ...collection,
+  access: {
+    admin: () => false,
+    create: () => false,
+    delete: () => false,
+    read: () => false,
+    readVersions: () => false,
+    unlock: () => false,
+    update: () => false,
+  },
+  admin: {
+    ...collection.admin,
+    hidden: true,
+  },
+  endpoints: false,
+  hooks: {},
+})
 
-  config.collections = [
-    ...(config.collections || []),
+export const billingPlugin = (pluginConfig: BillingPluginConfig = {}) => (config: Config): Config => {
+  const billingCollections = [
     createPaymentsCollection(pluginConfig),
     createInvoicesCollection(pluginConfig),
     createRefundsCollection(pluginConfig),
-  ];
+  ]
+
+  config.collections = [
+    ...(config.collections || []),
+    ...billingCollections.map(collection => pluginConfig.disabled
+      ? disableCollectionBehavior(collection)
+      : collection),
+  ]
+
+  if (pluginConfig.disabled) {
+    return config
+  }
 
   (pluginConfig.providers || [])
     .filter(provider => provider?.onConfig)

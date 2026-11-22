@@ -29,32 +29,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       )
     }
 
-    // Get customer info - either from relationship or direct fields
+    // The dev config has no customers collection or customer relationship -
+    // invoices carry customerInfo/billingAddress directly.
     let customerInfo = null
 
-    if (invoice.customer) {
-      // Try to fetch from customer relationship
-      try {
-        const customerData = await payload.findByID({
-          collection: 'customers',
-          id: typeof invoice.customer === 'object' ? invoice.customer.id : invoice.customer,
-        })
-        customerInfo = {
-          name: customerData.name,
-          email: customerData.email,
-          phone: customerData.phone,
-          company: customerData.company,
-          taxId: customerData.taxId,
-          billingAddress: customerData.address,
-        }
-      } catch (error) {
-        // Customer not found or collection doesn't exist
-        console.error('Failed to fetch customer:', error)
-      }
-    }
-
-    // Fall back to direct customerInfo fields if no customer relationship
-    if (!customerInfo && invoice.customerInfo) {
+    if (invoice.customerInfo) {
       customerInfo = {
         name: invoice.customerInfo.name,
         email: invoice.customerInfo.email,
@@ -84,7 +63,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     // Prepare the response
     const invoiceData = {
       id: invoice.id,
-      invoiceNumber: invoice.number || invoice.invoiceNumber,
+      invoiceNumber: invoice.number,
       customer: customerInfo,
       currency: invoice.currency,
       items: invoice.items || [],
@@ -93,7 +72,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       total,
       status: invoice.status,
       customMessage: invoice.customMessage,
-      issuedAt: invoice.issuedAt,
       dueDate: invoice.dueDate,
       createdAt: invoice.createdAt,
     }

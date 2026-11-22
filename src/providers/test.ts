@@ -7,6 +7,9 @@ import { extractSlug } from '../plugin/utils'
 import { handleWebhookError, logWebhookEvent } from './utils'
 import { isValidAmount, isValidCurrencyCode } from './currency'
 import { createContextLogger } from '../utils/logger'
+import { createHash } from 'node:crypto'
+import { applyProviderRefund } from './refunds'
+import type { Refund } from '../plugin/types/refunds'
 
 const TestModeWarningSymbol = Symbol.for('@xtr-dev/payload-billing/test-mode-warning')
 const hasGivenTestModeWarning = () => TestModeWarningSymbol in globalThis
@@ -115,6 +118,19 @@ export interface PaymentScenario {
   delay?: number // Delay in milliseconds before processing
   method?: PaymentMethod
 }
+
+/**
+ * How the test provider answers a refund. Pick one per refund with
+ * `metadata: { testScenario: '<id>' }` on the refund document; `refund-success` is the default.
+ */
+export type RefundScenarioId = 'refund-success' | 'refund-processing' | 'refund-failed' | 'refund-rejected'
+
+export const TEST_REFUND_SCENARIOS: Array<{ id: RefundScenarioId; description: string }> = [
+  { id: 'refund-success', description: 'Refund succeeds immediately' },
+  { id: 'refund-processing', description: 'Refund stays processing until settled via POST /payload-billing/test/refund' },
+  { id: 'refund-failed', description: 'Provider accepts the refund, then reports it failed' },
+  { id: 'refund-rejected', description: 'Provider rejects the refund request outright (HTTP 422)' },
+]
 
 export interface TestProviderConfig {
   enabled: boolean
@@ -468,6 +484,49 @@ export const testProvider = (testConfig: TestProviderConfig) => {
           }
         },
         {
+          // Settles a `refund-processing` refund, standing in for the provider's webhook
+          path: '/payload-billing/test/refund',
+          method: 'post',
+          handler: async (req) => {
+            const json = (body: unknown, status = 200) =>
+              new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
+            const body = (await req.json?.()) as { refundId?: unknown; outcome?: unknown } | undefined
+            const refundId = body?.refundId
+            const outcome = body?.outcome
+            if (typeof refundId !== 'string' || !refundId.startsWith('test_re_')) {
+              return json({ error: 'refundId must be a test provider refund id (test_re_…)' }, 400)
+            }
+            if (outcome !== 'succeeded' && outcome !== 'failed') {
+              return json({ error: "outcome must be 'succeeded' or 'failed'" }, 400)
+            }
+            const refundsSlug = extractSlug(pluginConfig.collections?.refunds, defaults.refundsCollection)
+            const paymentsSlug = extractSlug(pluginConfig.collections?.payments, defaults.paymentsCollection)
+            const found = await req.payload.find({
+              collection: refundsSlug,
+              depth: 0,
+              limit: 1,
+              where: { providerId: { equals: refundId } },
+            })
+            const refund = found.docs[0] as Refund | undefined
+            if (!refund) {
+              return json({ error: 'Refund not found' }, 404)
+            }
+            const payment = (await req.payload.findByID({
+              collection: paymentsSlug,
+              depth: 0,
+              id: (typeof refund.payment === 'object' ? refund.payment.id : refund.payment) as any,
+            })) as Payment
+            const updated = await applyProviderRefund(req.payload, pluginConfig, payment, {
+              amount: refund.amount,
+              currency: refund.currency,
+              failureReason: outcome === 'failed' ? 'Test provider: refund failed' : null,
+              providerId: refundId,
+              status: outcome,
+            })
+            return json({ status: updated?.status })
+          }
+        },
+        {
           path: '/payload-billing/test/status/:id',
           method: 'get',
           handler: async (req) => {
@@ -504,7 +563,7 @@ export const testProvider = (testConfig: TestProviderConfig) => {
               try {
                 const paymentSlug = extractSlug(pluginConfig.collections?.payments, defaults.paymentsCollection)
                 const result = await req.payload.find({
-                  collection: paymentSlug,
+                  collection: paymentSlug as CollectionSlug,
                   where: {
                     providerId: {
                       equals: paymentId
@@ -547,6 +606,34 @@ export const testProvider = (testConfig: TestProviderConfig) => {
           }
         }
       ]
+    },
+    // eslint-disable-next-line @typescript-eslint/require-await -- the provider contract is async
+    refundPayment: async (payload, request) => {
+      const scenario = ((request.metadata as Record<string, unknown> | null | undefined)?.testScenario ?? 'refund-success') as string
+      if (!TEST_REFUND_SCENARIOS.some((candidate) => candidate.id === scenario)) {
+        throw new Error(`Unknown test refund scenario "${scenario}"`)
+      }
+      if (scenario === 'refund-rejected') {
+        throw Object.assign(new Error('Test provider rejected the refund'), { statusCode: 422 })
+      }
+      // Derived from the idempotency key, so the same refund always gets the same provider id
+      // (and the unique providerId on refunds turns a double submit into a conflict, not a payout)
+      const providerId = `test_re_${createHash('sha1').update(request.idempotencyKey).digest('hex').slice(0, 16)}`
+      const status: Refund['status'] =
+        scenario === 'refund-processing' ? 'processing' : scenario === 'refund-failed' ? 'failed' : 'succeeded'
+      return {
+        amount: request.amount,
+        currency: request.currency,
+        failureReason: status === 'failed' ? 'Test provider: refund failed' : null,
+        idempotencyKey: request.idempotencyKey,
+        providerData: {
+          provider: 'test',
+          raw: { id: providerId, scenario, status, testMode: true },
+          timestamp: new Date().toISOString(),
+        },
+        providerId,
+        status,
+      }
     },
     onInit: (payload: Payload) => {
       logWebhookEvent('Test Provider', 'Test payment provider initialized', undefined, payload)

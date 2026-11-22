@@ -1,8 +1,9 @@
 
 export { billingPlugin } from './plugin/index'
-export type { BillingPluginConfig, CustomerInfoExtractor, AdvancedTestProviderConfig } from './plugin/config'
+export type { BillingPluginConfig, CustomerInfoExtractor, AdvancedTestProviderConfig, RefundHook, RefundHookArgs } from './plugin/config'
 export type { Invoice, Payment, Refund } from './plugin/types/index'
-export type { PaymentProvider, ProviderData, InitPayment } from './providers/types'
+export type { PaymentProvider, ProviderData, InitPayment, ProviderRefund, ProviderRefundRequest } from './providers/types'
+export { refundPayment, processRefund, processPendingRefunds, syncPaymentRefunds, syncOpenRefunds } from './refunds'
 
 import type { Invoice as InvoiceType } from './plugin/types/invoices'
 import type { Payment as PaymentType } from './plugin/types/payments'
@@ -28,8 +29,10 @@ export type {
   TestProviderConfigResponse,
   PaymentOutcome,
   PaymentMethod,
-  PaymentScenario
+  PaymentScenario,
+  RefundScenarioId
 } from './providers/test'
+export { TEST_REFUND_SCENARIOS } from './providers/test'
 
 // Mollie and Stripe providers are optional - import from separate entry points:
 // import { mollieProvider } from '@xtr-dev/payload-billing/mollie'

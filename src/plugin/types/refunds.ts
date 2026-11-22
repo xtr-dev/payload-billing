@@ -3,9 +3,17 @@ import type { Payment } from './payments'
 export interface Refund {
   id: number;
   /**
-   * The refund ID from the payment provider
+   * The refund ID from the payment provider (set once the provider accepted the refund)
    */
-  providerId: string;
+  providerId?: string | null;
+  /**
+   * Stable key that makes retries of this refund safe (sent to the provider)
+   */
+  idempotencyKey?: string | null;
+  /**
+   * Why the provider failed or canceled the refund
+   */
+  failureReason?: string | null;
   payment: number | Payment;
   status: 'pending' | 'processing' | 'succeeded' | 'failed' | 'canceled';
   /**

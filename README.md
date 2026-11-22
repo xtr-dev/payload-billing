@@ -800,6 +800,12 @@ refund.status      // 'processing' until Mollie settles it, then 'succeeded' | '
 - **Provider errors:** a 4xx rejection stores the refund as `failed` with `failureReason`; a network
   or 5xx error leaves it `pending` for `processPendingRefunds(payload)` (run it from a cron/job).
 
+**Access:** by default any authenticated user can create refunds, which now means issuing real
+payouts (or, with a `providerId`, marking a refund `succeeded`). Restrict the refunds collection
+with `collections.refunds.extend` (e.g. `access.create` limited to staff). Concurrent refunds
+with different keys are validated check-then-create, so rely on the provider's own over-refund
+guard (Mollie has one) as the final backstop.
+
 **Hooks** (e.g. to email the buyer and alert staff). They run once per status transition, and an
 error thrown in one is logged, never rolls the refund back:
 

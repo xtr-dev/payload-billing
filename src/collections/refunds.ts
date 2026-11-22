@@ -188,7 +188,7 @@ export function createRefundsCollection(pluginConfig: BillingPluginConfig): Coll
           }
           if (operation === 'create') {
             const logger = createContextLogger(req.payload, 'Refunds Collection')
-            logger.info(`Refund created: ${doc.id} for payment: ${doc.payment}`)
+            logger.info(`Refund created: ${doc.id} for payment: ${typeof doc.payment === 'object' ? doc.payment.id : doc.payment}`)
 
             // Update the related payment's refund relationship
             try {

@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest'
 
 const client = {
   paymentRefunds: { create: vi.fn(), page: vi.fn() },
-  payments: {},
+  payments: {} as { get?: ReturnType<typeof vi.fn> },
 }
 vi.mock('@mollie/api-client', () => ({ default: () => client }))
 

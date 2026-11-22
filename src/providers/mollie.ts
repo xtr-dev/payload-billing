@@ -143,6 +143,8 @@ export const mollieProvider = (mollieConfig: MollieProviderConfig & {
                 logger.warn(`Failed to update payment ${payment.id}, skipping invoice update`)
               }
 
+              // (Only `paid` payments are synced: Mollie refunds only paid payments, and a
+              // later canceled/expired status would not carry refunds.)
               // Mollie calls the payment's webhook again whenever one of its refunds changes
               // state, so refunds are synced here: provider refund id, status, and the
               // payment's (partially) refunded status all follow from the refund documents.
@@ -169,7 +171,7 @@ export const mollieProvider = (mollieConfig: MollieProviderConfig & {
 
       // The Idempotency-Key header only protects for a limited time, so also look for a refund
       // already created for this key (kept in the refund's metadata) before creating one.
-      const existing = (await client.paymentRefunds.page({ paymentId })) as unknown as any[]
+      const existing = (await client.paymentRefunds.page({ limit: 250, paymentId })) as unknown as any[]
       const duplicate = existing.find((refund) => refund.metadata?.idempotencyKey === request.idempotencyKey)
       if (duplicate) {
         return toProviderRefund(duplicate)
@@ -193,6 +195,7 @@ export const mollieProvider = (mollieConfig: MollieProviderConfig & {
     },
     fetchRefunds: async (payload, payment) => {
       const refunds = (await singleton.get(payload).paymentRefunds.page({
+        limit: 250, // Mollie's maximum page size
         paymentId: payment.providerId as string,
       })) as unknown as any[]
       return refunds.map(toProviderRefund)

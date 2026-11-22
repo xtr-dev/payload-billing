@@ -58,6 +58,9 @@ export async function sumRefunds(
 /**
  * Throws if the refund cannot be issued: payment not refundable, wrong currency, or more
  * than what is left after the refunds already pending, processing or succeeded.
+ *
+ * Limitation: this is check-then-create, so two concurrent refunds with different keys can both
+ * pass. Mollie rejects the second (it becomes `failed`); a provider without that guard would not.
  */
 export async function validateRefundRequest(
   payload: Payload,
@@ -130,7 +133,8 @@ export async function submitRefundToProvider(
       status: result.status,
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    // failureReason is readable by anyone who can read refunds: keep it short
+    const message = (error instanceof Error ? error.message : String(error)).slice(0, 300)
     if (isRejection(error)) {
       logger.error(`Provider rejected refund for payment ${payment.id}: ${message}`)
       return { failureReason: message, status: 'failed' }
@@ -178,6 +182,7 @@ export async function processPendingRefunds(payload: Payload, pluginConfig: Bill
     collection: refundsSlug,
     depth: 0,
     limit: 100,
+    sort: 'createdAt',
     where: { and: [{ status: { equals: 'pending' } }, { providerId: { exists: false } }] },
   })
   const done: Refund[] = []
@@ -268,6 +273,7 @@ export async function syncOpenRefunds(payload: Payload, pluginConfig: BillingPlu
     collection: refundsSlug,
     depth: 0,
     limit: 100,
+    sort: 'createdAt',
     where: { and: [{ status: { in: OPEN_STATUSES } }, { providerId: { exists: true } }] },
   })
   const seen = new Set<string>()

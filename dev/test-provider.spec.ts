@@ -272,7 +272,8 @@ describe('/payload-billing/test/status/:id and /payload-billing/test/payment/:id
 
     expect(response.status).toBe(200)
     expect(response.headers.get('Content-Type')).toBe('text/html')
-    expect(html).toContain(`paymentId: '${payment.providerId}'`)
+    // the checkout page writes the id as a JSON string literal (jsString), not single-quoted
+    expect(html).toContain(`paymentId: ${JSON.stringify(payment.providerId)}`)
     expect(html).not.toContain(`${payment.providerId}?foo=bar`)
   })
 })

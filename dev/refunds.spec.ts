@@ -164,6 +164,18 @@ describe('refunding through the provider', () => {
     expect(all.totalDocs).toBe(1)
   })
 
+  test('reusing an idempotency key for a different payment or amount is an error, not a silent reuse', async () => {
+    const payment = await paidPayment(5000)
+    const other = await paidPayment(5000)
+    await refundPayment(payload, { amount: 1000, idempotencyKey: 'order-77', paymentId: payment.id })
+    await expect(
+      refundPayment(payload, { amount: 2000, idempotencyKey: 'order-77', paymentId: payment.id }),
+    ).rejects.toThrow(/different refund/)
+    await expect(
+      refundPayment(payload, { amount: 1000, idempotencyKey: 'order-77', paymentId: other.id }),
+    ).rejects.toThrow(/different refund/)
+  })
+
   test('the sweep retries a refund left pending by a transient error without double paying', async () => {
     const payment = await paidPayment()
     // A pending refund with no provider refund, as left behind when the provider was unreachable.

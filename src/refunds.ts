@@ -30,6 +30,15 @@ const billing = (payload: Payload) => {
   return plugin.config
 }
 
+/** A reused key must describe the same refund; returning a different one would hide a caller bug. */
+function assertSameRequest(existing: Refund, args: RefundPaymentArgs): Refund {
+  const existingPayment = typeof existing.payment === 'object' ? existing.payment.id : existing.payment
+  if (String(existingPayment) !== String(args.paymentId) || (args.amount !== undefined && existing.amount !== args.amount)) {
+    throw new Error(`Idempotency key "${args.idempotencyKey}" was already used for a different refund`)
+  }
+  return existing
+}
+
 /**
  * Issue a refund through the payment's provider. Creates the refund document, which makes the
  * provider carry it out: the returned refund has its provider id and `processing` /
@@ -47,7 +56,7 @@ export async function refundPayment(payload: Payload, args: RefundPaymentArgs): 
 
   if (args.idempotencyKey) {
     const existing = await findByKey(args.idempotencyKey)
-    if (existing) {return existing}
+    if (existing) {return assertSameRequest(existing, args)}
   }
 
   try {
@@ -66,7 +75,7 @@ export async function refundPayment(payload: Payload, args: RefundPaymentArgs): 
   } catch (error) {
     // Two callers with the same key raced: the unique key rejected the loser, who gets the winner's refund
     const raced = args.idempotencyKey ? await findByKey(args.idempotencyKey) : null
-    if (raced) {return raced}
+    if (raced) {return assertSameRequest(raced, args)}
     throw error
   }
 }

@@ -1,6 +1,7 @@
-import type { AccessArgs, CollectionAfterChangeHook, CollectionBeforeChangeHook, CollectionConfig, Field } from 'payload'
+import type { CollectionAfterChangeHook, CollectionBeforeChangeHook, CollectionConfig, Field } from 'payload'
 import type { BillingPluginConfig} from '../plugin/config';
 import { defaults } from '../plugin/config'
+import { resolveAccess } from './access'
 import { extractSlug } from '../plugin/utils'
 import type { Payment } from '../plugin/types/payments'
 import { initProviderPayment } from './hooks'
@@ -141,12 +142,7 @@ export function createPaymentsCollection(pluginConfig: BillingPluginConfig): Col
 
   const baseConfig: CollectionConfig = {
     slug: paymentsSlug,
-    access: {
-      create: ({ req: { user } }: AccessArgs) => !!user,
-      delete: ({ req: { user } }: AccessArgs) => !!user,
-      read: ({ req: { user } }: AccessArgs) => !!user,
-      update: ({ req: { user } }: AccessArgs) => !!user,
-    },
+    access: resolveAccess(pluginConfig.collections?.payments),
     admin: {
       defaultColumns: ['id', 'provider', 'status', 'amount', 'currency', 'createdAt'],
       group: 'Billing',

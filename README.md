@@ -392,6 +392,36 @@ billingPlugin({
 })
 ```
 
+### Access Control
+
+The `payments`, `invoices` and `refunds` collections are **admin-only by default**: a request is allowed
+only when `req.user` signed in through the collection Payload uses for its admin panel
+(`admin.user`, normally `users`). This governs REST, GraphQL and the admin panel. The plugin's own
+code (webhooks, providers, `refundPayment`, the sweeps) uses the Local API without a user and is not
+affected.
+
+> **If customers sign up in the same collection as your staff** (for example a single `users`
+> collection with roles), the default cannot tell them apart and every customer would be allowed.
+> Set `access` yourself. Without it a signed-in customer could `PATCH` their own payment to
+> `succeeded`, read every invoice (names, emails, addresses) and reserve refund payouts.
+
+Set per-operation access with the `access` option of each collection. An override replaces only the
+operation it names; the others keep the default:
+
+```typescript
+const isStaff = ({ req }) => req.user?.role === 'staff'
+
+billingPlugin({
+  collections: {
+    payments: { access: { read: isStaff, create: isStaff, update: isStaff, delete: () => false } },
+    invoices: { access: { read: isStaff } },       // create/update/delete stay admin-only
+    refunds: { slug: 'chargebacks', access: { create: isStaff } },
+  },
+})
+```
+
+`extend` still runs last, so it can override `access` too. API-key users of the admin collection are treated like its other users. Passing `undefined` for an operation keeps the default.
+
 ### Provider Configuration Reference
 
 | Provider | Required Config | Optional Config | Notes |
@@ -1194,7 +1224,7 @@ const createPayment = async (
 
 5. **Secure customer data:**
    - Use customer relationships instead of duplicating data
-   - Implement proper access control on collections
+   - Review [Access Control](#access-control): the collections are admin-only by default, and you must set `access` if customers share your admin users collection
 
 6. **Test webhook handling:**
    - Use Stripe CLI or test provider for local testing

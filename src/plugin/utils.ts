@@ -15,8 +15,8 @@ export const extractSlug = (arg: CollectionExtension | undefined, defaultSlug: s
   if (typeof arg === 'string') {
     return arg as CollectionSlug
   }
-  // arg is an object with slug property
-  return arg.slug as CollectionSlug
+  // arg is an object; its slug is optional (it may only set access or extend)
+  return (arg.slug ?? defaultSlug) as CollectionSlug
 }
 
 /**

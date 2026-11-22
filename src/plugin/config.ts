@@ -1,4 +1,5 @@
 import type { CollectionConfig } from 'payload'
+import type { BillingCollectionAccess } from '../collections/access'
 import type { FieldsOverride } from './utils'
 import type { Payload, PayloadRequest } from 'payload'
 import type { Payment, PaymentProvider, Refund } from './types/index'
@@ -36,7 +37,14 @@ export interface CustomerInfoExtractor {
 export type CollectionExtension =
   | string
   | {
-      slug: string
+      /** Defaults to the collection's default slug. */
+      slug?: string
+      /**
+       * Per-operation access for REST, GraphQL and the admin panel. Defaults to admin-collection
+       * users only (`req.user.collection === payload.config.admin.user`); an override replaces just
+       * the operation it names. Set this if customers sign up in your admin users collection.
+       */
+      access?: BillingCollectionAccess
       extend?: (config: CollectionConfig) => CollectionConfig
     }
 

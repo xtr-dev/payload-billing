@@ -1,6 +1,7 @@
-import type { AccessArgs, CollectionConfig, PayloadRequest } from 'payload'
+import type { CollectionConfig, PayloadRequest } from 'payload'
 import type { BillingPluginConfig} from '../plugin/config';
 import { defaults } from '../plugin/config'
+import { resolveAccess } from './access'
 import { extractSlug } from '../plugin/utils'
 import type { Payment, Refund } from '../plugin/types/index'
 import { randomUUID } from 'node:crypto'
@@ -58,12 +59,7 @@ export function createRefundsCollection(pluginConfig: BillingPluginConfig): Coll
 
   const baseConfig: CollectionConfig = {
     slug: refundsSlug,
-    access: {
-      create: ({ req: { user } }: AccessArgs) => !!user,
-      delete: ({ req: { user } }: AccessArgs) => !!user,
-      read: ({ req: { user } }: AccessArgs) => !!user,
-      update: ({ req: { user } }: AccessArgs) => !!user,
-    },
+    access: resolveAccess(pluginConfig.collections?.refunds),
     admin: {
       defaultColumns: ['id', 'payment', 'amount', 'currency', 'status', 'createdAt'],
       group: 'Billing',

@@ -420,7 +420,7 @@ billingPlugin({
 })
 ```
 
-`extend` still runs last, so it can override `access` too.
+`extend` still runs last, so it can override `access` too. API-key users of the admin collection are treated like its other users. Passing `undefined` for an operation keeps the default.
 
 ### Provider Configuration Reference
 

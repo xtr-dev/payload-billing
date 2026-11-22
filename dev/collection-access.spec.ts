@@ -78,6 +78,19 @@ describe('the access option', () => {
     expect(run(access.update, staff)).toBe(true)
   })
 
+  test('an explicit undefined override keeps the default instead of reopening the operation', () => {
+    // Payload treats a missing access function as "any signed-in user", so letting undefined
+    // overwrite the default (for example from `read: cond ? isStaff : undefined`) would reopen it
+    const payments = createPaymentsCollection({
+      collections: { payments: { access: { read: undefined, update: undefined } } },
+    })
+    expect(payments.access!.read).toBeTypeOf('function')
+    expect(payments.access!.update).toBeTypeOf('function')
+    expect(run(payments.access!.read, customer)).toBe(false)
+    expect(run(payments.access!.update, customer)).toBe(false)
+    expect(run(payments.access!.read, staff)).toBe(true)
+  })
+
   test('can deny an operation for everyone', () => {
     const refunds = createRefundsCollection({
       collections: { refunds: { access: { delete: () => false } } },

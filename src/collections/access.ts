@@ -27,12 +27,20 @@ export const isAdminCollectionUser: Access = ({ req }) =>
 export function resolveAccess(
   option: CollectionExtension | undefined,
 ): NonNullable<CollectionConfig['access']> {
-  const overrides = typeof option === 'object' ? option.access : undefined
-  return {
+  const access: NonNullable<CollectionConfig['access']> = {
     create: isAdminCollectionUser,
     delete: isAdminCollectionUser,
     read: isAdminCollectionUser,
     update: isAdminCollectionUser,
-    ...overrides,
   }
+  const overrides = typeof option === 'object' ? option.access : undefined
+  for (const operation of ['create', 'delete', 'read', 'update'] as const) {
+    // An explicit undefined must keep the default: Payload treats a missing access function as
+    // "any signed-in user", so spreading it over the default would silently reopen the operation.
+    const override = overrides?.[operation]
+    if (override !== undefined) {
+      access[operation] = override
+    }
+  }
+  return access
 }

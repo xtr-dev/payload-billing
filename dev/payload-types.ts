@@ -334,9 +334,17 @@ export interface Invoice {
 export interface Refund {
   id: number;
   /**
-   * The refund ID from the payment provider
+   * The refund ID from the payment provider. Filled in when the provider accepts the refund; supply it to record a refund made elsewhere.
    */
-  providerId: string;
+  providerId?: string | null;
+  /**
+   * Sent to the provider so retrying this refund can never pay out twice
+   */
+  idempotencyKey?: string | null;
+  /**
+   * Why the provider failed or canceled the refund
+   */
+  failureReason?: string | null;
   payment: number | Payment;
   status: 'pending' | 'processing' | 'succeeded' | 'failed' | 'canceled';
   /**
@@ -572,6 +580,8 @@ export interface InvoicesSelect<T extends boolean = true> {
  */
 export interface RefundsSelect<T extends boolean = true> {
   providerId?: T;
+  idempotencyKey?: T;
+  failureReason?: T;
   payment?: T;
   status?: T;
   amount?: T;

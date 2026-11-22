@@ -195,7 +195,7 @@ export async function processRefund(
       data: {
         failureReason: `Exceeds the refundable amount of payment ${payment.id} (other refunds reserve ${reservedByOthers} of ${payment.amount})`,
         status: 'failed',
-      },
+      } as any,
       id: toPayloadId(refund.id),
     })) as Refund
   }

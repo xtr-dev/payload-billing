@@ -332,12 +332,15 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
 
                 logger.info(`Linking payment ${paymentId} back to invoice ${doc.id}`)
 
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 await req.payload.update({
+                  // The payments slug is configurable: without generated types CollectionSlug is plain string
+                  // and the cast looks redundant to ESLint, but tsc needs it when the host app has generated types
+                  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
                   collection: paymentsSlug as CollectionSlug,
                   id: paymentId,
                   data: {
                     invoice: doc.id,
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   } as any,
                 })
 
@@ -356,10 +359,13 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
               const paymentId = typeof doc.payment === 'object' ? doc.payment.id : doc.payment
 
               // Fetch the payment to check its status
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               const payment = await req.payload.findByID({
+                // The payments slug is configurable: without generated types CollectionSlug is plain string
+                // and the cast looks redundant to ESLint, but tsc needs it when the host app has generated types
+                // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
                 collection: paymentsSlug as CollectionSlug,
                 id: paymentId,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               }) as any
 
               // Do not overwrite a provider-reported terminal payment status.
@@ -373,12 +379,15 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
               if (payment && !terminalPaymentStatuses.includes(payment.status)) {
                 logger.info(`Invoice ${doc.id} marked as paid, updating payment ${paymentId}`)
 
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 await req.payload.update({
+                  // The payments slug is configurable: without generated types CollectionSlug is plain string
+                  // and the cast looks redundant to ESLint, but tsc needs it when the host app has generated types
+                  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
                   collection: paymentsSlug as CollectionSlug,
                   id: paymentId,
                   data: {
                     status: 'succeeded',
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   } as any,
                 })
 

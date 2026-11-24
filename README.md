@@ -846,7 +846,11 @@ refund.status      // 'processing' until Mollie settles it, then 'succeeded' | '
   create) to keep it as a record only: `processRefund`, `processPendingRefunds` and
   `syncOpenRefunds` skip it, so it is never paid out by the plugin. Use it for refunds handled by
   hand or to hold one back; untick it to let the next sweep send it. A manual refund still counts
-  against what can be refunded while it is `pending` / `processing` / `succeeded`.
+  against what can be refunded while it is `pending` / `processing` / `succeeded`. It only stops
+  the plugin from *sending* or *polling* it: a manual refund with a `providerId` is still updated
+  when the payment's webhook or `syncPaymentRefunds` reports that refund. Anyone who can update
+  refunds can clear `manual` (and so release it to the sweep): restrict it together with
+  `providerId`, e.g. with field-level access via `collections.refunds.extend`.
 
 **Access:** by default any authenticated user can create refunds, which now means reserving real
 payouts (or, with a `providerId`, marking a refund `succeeded`). Restrict the refunds collection

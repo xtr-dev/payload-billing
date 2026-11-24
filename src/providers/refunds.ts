@@ -25,6 +25,11 @@ const NOT_MANUAL: Where = {
   or: [{ manual: { equals: false } }, { manual: { exists: false } }],
 }
 
+/** Statuses that count against what can still be refunded. */
+const RESERVING_STATUSES: RefundStatus[] = ['pending', 'processing', 'succeeded']
+/** Payment statuses a refund can be issued against. */
+const REFUNDABLE_PAYMENT_STATUSES: Payment['status'][] = ['succeeded', 'partially_refunded']
+
 /**
  * Every refund matching `where`, oldest first, with only the fields a sweep needs. Reads all
  * matches up front (not a page of them), so rows that stay open cannot crowd out newer ones,
@@ -46,11 +51,6 @@ async function findAllRefunds(
   })
   return result.docs as Pick<Refund, 'id' | 'payment'>[]
 }
-/** Statuses that count against what can still be refunded. */
-const RESERVING_STATUSES: RefundStatus[] = ['pending', 'processing', 'succeeded']
-/** Payment statuses a refund can be issued against. */
-const REFUNDABLE_PAYMENT_STATUSES: Payment['status'][] = ['succeeded', 'partially_refunded']
-
 const rank = (status: RefundStatus) => (status === 'pending' ? 0 : status === 'processing' ? 1 : 2)
 
 /**

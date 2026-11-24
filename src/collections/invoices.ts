@@ -436,8 +436,9 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
           }
 
           if (operation === 'create') {
-            // Generate invoice number if not provided
-            if (!data.number) {
+            // Generate invoice number if not provided (a blank one counts as not provided). The
+            // `number` field's validator relies on this running first: it rejects an empty number.
+            if (!data.number?.trim()) {
               data.number = generateInvoiceNumber()
             }
 

@@ -107,6 +107,12 @@ describe('Invoice number generation', () => {
     expect(updated.number).toBe(invoice.number)
   })
 
+  test('generates a number when create passes a blank one', async () => {
+    const invoice = await payload.create({ collection: 'invoices', data: { ...invoiceData, number: '  ' } as any })
+
+    expect(invoice.number).toMatch(/^INV-\d+$/)
+  })
+
   test('rejects an update that clears the number', async () => {
     const invoice = await payload.create({ collection: 'invoices', data: invoiceData as any })
 

@@ -16,6 +16,7 @@ import {
 import { formatAmountForProvider, isValidAmount, isValidCurrencyCode, parseAmountFromProvider } from './currency'
 import { syncPaymentRefunds } from './refunds'
 import { createContextLogger } from '../utils/logger'
+import { fillReturnToken } from '../utils/returnToken'
 
 const symbol = Symbol.for('@xtr-dev/payload-billing/mollie')
 export type MollieProviderConfig = Parameters<typeof createMollieClient>[0]
@@ -251,7 +252,7 @@ export const mollieProvider = (mollieConfig: MollieProviderConfig & {
       const serverUrl = process.env.NEXT_PUBLIC_SERVER_URL || process.env.PAYLOAD_PUBLIC_SERVER_URL || process.env.SERVER_URL
 
       // Priority: payment.redirectUrl > config.redirectUrl > dev fallback
-      let redirectUrl = payment.redirectUrl || mollieConfig.redirectUrl
+      let redirectUrl = fillReturnToken(payment.redirectUrl || mollieConfig.redirectUrl, payment)
       if (!redirectUrl && !isProduction) {
         redirectUrl = 'https://localhost:3000/payment/success'
       }

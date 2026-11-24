@@ -42,7 +42,7 @@ describe('syncPaymentFromProvider', () => {
 
   test("runs the provider's syncPayment and returns the stored payment", async () => {
     const payment = await newPayment()
-    const testProvider = useBillingPlugin(payload)!.config.providers!.find((p) => p.key === 'test')!
+    const testProvider = useBillingPlugin(payload)!.config.providers!.find((p) => p?.key === 'test')!
     const syncPayment = vi.fn(async (p: Payload, _config: unknown, doc: Payment) => {
       await p.update({ id: doc.id, collection: 'payments', data: { status: 'succeeded' } as any })
       return true

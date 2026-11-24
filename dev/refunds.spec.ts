@@ -9,11 +9,11 @@ import { rm } from 'fs/promises'
 
 import config, { vitestSqlitePath } from '@payload-config'
 import { getPayload } from 'payload'
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest'
 
 import type { Payment, Refund } from '../src/index'
 
-import { processPendingRefunds, processRefund, refundPayment } from '../src/index'
+import { processPendingRefunds, processRefund, refundPayment, syncOpenRefunds } from '../src/index'
 import { useBillingPlugin } from '../src/plugin/index'
 import { testProvider } from '../src/providers/test'
 
@@ -270,5 +270,88 @@ describe('refunding through the provider', () => {
     })) as unknown as Refund
     expect(refund.providerId).toBe('re_external')
     expect((await reload(payment.id)).status).toBe('partially_refunded')
+  })
+})
+
+describe('manual refunds (records that are never sent)', () => {
+  test('the sweep and processRefund leave a manual refund alone until it is unticked', async () => {
+    const payment = await paidPayment()
+    const manual = (await payload.create({
+      collection: 'refunds',
+      data: { amount: 1000, currency: 'EUR', manual: true, payment: payment.id, status: 'pending' } as any,
+    })) as unknown as Refund
+
+    const swept = await processPendingRefunds(payload)
+    expect(swept.map((r) => r.id)).not.toContain(manual.id)
+    const processed = await processRefund(payload, manual.id)
+    expect(processed.status).toBe('pending')
+    expect(processed.providerId).toBeFalsy()
+
+    // Unticking `manual` releases the hold: the next sweep sends it
+    await payload.update({ id: manual.id, collection: 'refunds', data: { manual: false } as any })
+    const released = await processPendingRefunds(payload)
+    expect(released.find((r) => r.id === manual.id)?.status).toBe('succeeded')
+  })
+
+  test('a refund written before the manual field existed (no value) is still swept', async () => {
+    const payment = await paidPayment()
+    const legacy = (await payload.db.create({
+      collection: 'refunds',
+      data: { amount: 1000, currency: 'EUR', idempotencyKey: randomUUID(), payment: payment.id, status: 'pending' },
+    })) as unknown as Refund
+    // Payload fills in the default, so clear the column the way an older row has it
+    const db = payload.db as any
+    await db.execute({ drizzle: db.drizzle, raw: `UPDATE refunds SET manual = NULL WHERE id = ${Number(legacy.id)}` })
+    const stored = (await payload.findByID({ id: legacy.id, collection: 'refunds', depth: 0 })) as unknown as Refund
+    expect(stored.manual ?? null).toBeNull()
+
+    const swept = await processPendingRefunds(payload)
+    expect(swept.find((r) => r.id === legacy.id)?.status).toBe('succeeded')
+  })
+})
+
+describe('refund sweeps', () => {
+  test('processPendingRefunds reaches every pending refund, not only the oldest 100', async () => {
+    const payment = await paidPayment(200)
+    const ids: Refund['id'][] = []
+    for (let i = 0; i < 105; i++) {
+      const reserved = await payload.db.create({
+        collection: 'refunds',
+        data: { amount: 1, currency: 'EUR', idempotencyKey: randomUUID(), payment: payment.id, status: 'pending' },
+      })
+      ids.push(reserved.id as Refund['id'])
+    }
+
+    const swept = await processPendingRefunds(payload)
+    const sweptIds = swept.map((r) => r.id)
+    expect(ids.every((id) => sweptIds.includes(id))).toBe(true)
+  })
+
+  test('syncOpenRefunds polls only processing provider refunds that are not manual', async () => {
+    const recorded = await paidPayment()
+    const held = await paidPayment()
+    const inFlight = await paidPayment()
+    const create = (paymentId: Payment['id'], data: Record<string, unknown>) =>
+      payload.create({
+        collection: 'refunds',
+        data: { amount: 1000, currency: 'EUR', payment: paymentId, providerId: `re_${randomUUID()}`, ...data } as any,
+      })
+    // A hand-made record with a providerId, still `pending`: the provider never moves those
+    await create(recorded.id, { status: 'pending' })
+    await create(held.id, { manual: true, status: 'processing' })
+    await create(inFlight.id, { status: 'processing' })
+
+    const provider = useBillingPlugin(payload)!.config.providers!.find((p) => p?.key === 'test')!
+    const fetchRefunds = vi.fn(async (_payload: Payload, _payment: Payment) => [])
+    provider.fetchRefunds = fetchRefunds
+    try {
+      await syncOpenRefunds(payload)
+    } finally {
+      delete provider.fetchRefunds
+    }
+    const polled = fetchRefunds.mock.calls.map(([, p]) => p.id)
+    expect(polled).toContain(inFlight.id)
+    expect(polled).not.toContain(recorded.id)
+    expect(polled).not.toContain(held.id)
   })
 })

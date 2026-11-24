@@ -839,6 +839,14 @@ refund.status      // 'processing' until Mollie settles it, then 'succeeded' | '
   you've used returns the existing refund. A webhook + sweep retry can't pay out twice.
 - **Provider errors:** a 4xx rejection stores the refund as `failed` with `failureReason`; a network
   or 5xx error leaves it `pending` for `processPendingRefunds(payload)` (run it from a cron/job).
+- **Sweeps:** `processPendingRefunds` and `syncOpenRefunds` work through every matching refund,
+  oldest first, not just one page. `syncOpenRefunds` only polls `processing` refunds with a
+  `providerId` (the only ones the provider can still move on).
+- **Manual refunds:** tick `manual` on a refund (field in the admin sidebar, or `manual: true` on
+  create) to keep it as a record only: `processRefund`, `processPendingRefunds` and
+  `syncOpenRefunds` skip it, so it is never paid out by the plugin. Use it for refunds handled by
+  hand or to hold one back; untick it to let the next sweep send it. A manual refund still counts
+  against what can be refunded while it is `pending` / `processing` / `succeeded`.
 
 **Access:** by default any authenticated user can create refunds, which now means reserving real
 payouts (or, with a `providerId`, marking a refund `succeeded`). Restrict the refunds collection

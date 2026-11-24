@@ -338,6 +338,10 @@ export interface Refund {
    */
   providerId?: string | null;
   /**
+   * Keep this refund as a record only: it is never sent to the payment provider or polled. Use it for refunds handled by hand, or to hold one back; untick it to let the refund sweep send it.
+   */
+  manual?: boolean | null;
+  /**
    * Sent to the provider so retrying this refund can never pay out twice
    */
   idempotencyKey?: string | null;
@@ -580,6 +584,7 @@ export interface InvoicesSelect<T extends boolean = true> {
  */
 export interface RefundsSelect<T extends boolean = true> {
   providerId?: T;
+  manual?: T;
   idempotencyKey?: T;
   failureReason?: T;
   payment?: T;

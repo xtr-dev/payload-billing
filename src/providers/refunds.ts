@@ -51,6 +51,7 @@ async function findAllRefunds(
   })
   return result.docs as Pick<Refund, 'id' | 'payment'>[]
 }
+
 const rank = (status: RefundStatus) => (status === 'pending' ? 0 : status === 'processing' ? 1 : 2)
 
 /**

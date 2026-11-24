@@ -275,7 +275,7 @@ export async function applyProviderRefund(
   if (Object.keys(data).length === 0) {
     return existing
   }
-  return (await payload.update({ collection: refundsSlug, data, id: toPayloadId(existing.id) })) as Refund
+  return (await payload.update({ collection: refundsSlug, data: data as any, id: toPayloadId(existing.id) })) as Refund
 }
 
 /**

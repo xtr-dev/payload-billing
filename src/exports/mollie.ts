@@ -1,2 +1,2 @@
-export { mollieProvider } from '../providers/mollie'
+export { mapMollieStatusToPaymentStatus, mollieProvider } from '../providers/mollie'
 export type { MollieProviderConfig } from '../providers/mollie'

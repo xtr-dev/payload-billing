@@ -55,7 +55,7 @@ export interface Payment {
     | number
     | boolean
     | null;
-  refunds?: (number | Refund)[] | null;
+  refunds?: (Id | Refund)[] | null;
   /**
    * Version number for optimistic locking (auto-incremented on updates)
    */

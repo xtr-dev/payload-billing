@@ -219,7 +219,7 @@ export interface Invoice {
   /**
    * Invoice number (auto-generated as INV-<unix-ms-timestamp>, e.g. INV-1755289904123, unless set explicitly)
    */
-  number: string;
+  number?: string | null;
   /**
    * Customer billing information
    */

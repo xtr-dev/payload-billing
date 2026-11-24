@@ -1,7 +1,8 @@
+import type { Id } from './id'
 import type { Payment } from './payments'
 
 export interface Refund {
-  id: number;
+  id: Id;
   /**
    * The refund ID from the payment provider (set once the provider accepted the refund)
    */
@@ -14,7 +15,7 @@ export interface Refund {
    * Why the provider failed or canceled the refund
    */
   failureReason?: string | null;
-  payment: number | Payment;
+  payment: Id | Payment;
   status: 'pending' | 'processing' | 'succeeded' | 'failed' | 'canceled';
   /**
    * Refund amount in cents

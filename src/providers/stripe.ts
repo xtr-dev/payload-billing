@@ -13,6 +13,7 @@ import {
 } from './utils'
 import { isValidAmount, isValidCurrencyCode } from './currency'
 import { createContextLogger } from '../utils/logger'
+import { fillReturnToken } from '../utils/returnToken'
 
 const symbol = Symbol.for('@xtr-dev/payload-billing/stripe')
 
@@ -252,7 +253,7 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
       const stripe = singleton.get(payload)
 
       // Priority: payment.redirectUrl > config.returnUrl
-      const returnUrl = payment.redirectUrl || stripeConfig.returnUrl
+      const returnUrl = fillReturnToken(payment.redirectUrl || stripeConfig.returnUrl, payment)
 
       // Create a payment intent
       const paymentIntent = await stripe.paymentIntents.create({

@@ -208,6 +208,16 @@ describe('baseUrl precedence', () => {
     expect(payment.checkoutUrl?.startsWith('https://set-after-config.example/')).toBe(true)
   })
 
+  it('fills {returnToken} in a returnUrl built on the runtime server URL', async () => {
+    process.env.PAYLOAD_SERVER_URL = 'https://runtime.example'
+    const provider = testProvider({ enabled: true, returnUrl: '/thanks/{returnToken}' })!
+    const payment: any = { amount: 500, currency: 'EUR', returnToken: 'tok123' }
+    provider.initPayment(null as any, payment)
+    const { '/payload-billing/test/payment/:id': handler } = endpointsFor(provider)
+    const response = await handler({ url: `/api/payload-billing/test/payment/${payment.providerId}` })
+    expect(await response.text()).toContain('https://runtime.example/thanks/tok123')
+  })
+
   it('falls back to http://localhost:3000 when nothing is set', () => {
     const provider = testProvider({ enabled: true })!
     const payment = provider.initPayment(null as any, { amount: 500, currency: 'EUR' }) as Payment

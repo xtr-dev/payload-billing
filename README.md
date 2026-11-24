@@ -448,7 +448,8 @@ Tracks payment transactions with provider integration.
   currency: string                      // ISO 4217 currency code
   description?: string
   checkoutUrl?: string                  // Checkout URL (if applicable)
-  redirectUrl?: string                  // URL to redirect user after payment
+  redirectUrl?: string                  // URL to redirect user after payment ({returnToken} is filled in)
+  returnToken?: string                  // Random token set on create (read-only)
   invoice?: Invoice | string            // Linked invoice
   metadata?: Record<string, any>        // Custom metadata
   providerData?: ProviderData           // Raw provider response (read-only)
@@ -505,6 +506,42 @@ await payload.create({
 ```
 
 **Priority:** `payment.redirectUrl` > provider config `redirectUrl`/`returnUrl` > default fallback
+
+**Finding the payment on your return page (`{returnToken}`):**
+
+The return URL is sent to the provider while the payment is being created, before it has a
+database id, so there is no `{paymentId}` placeholder. Instead every payment gets a random
+`returnToken` on create (32 random hex characters, unique, stored on the payment), and the plugin replaces
+`{returnToken}` in the redirect URL with it. This works in `payment.redirectUrl` and in the
+provider config's `redirectUrl` (Mollie) / `returnUrl` (Stripe, test provider).
+
+```typescript
+await payload.create({
+  collection: 'payments',
+  data: {
+    provider: 'mollie',
+    amount: 5000,
+    currency: 'EUR',
+    redirectUrl: 'https://example.com/thank-you?t={returnToken}',
+  },
+})
+
+// On https://example.com/thank-you?t=...
+const { docs } = await payload.find({
+  collection: 'payments',
+  where: { returnToken: { equals: token } },
+  limit: 1,
+})
+```
+
+The plugin always generates the token itself: a `returnToken` passed on create is replaced, and an
+update cannot change it. Payments created before this feature have no token.
+
+Treat the token as a bearer secret for that one payment. Anyone who has the return URL can use it,
+and it also ends up in browser history, server logs and the provider's dashboard. On the return
+page, show only what the customer may see (for example the status), and don't expose the whole
+payment document on a public endpoint keyed only by the token. The stored `redirectUrl` already
+has the token filled in.
 
 ### Invoices
 

@@ -7,6 +7,7 @@ import { extractSlug } from '../plugin/utils'
 import { handleWebhookError, logWebhookEvent } from './utils'
 import { isValidAmount, isValidCurrencyCode } from './currency'
 import { createContextLogger } from '../utils/logger'
+import { fillReturnToken } from '../utils/returnToken'
 import { createHash } from 'node:crypto'
 import { applyProviderRefund } from './refunds'
 import { getServerUrlFromEnv } from './serverUrl'
@@ -327,7 +328,10 @@ export const testProvider = (testConfig: TestProviderConfig) => {
             const baseUrl = resolveBaseUrl()
             // Determine redirect URL: session.redirectUrl > payment.redirectUrl > config.returnUrl > default
             const defaultReturnUrl = testConfig.returnUrl ? `${baseUrl}${testConfig.returnUrl}` : `${baseUrl}/payment/success`
-            const redirectUrl = session.redirectUrl || (session.payment as Payment)?.redirectUrl || defaultReturnUrl
+            const redirectUrl = fillReturnToken(
+              session.redirectUrl || (session.payment as Payment)?.redirectUrl || defaultReturnUrl,
+              session.payment as Payment,
+            )
 
             // Generate test payment UI
             const html = generateTestPaymentUI(session, scenarios, uiRoute, baseUrl, testConfig, redirectUrl)

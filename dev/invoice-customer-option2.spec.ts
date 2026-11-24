@@ -7,7 +7,7 @@
 // these snapshot fields are required only when there is no customer relationship (Option 3).
 // Factory tests pin the flags; the sqlite tests pin the Local API create that used to fail.
 // Own sqlite so a parallel getPayload spec cannot SQLITE_BUSY this file.
-import type { Field, Payload } from 'payload'
+import type { CollectionSlug, Field, Payload } from 'payload'
 
 import { sqliteAdapter } from '@payloadcms/db-sqlite'
 import { rm } from 'node:fs/promises'
@@ -150,8 +150,10 @@ describe('README Option 2 invoice create', () => {
   }
 
   test('creates an invoice with only a customer relationship', async () => {
+    // This suite builds its own config with a customers collection that the dev app's
+    // generated types don't include, hence the casts on the slug and the returned invoice.
     const customer = await payload.create({
-      collection: 'customers',
+      collection: 'customers' as CollectionSlug,
       data: {
         name: 'Acme',
         email: 'acme@example.com',
@@ -169,9 +171,8 @@ describe('README Option 2 invoice create', () => {
     })
 
     expect(typeof invoice.id === 'string' || typeof invoice.id === 'number').toBe(true)
-    const linkedId = typeof invoice.customer === 'object' && invoice.customer !== null
-      ? invoice.customer.id
-      : invoice.customer
+    const { customer: linked } = invoice as typeof invoice & { customer?: { id: number | string } | number | string | null }
+    const linkedId = typeof linked === 'object' && linked !== null ? linked.id : linked
     expect(linkedId).toBe(customer.id)
   })
 

@@ -1,0 +1,57 @@
+name: CI
+
+# Runs the checks a release depends on (typecheck, lint, tests, packed build) on
+# every PR into main or dev and on pushes to those branches, so a PR that breaks
+# them is caught before merge rather than at publish time.
+on:
+  pull_request:
+    branches:
+      - main
+      - dev
+  push:
+    branches:
+      - main
+      - dev
+
+# A new push supersedes the run still going for the previous commit.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: ${{ matrix.task.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        task:
+          - name: Typecheck
+            run: pnpm typecheck
+          - name: Lint
+            run: pnpm lint
+          - name: Test
+            run: pnpm test
+          - name: Build and verify packed exports
+            run: pnpm test:pack
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: ${{ matrix.task.name }}
+        run: ${{ matrix.task.run }}

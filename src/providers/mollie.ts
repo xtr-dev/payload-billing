@@ -17,6 +17,7 @@ import { formatAmountForProvider, isValidAmount, isValidCurrencyCode, parseAmoun
 import { syncPaymentRefunds } from './refunds'
 import { createContextLogger } from '../utils/logger'
 import { fillReturnToken } from '../utils/returnToken'
+import { getServerUrlFromEnv } from './serverUrl'
 
 const symbol = Symbol.for('@xtr-dev/payload-billing/mollie')
 export type MollieProviderConfig = Parameters<typeof createMollieClient>[0]
@@ -249,7 +250,6 @@ export const mollieProvider = (mollieConfig: MollieProviderConfig & {
       // Setup URLs with development defaults
       // Only use localhost fallbacks in non-production environments
       const isProduction = process.env.NODE_ENV === 'production'
-      const serverUrl = process.env.NEXT_PUBLIC_SERVER_URL || process.env.PAYLOAD_PUBLIC_SERVER_URL || process.env.SERVER_URL
 
       // Priority: payment.redirectUrl > config.redirectUrl > dev fallback
       let redirectUrl = fillReturnToken(payment.redirectUrl || mollieConfig.redirectUrl, payment)
@@ -259,6 +259,11 @@ export const mollieProvider = (mollieConfig: MollieProviderConfig & {
 
       let webhookUrl = mollieConfig.webhookUrl
       if (!webhookUrl) {
+        // Read only when no webhookUrl is configured, so a configured one never triggers the
+        // NEXT_PUBLIC_SERVER_URL warning.
+        const serverUrl = getServerUrlFromEnv((message) =>
+          createContextLogger(payload, 'Mollie Provider').warn(message),
+        )
         if (serverUrl) {
           webhookUrl = `${serverUrl}/api/payload-billing/mollie/webhook`
         } else if (!isProduction) {

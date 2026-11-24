@@ -72,6 +72,7 @@ export interface Config {
     payments: Payment;
     invoices: Invoice;
     refunds: Refund;
+    'payload-kv': PayloadKv;
     users: User;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
@@ -84,6 +85,7 @@ export interface Config {
     payments: PaymentsSelect<false> | PaymentsSelect<true>;
     invoices: InvoicesSelect<false> | InvoicesSelect<true>;
     refunds: RefundsSelect<false> | RefundsSelect<true>;
+    'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     users: UsersSelect<false> | UsersSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
@@ -92,12 +94,14 @@ export interface Config {
   db: {
     defaultIDType: number;
   };
+  fallbackLocale: null;
   globals: {};
   globalsSelect: {};
   locale: null;
-  user: User & {
-    collection: 'users';
+  widgets: {
+    collections: CollectionsWidget;
   };
+  user: User;
   jobs: {
     tasks: unknown;
     workflows: unknown;
@@ -177,9 +181,13 @@ export interface Payment {
    */
   checkoutUrl?: string | null;
   /**
-   * URL to redirect user after payment completion
+   * URL to redirect user after payment completion. {returnToken} is replaced with this payment's return token.
    */
   redirectUrl?: string | null;
+  /**
+   * Random token set by the plugin on create. Put {returnToken} in the redirect URL to get it back on your return page, then find the payment by it.
+   */
+  returnToken?: string | null;
   invoice?: (number | null) | Invoice;
   /**
    * Additional metadata for the payment
@@ -219,7 +227,7 @@ export interface Invoice {
   /**
    * Invoice number (auto-generated as INV-<unix-ms-timestamp>, e.g. INV-1755289904123, unless set explicitly)
    */
-  number: string;
+  number?: string | null;
   /**
    * Customer billing information
    */
@@ -338,6 +346,10 @@ export interface Refund {
    */
   providerId?: string | null;
   /**
+   * Keep this refund as a record only: it is never sent to the payment provider or polled. Use it for refunds handled by hand, or to hold one back; untick it to let the refund sweep send it.
+   */
+  manual?: boolean | null;
+  /**
    * Sent to the provider so retrying this refund can never pay out twice
    */
   idempotencyKey?: string | null;
@@ -392,6 +404,23 @@ export interface Refund {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "payload-kv".
+ */
+export interface PayloadKv {
+  id: number;
+  key: string;
+  data:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "users".
  */
 export interface User {
@@ -403,9 +432,18 @@ export interface User {
   resetPasswordExpiration?: string | null;
   salt?: string | null;
   hash?: string | null;
+  resetPasswordRequestedAt?: string | null;
   loginAttempts?: number | null;
   lockUntil?: string | null;
+  sessions?:
+    | {
+        id: string;
+        createdAt?: string | null;
+        expiresAt: string;
+      }[]
+    | null;
   password?: string | null;
+  collection: 'users';
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -518,6 +556,7 @@ export interface PaymentsSelect<T extends boolean = true> {
   description?: T;
   checkoutUrl?: T;
   redirectUrl?: T;
+  returnToken?: T;
   invoice?: T;
   metadata?: T;
   providerData?: T;
@@ -580,6 +619,7 @@ export interface InvoicesSelect<T extends boolean = true> {
  */
 export interface RefundsSelect<T extends boolean = true> {
   providerId?: T;
+  manual?: T;
   idempotencyKey?: T;
   failureReason?: T;
   payment?: T;
@@ -595,6 +635,14 @@ export interface RefundsSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "payload-kv_select".
+ */
+export interface PayloadKvSelect<T extends boolean = true> {
+  key?: T;
+  data?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "users_select".
  */
 export interface UsersSelect<T extends boolean = true> {
@@ -605,8 +653,16 @@ export interface UsersSelect<T extends boolean = true> {
   resetPasswordExpiration?: T;
   salt?: T;
   hash?: T;
+  resetPasswordRequestedAt?: T;
   loginAttempts?: T;
   lockUntil?: T;
+  sessions?:
+    | T
+    | {
+        id?: T;
+        createdAt?: T;
+        expiresAt?: T;
+      };
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -639,6 +695,16 @@ export interface PayloadMigrationsSelect<T extends boolean = true> {
   batch?: T;
   updatedAt?: T;
   createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "collections_widget".
+ */
+export interface CollectionsWidget {
+  data?: {
+    [k: string]: unknown;
+  };
+  width: 'full';
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema

@@ -14,7 +14,7 @@ import type { Payment } from '../src/plugin/types/payments'
 import { beforeEach, afterEach, describe, expect, it } from 'vitest'
 import { testProvider } from '../src/providers/test'
 
-const ENV_KEYS = ['NEXT_PUBLIC_SERVER_URL', 'PAYLOAD_PUBLIC_SERVER_URL', 'SERVER_URL'] as const
+const ENV_KEYS = ['PAYLOAD_SERVER_URL', 'NEXT_PUBLIC_SERVER_URL', 'PAYLOAD_PUBLIC_SERVER_URL', 'SERVER_URL'] as const
 
 let savedEnv: Record<string, string | undefined>
 
@@ -77,6 +77,16 @@ describe('initPayment validation', () => {
     )
   })
 
+  it('rejects an amount over the 99999999999 reasonable-limit ceiling', () => {
+    // isValidAmount (src/providers/currency.ts) treats this as the other side of the same
+    // boundary as the negative-amount case above — worth pinning independently since a
+    // regression narrowing or widening the ceiling wouldn't trip either of the other two.
+    const provider = testProvider({ enabled: true })!
+    expect(() =>
+      provider.initPayment(null as any, { amount: 100000000000, currency: 'EUR' }),
+    ).toThrow('Invalid amount: must be a non-negative integer within reasonable limits')
+  })
+
   it('rejects a currency that is not a 3-letter code', () => {
     const provider = testProvider({ enabled: true })!
     expect(() => provider.initPayment(null as any, { amount: 1000, currency: 'EURO' })).toThrow(
@@ -109,6 +119,17 @@ describe('initPayment writes back', () => {
     // would redirect the user somewhere other than where the record says.
     expect(result.checkoutUrl).toBe((result.providerData as any).raw.paymentUrl)
     expect((result.providerData as any).provider).toBe('test')
+    expect((result.providerData as any).raw.testMode).toBe(true)
+    // Pins the full default scenario list surfaced to the checkout UI, not just its length —
+    // a regression reordering or dropping one wouldn't be caught by a count alone.
+    expect((result.providerData as any).raw.scenarios.map((s: { id: string }) => s.id)).toEqual([
+      'instant-success',
+      'delayed-success',
+      'cancelled-payment',
+      'declined-payment',
+      'expired-payment',
+      'pending-payment',
+    ])
     // initPayment mutates its argument in place; the payments beforeChange hook discards
     // whatever initProviderPayment returns and relies on that mutation.
     expect(payment).toBe(result)
@@ -140,10 +161,26 @@ describe('baseUrl precedence', () => {
     expect(payment.checkoutUrl?.startsWith('https://config.example/')).toBe(true)
   })
 
-  it('prefers NEXT_PUBLIC_SERVER_URL over the remaining env vars', () => {
+  it('prefers PAYLOAD_SERVER_URL over every other env var', () => {
+    process.env.PAYLOAD_SERVER_URL = 'https://payload-runtime.example'
     process.env.NEXT_PUBLIC_SERVER_URL = 'https://next-public.example'
     process.env.PAYLOAD_PUBLIC_SERVER_URL = 'https://payload-public.example'
     process.env.SERVER_URL = 'https://server.example'
+    const provider = testProvider({ enabled: true })!
+    const payment = provider.initPayment(null as any, { amount: 500, currency: 'EUR' }) as Payment
+    expect(payment.checkoutUrl?.startsWith('https://payload-runtime.example/')).toBe(true)
+  })
+
+  it('prefers the runtime env vars over the build-time NEXT_PUBLIC_SERVER_URL', () => {
+    process.env.NEXT_PUBLIC_SERVER_URL = 'https://next-public.example'
+    process.env.SERVER_URL = 'https://server.example'
+    const provider = testProvider({ enabled: true })!
+    const payment = provider.initPayment(null as any, { amount: 500, currency: 'EUR' }) as Payment
+    expect(payment.checkoutUrl?.startsWith('https://server.example/')).toBe(true)
+  })
+
+  it('still falls back to NEXT_PUBLIC_SERVER_URL when it is the only one set', () => {
+    process.env.NEXT_PUBLIC_SERVER_URL = 'https://next-public.example'
     const provider = testProvider({ enabled: true })!
     const payment = provider.initPayment(null as any, { amount: 500, currency: 'EUR' }) as Payment
     expect(payment.checkoutUrl?.startsWith('https://next-public.example/')).toBe(true)
@@ -162,6 +199,23 @@ describe('baseUrl precedence', () => {
     const provider = testProvider({ enabled: true })!
     const payment = provider.initPayment(null as any, { amount: 500, currency: 'EUR' }) as Payment
     expect(payment.checkoutUrl?.startsWith('https://server.example/')).toBe(true)
+  })
+
+  it('reads the environment when a payment is created, not when the provider is built', () => {
+    const provider = testProvider({ enabled: true })!
+    process.env.PAYLOAD_SERVER_URL = 'https://set-after-config.example'
+    const payment = provider.initPayment(null as any, { amount: 500, currency: 'EUR' }) as Payment
+    expect(payment.checkoutUrl?.startsWith('https://set-after-config.example/')).toBe(true)
+  })
+
+  it('fills {returnToken} in a returnUrl built on the runtime server URL', async () => {
+    process.env.PAYLOAD_SERVER_URL = 'https://runtime.example'
+    const provider = testProvider({ enabled: true, returnUrl: '/thanks/{returnToken}' })!
+    const payment: any = { amount: 500, currency: 'EUR', returnToken: 'tok123' }
+    provider.initPayment(null as any, payment)
+    const { '/payload-billing/test/payment/:id': handler } = endpointsFor(provider)
+    const response = await handler({ url: `/api/payload-billing/test/payment/${payment.providerId}` })
+    expect(await response.text()).toContain('https://runtime.example/thanks/tok123')
   })
 
   it('falls back to http://localhost:3000 when nothing is set', () => {

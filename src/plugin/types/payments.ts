@@ -30,6 +30,10 @@ export interface Payment {
    * URL to redirect user after payment completion
    */
   redirectUrl?: string | null;
+  /**
+   * Random token set on create; replaces `{returnToken}` in the redirect URL
+   */
+  returnToken?: string | null;
   invoice?: (Id | null) | Invoice;
   /**
    * Additional metadata for the payment
@@ -55,7 +59,7 @@ export interface Payment {
     | number
     | boolean
     | null;
-  refunds?: (number | Refund)[] | null;
+  refunds?: (Id | Refund)[] | null;
   /**
    * Version number for optimistic locking (auto-incremented on updates)
    */

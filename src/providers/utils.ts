@@ -1,4 +1,4 @@
-import type { Payload } from 'payload'
+import type { CollectionSlug, Payload, Where } from 'payload'
 import type { Payment } from '../plugin/types/payments'
 import type { BillingPluginConfig } from '../plugin/config'
 import type { ProviderData } from './types'
@@ -49,8 +49,129 @@ export async function findPaymentByProviderId(
   return payments.docs.length > 0 ? payments.docs[0] as Payment : null
 }
 
+type PaymentStatus = Payment['status']
+
+const ALL_PAYMENT_STATUSES: PaymentStatus[] = [
+  'pending',
+  'processing',
+  'succeeded',
+  'failed',
+  'canceled',
+  'refunded',
+  'partially_refunded',
+]
+
 /**
- * Update payment status and provider data with optimistic locking
+ * Which statuses a provider update may move a payment to, per current status.
+ *
+ * - `pending` / `processing` are open and may move anywhere.
+ * - `succeeded` may only move on to the refund statuses; a late or out-of-order
+ *   webhook reporting `pending` must not undo a success.
+ * - `failed` / `canceled` may still become `succeeded`: Stripe lets a customer retry a
+ *   PaymentIntent after a failed attempt, and money the provider reports as received must
+ *   never be dropped. `failed` may also become `canceled` (an abandoned intent).
+ * - The refund statuses only move forward (`partially_refunded` -> `refunded`); the
+ *   refund code derives them itself and does not go through this function.
+ *
+ * Writing the same status again is always allowed, so providerData can be refreshed.
+ */
+const PAYMENT_TRANSITIONS: Record<PaymentStatus, PaymentStatus[]> = {
+  pending: ALL_PAYMENT_STATUSES,
+  processing: ALL_PAYMENT_STATUSES,
+  succeeded: ['succeeded', 'partially_refunded', 'refunded'],
+  failed: ['failed', 'succeeded', 'canceled'],
+  canceled: ['canceled', 'succeeded'],
+  partially_refunded: ['partially_refunded', 'refunded'],
+  refunded: ['refunded'],
+}
+
+/**
+ * Whether a provider-reported status may replace the payment's current status.
+ * Unknown current statuses are treated as open, so data written by older versions
+ * of the plugin is not locked.
+ */
+export function canTransitionPayment(from: PaymentStatus | null | undefined, to: PaymentStatus): boolean {
+  if (!from || !PAYMENT_TRANSITIONS[from]) {return true}
+  return PAYMENT_TRANSITIONS[from].includes(to)
+}
+
+type ClaimResult = 'claimed' | 'conflict' | 'settled'
+
+/**
+ * Claim the right to write the payment: succeeds only when the payment still has the
+ * version that was read and its stored status may still move to `toStatus`. Otherwise
+ * another writer changed the payment first or it has settled meanwhile (MongoDB cannot
+ * tell those two apart and reports `conflict`).
+ *
+ * On MongoDB this is a real compare-and-set in the database (`updateOne` with the
+ * conditions in its filter, i.e. findOneAndUpdate, which returns null when nothing
+ * matched) that bumps the version, so it holds without transactions too (MongoDB without
+ * a replica set). The SQL adapters cannot express that through Payload's adapter API
+ * (their `updateOne` / `updateMany` write whole rows and pick the row in a separate
+ * select), so there the payment is re-read, inside the transaction when there is one,
+ * and compared. Without a transaction that re-read is best effort only: it narrows the
+ * window for a concurrent writer but does not close it.
+ *
+ * On MongoDB without a transaction, a failure after a successful claim (e.g. a throwing
+ * beforeChange hook in the status write) leaves the version bumped with the old status.
+ * Nothing is lost: the next attempt re-reads the new version and succeeds; only a writer
+ * that read before the claim sees a conflict.
+ */
+async function claimPaymentWrite(
+  payload: Payload,
+  collection: CollectionSlug,
+  id: string | number,
+  read: Payment,
+  toStatus: PaymentStatus,
+  req?: { transactionID: string | number },
+): Promise<ClaimResult> {
+  const db = payload.db as Payload['db'] & { name?: string }
+
+  if (db.name === 'mongoose') {
+    const versionMatch: Where =
+      typeof read.version === 'number'
+        ? { version: { equals: read.version } }
+        : { or: [{ version: { exists: false } }, { version: { equals: null } }] }
+    const where: Where = {
+      and: [
+        { id: { equals: id } },
+        versionMatch,
+        {
+          or: [
+            { status: { in: ALL_PAYMENT_STATUSES.filter((from) => canTransitionPayment(from, toStatus)) } },
+            // Missing or unknown statuses count as open, as in canTransitionPayment
+            { status: { not_in: ALL_PAYMENT_STATUSES } },
+          ],
+        },
+      ],
+    }
+    const claimed = await db.updateOne({
+      collection,
+      data: { version: (read.version || 1) + 1 },
+      req,
+      where,
+    })
+    return claimed ? 'claimed' : 'conflict'
+  }
+
+  const current = await payload.findByID({ collection, id, ...(req ? { req } : {}) }) as Payment
+  if ((current.version || 1) !== (read.version || 1)) {return 'conflict'}
+  return canTransitionPayment(current.status, toStatus) ? 'claimed' : 'settled'
+}
+
+/**
+ * Update payment status and provider data with optimistic locking.
+ *
+ * Returns false (and writes nothing) when the payment has already settled into a status
+ * the new one may not replace (see {@link canTransitionPayment}), or when another process
+ * changed the payment between our read and our write. The write itself still goes through
+ * `payload.update`, so the collection's hooks (and a host's afterChange hooks) see the real
+ * status change with the correct previousDoc.
+ *
+ * On MongoDB two writers that read the same version can no longer both write, with or
+ * without a transaction. Without a transaction a small window remains between the version
+ * bump and the status write (two writes, so hooks still see the status change): a writer
+ * that reads the payment inside that window can still overwrite it.
  */
 export async function updatePaymentStatus(
   payload: Payload,
@@ -74,6 +195,11 @@ export async function updatePaymentStatus(
       return false
     }
 
+    if (!canTransitionPayment(currentPayment.status, status)) {
+      logger.warn(`Refusing to move payment ${paymentId} from ${currentPayment.status} to ${status}`)
+      return false
+    }
+
     const currentVersion = currentPayment.version || 1
 
     // Try to use transactions if supported by the database adapter
@@ -84,50 +210,27 @@ export async function updatePaymentStatus(
       // Transaction support may not be available in all database adapters
       logger.debug('Transactions not supported, falling back to direct update')
     }
+    const req = transactionID ? { transactionID } : undefined
 
-    if (transactionID) {
-      // Use transactional update with optimistic locking
-      try {
-        // Re-fetch within transaction to ensure consistency
-        const paymentInTransaction = await payload.findByID({
-          collection: paymentsCollection,
-          id: toPayloadId(paymentId),
-          req: { transactionID }
-        }) as Payment
-
-        // Check if version still matches
-        if ((paymentInTransaction.version || 1) !== currentVersion) {
-          // Version conflict detected - payment was modified by another process
-          logger.warn(`Version conflict for payment ${paymentId} (expected version: ${currentVersion}, got: ${paymentInTransaction.version})`)
-          await payload.db.rollbackTransaction(transactionID)
-          return false
-        }
-
-        // Update with new version
-        await payload.update({
-          collection: paymentsCollection,
-          id: toPayloadId(paymentId),
-          data: {
-            status,
-            providerData: {
-              ...providerData,
-              webhookProcessedAt: new Date().toISOString()
-            },
-            version: currentVersion + 1
-          },
-          req: { transactionID }
-        })
-
-        await payload.db.commitTransaction(transactionID)
-        return true
-      } catch (error) {
-        await payload.db.rollbackTransaction(transactionID)
-        throw error
+    try {
+      const claim = await claimPaymentWrite(
+        payload,
+        paymentsCollection,
+        toPayloadId(paymentId),
+        currentPayment,
+        status,
+        req,
+      )
+      if (claim !== 'claimed') {
+        // Another process changed the payment, or it settled, after we read it
+        logger.warn(
+          claim === 'settled'
+            ? `Payment ${paymentId} settled meanwhile; refusing to move it to ${status}`
+            : `Version conflict for payment ${paymentId} (expected version: ${currentVersion}, changed or settled meanwhile), not updating to ${status}`,
+        )
+        if (transactionID) {await payload.db.rollbackTransaction(transactionID)}
+        return false
       }
-    } else {
-      // Fallback: Direct update without transaction support
-      // This is less safe but allows payment updates on databases without transaction support
-      logger.debug('Using direct update without transaction')
 
       await payload.update({
         collection: paymentsCollection,
@@ -139,10 +242,15 @@ export async function updatePaymentStatus(
             webhookProcessedAt: new Date().toISOString()
           },
           version: currentVersion + 1
-        }
+        },
+        ...(req ? { req } : {}),
       })
 
+      if (transactionID) {await payload.db.commitTransaction(transactionID)}
       return true
+    } catch (error) {
+      if (transactionID) {await payload.db.rollbackTransaction(transactionID)}
+      throw error
     }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error)

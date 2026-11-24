@@ -35,7 +35,12 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
         description: 'Invoice number (auto-generated as INV-<unix-ms-timestamp>, e.g. INV-1755289904123, unless set explicitly)',
       },
       index: true,
-      required: true,
+      // Not `required: true`: that would make `number` mandatory in the host's generated types,
+      // so creating an invoice from code would need a dummy `number: ''`. The beforeValidate hook
+      // fills it on create, and this validator still rejects a stored invoice without a number
+      // (for example when an admin clears the field on update).
+      validate: (value: null | string | undefined) =>
+        typeof value === 'string' && value.trim() !== '' ? true : 'Invoice number is required',
       unique: true,
     },
     // Optional customer relationship
@@ -440,8 +445,9 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
           }
 
           if (operation === 'create') {
-            // Generate invoice number if not provided
-            if (!data.number) {
+            // Generate invoice number if not provided (a blank one counts as not provided). The
+            // `number` field's validator relies on this running first: it rejects an empty number.
+            if (!data.number?.trim()) {
               data.number = generateInvoiceNumber()
             }
 

@@ -177,12 +177,12 @@ mollieProvider({
 ```bash
 MOLLIE_API_KEY=test_...
 MOLLIE_WEBHOOK_URL=https://yourdomain.com/api/payload-billing/mollie/webhook  # Optional if server URL is set
-NEXT_PUBLIC_SERVER_URL=https://yourdomain.com  # Or PAYLOAD_PUBLIC_SERVER_URL or SERVER_URL
+PAYLOAD_SERVER_URL=https://yourdomain.com  # Or PAYLOAD_PUBLIC_SERVER_URL or SERVER_URL; see Server URL below
 ```
 
 **Important Notes:**
 - Mollie requires HTTPS URLs in production (no localhost)
-- Webhook URL is auto-generated from server URL environment variables (checked in order: `NEXT_PUBLIC_SERVER_URL`, `PAYLOAD_PUBLIC_SERVER_URL`, `SERVER_URL`)
+- Webhook URL is auto-generated from server URL environment variables (checked in order: `PAYLOAD_SERVER_URL`, `PAYLOAD_PUBLIC_SERVER_URL`, `SERVER_URL`, `NEXT_PUBLIC_SERVER_URL`). See [Server URL](#server-url)
 - Falls back to `https://localhost:3000` only in non-production environments
 - In production, throws an error if no valid URL can be determined
 - Amounts are formatted as decimal strings (e.g., "50.00")
@@ -448,7 +448,8 @@ Tracks payment transactions with provider integration.
   currency: string                      // ISO 4217 currency code
   description?: string
   checkoutUrl?: string                  // Checkout URL (if applicable)
-  redirectUrl?: string                  // URL to redirect user after payment
+  redirectUrl?: string                  // URL to redirect user after payment ({returnToken} is filled in)
+  returnToken?: string                  // Random token set on create (read-only)
   invoice?: Invoice | string            // Linked invoice
   metadata?: Record<string, any>        // Custom metadata
   providerData?: ProviderData           // Raw provider response (read-only)
@@ -472,6 +473,7 @@ succeeded → partially_refunded → refunded
 - Amount must be a positive integer
 - Currency normalized to uppercase
 - Version incremented on each update
+- Provider webhooks never move a settled payment back: `succeeded` only moves on to the refund statuses, `failed` / `canceled` only to `succeeded` (Stripe allows a retry after a failed attempt). On MongoDB the version check is a conditional write in the database, so it also holds without a replica set (no transactions)
 - Provider's `initPayment()` called on creation
 - Linked invoice updated when status becomes `succeeded`
 
@@ -504,6 +506,42 @@ await payload.create({
 ```
 
 **Priority:** `payment.redirectUrl` > provider config `redirectUrl`/`returnUrl` > default fallback
+
+**Finding the payment on your return page (`{returnToken}`):**
+
+The return URL is sent to the provider while the payment is being created, before it has a
+database id, so there is no `{paymentId}` placeholder. Instead every payment gets a random
+`returnToken` on create (32 random hex characters, unique, stored on the payment), and the plugin replaces
+`{returnToken}` in the redirect URL with it. This works in `payment.redirectUrl` and in the
+provider config's `redirectUrl` (Mollie) / `returnUrl` (Stripe, test provider).
+
+```typescript
+await payload.create({
+  collection: 'payments',
+  data: {
+    provider: 'mollie',
+    amount: 5000,
+    currency: 'EUR',
+    redirectUrl: 'https://example.com/thank-you?t={returnToken}',
+  },
+})
+
+// On https://example.com/thank-you?t=...
+const { docs } = await payload.find({
+  collection: 'payments',
+  where: { returnToken: { equals: token } },
+  limit: 1,
+})
+```
+
+The plugin always generates the token itself: a `returnToken` passed on create is replaced, and an
+update cannot change it. Payments created before this feature have no token.
+
+Treat the token as a bearer secret for that one payment. Anyone who has the return URL can use it,
+and it also ends up in browser history, server logs and the provider's dashboard. On the return
+page, show only what the customer may see (for example the status), and don't expose the whole
+payment document on a public endpoint keyed only by the token. The stored `redirectUrl` already
+has the token filled in.
 
 ### Invoices
 
@@ -839,6 +877,18 @@ refund.status      // 'processing' until Mollie settles it, then 'succeeded' | '
   you've used returns the existing refund. A webhook + sweep retry can't pay out twice.
 - **Provider errors:** a 4xx rejection stores the refund as `failed` with `failureReason`; a network
   or 5xx error leaves it `pending` for `processPendingRefunds(payload)` (run it from a cron/job).
+- **Sweeps:** `processPendingRefunds` and `syncOpenRefunds` work through every matching refund,
+  oldest first, not just one page. `syncOpenRefunds` only polls `processing` refunds with a
+  `providerId` (the only ones the provider can still move on).
+- **Manual refunds:** tick `manual` on a refund (field in the admin sidebar, or `manual: true` on
+  create) to keep it as a record only: `processRefund`, `processPendingRefunds` and
+  `syncOpenRefunds` skip it, so it is never paid out by the plugin. Use it for refunds handled by
+  hand or to hold one back; untick it to let the next sweep send it. A manual refund still counts
+  against what can be refunded while it is `pending` / `processing` / `succeeded`. It only stops
+  the plugin from *sending* or *polling* it: a manual refund with a `providerId` is still updated
+  when the payment's webhook or `syncPaymentRefunds` reports that refund. Anyone who can update
+  refunds can clear `manual` (and so release it to the sweep): restrict it together with
+  `providerId`, e.g. with field-level access via `collections.refunds.extend`.
 
 **Access:** by default any authenticated user can create refunds, which now means reserving real
 payouts (or, with a `providerId`, marking a refund `succeeded`). Restrict the refunds collection
@@ -1018,9 +1068,10 @@ const campaignPayments = await payload.find({
 1. **Set server URL** (webhook URL is auto-generated):
    ```bash
    # Any of these work (checked in this order):
-   NEXT_PUBLIC_SERVER_URL=https://yourdomain.com
+   PAYLOAD_SERVER_URL=https://yourdomain.com
    PAYLOAD_PUBLIC_SERVER_URL=https://yourdomain.com
    SERVER_URL=https://yourdomain.com
+   NEXT_PUBLIC_SERVER_URL=https://yourdomain.com  # last resort, fixed at build time (see Server URL)
 
    # Or set explicit webhook URL:
    MOLLIE_WEBHOOK_URL=https://yourdomain.com/api/payload-billing/mollie/webhook
@@ -1031,14 +1082,52 @@ const campaignPayments = await payload.find({
 3. **Test locally with ngrok:**
    ```bash
    ngrok http 3000
-   # Use ngrok URL as NEXT_PUBLIC_SERVER_URL
+   # Use ngrok URL as PAYLOAD_SERVER_URL
    ```
 
 **Important:**
 - Mollie requires HTTPS URLs (no `http://` or `localhost` in production)
-- Webhook URL auto-generated from `NEXT_PUBLIC_SERVER_URL`, `PAYLOAD_PUBLIC_SERVER_URL`, or `SERVER_URL`
+- Webhook URL auto-generated from `PAYLOAD_SERVER_URL`, `PAYLOAD_PUBLIC_SERVER_URL`, `SERVER_URL` or `NEXT_PUBLIC_SERVER_URL` (in that order)
 - In production, throws an error if no valid server URL is configured
 - Mollie validates webhooks by verifying payment ID exists
+
+### Server URL
+
+When a provider config has no `webhookUrl` (Mollie) or `baseUrl` (test provider), the plugin builds
+those URLs from the environment, checking in order:
+
+1. `PAYLOAD_SERVER_URL`
+2. `PAYLOAD_PUBLIC_SERVER_URL`
+3. `SERVER_URL`
+4. `NEXT_PUBLIC_SERVER_URL`
+
+`NEXT_PUBLIC_SERVER_URL` is checked last, and the plugin logs a warning when it uses it. Next.js
+replaces every `process.env.NEXT_PUBLIC_*` with its value at `next build`, so an image built once
+and deployed under another URL would send Mollie webhooks and test-checkout redirects to the URL it
+was built with. Set one of the runtime variables, or pass the URL in the config:
+
+```typescript
+mollieProvider({
+  apiKey: process.env.MOLLIE_API_KEY!,
+  webhookUrl: `${process.env.PAYLOAD_SERVER_URL}/api/payload-billing/mollie/webhook`,
+})
+
+testProvider({ enabled: true, baseUrl: process.env.PAYLOAD_SERVER_URL })
+```
+
+**Syncing a payment without the webhook:** when a webhook never arrived (local development,
+an outage), pull the payment from the provider with the same code path the webhook uses
+(status update, invoice marked paid, refunds synced), e.g. from a cron job or a thank-you page:
+
+```typescript
+import { syncPaymentFromProvider } from '@xtr-dev/payload-billing'
+
+const payment = await syncPaymentFromProvider(payload, paymentId) // our payment id
+```
+
+It throws when the payment has no provider payment id yet or its provider cannot sync
+(currently only Mollie can). To only read a Mollie status the way the plugin does, use
+`mapMollieStatusToPaymentStatus` from `@xtr-dev/payload-billing/mollie`.
 
 ### Webhook Security
 
@@ -1259,10 +1348,11 @@ echo $STRIPE_WEBHOOK_SECRET
 
 **Mollie:**
 ```bash
-# Verify server URL is set (any of these work):
-echo $NEXT_PUBLIC_SERVER_URL
+# Verify server URL is set (any of these work, checked in this order):
+echo $PAYLOAD_SERVER_URL
 echo $PAYLOAD_PUBLIC_SERVER_URL
 echo $SERVER_URL
+echo $NEXT_PUBLIC_SERVER_URL
 
 # Check webhook URL is accessible (must be HTTPS in production)
 curl -X POST https://yourdomain.com/api/payload-billing/mollie/webhook \
@@ -1276,6 +1366,7 @@ curl -X POST https://yourdomain.com/api/payload-billing/mollie/webhook \
 3. **Check database transactions** are supported
 4. **Look for version conflicts** (optimistic locking failures)
 5. **Verify payment exists** with matching `providerId`
+6. **Resync it by hand** with `syncPaymentFromProvider(payload, paymentId)` (Mollie)
 
 ### Invoice Not Updating After Payment
 
@@ -1299,7 +1390,7 @@ curl -X POST https://yourdomain.com/api/payload-billing/mollie/webhook \
 - Use ngrok or deploy to staging for local testing:
   ```bash
   ngrok http 3000
-  # Set NEXT_PUBLIC_SERVER_URL to ngrok URL
+  # Set PAYLOAD_SERVER_URL to ngrok URL
   ```
 
 ### Test Provider Payment Not Processing

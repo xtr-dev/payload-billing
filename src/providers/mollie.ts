@@ -2,6 +2,7 @@ import type { Payment } from '../plugin/types/payments'
 import type { PaymentProvider, ProviderRefund } from '../plugin/types/index'
 import type { Refund } from '../plugin/types/refunds'
 import type { Payload } from 'payload'
+import type { BillingPluginConfig } from '../plugin/config'
 import { createSingleton } from '../plugin/singleton'
 import type { createMollieClient, MollieClient } from '@mollie/api-client'
 import {
@@ -15,14 +16,19 @@ import {
 import { formatAmountForProvider, isValidAmount, isValidCurrencyCode, parseAmountFromProvider } from './currency'
 import { syncPaymentRefunds } from './refunds'
 import { createContextLogger } from '../utils/logger'
+import { fillReturnToken } from '../utils/returnToken'
+import { getServerUrlFromEnv } from './serverUrl'
 
 const symbol = Symbol.for('@xtr-dev/payload-billing/mollie')
 export type MollieProviderConfig = Parameters<typeof createMollieClient>[0]
 
 /**
- * Type-safe mapping of Mollie payment status to internal status
+ * Type-safe mapping of Mollie payment status to internal status. Exported so hosts can
+ * read a Mollie status the same way the plugin does; to apply it, prefer
+ * `syncPaymentFromProvider`, which also runs the refund guard, invoice update and refund sync.
+ * Any status not listed (a new or unknown Mollie status) maps to `processing`.
  */
-function mapMollieStatusToPaymentStatus(mollieStatus: string): Payment['status'] {
+export function mapMollieStatusToPaymentStatus(mollieStatus: string): Payment['status'] {
   // Define known Mollie statuses for type safety
   const mollieStatusMap: Record<string, Payment['status']> = {
     'paid': 'succeeded',
@@ -68,6 +74,61 @@ function toProviderRefund(refund: any): ProviderRefund {
   }
 }
 
+/**
+ * Pull one payment's current state from Mollie and apply it: the same path the webhook
+ * takes. Keeps a (partially) refunded status, marks the invoice paid on success and syncs
+ * the payment's refunds. Returns whether the payment document was updated.
+ */
+async function syncMolliePayment(
+  payload: Payload,
+  pluginConfig: BillingPluginConfig,
+  mollieClient: MollieClient,
+  payment: Payment,
+): Promise<boolean> {
+  // Fetch the payment details from Mollie
+  const molliePayment = await mollieClient.payments.get(payment.providerId as string)
+
+  // Map Mollie status to our status using proper type-safe mapping
+  const status = mapMollieStatusToPaymentStatus(molliePayment.status)
+
+  // Mollie keeps reporting a refunded payment as `paid`; that must not undo the
+  // refunded / partially_refunded status our refunds put on it.
+  const keepRefundStatus =
+    status === 'succeeded' && (payment.status === 'refunded' || payment.status === 'partially_refunded')
+
+  // Update the payment status and provider data
+  // Use toPlainObject if available, otherwise spread the object
+  const providerData = typeof molliePayment.toPlainObject === 'function'
+    ? molliePayment.toPlainObject()
+    : { ...molliePayment }
+  const updateSuccess = await updatePaymentStatus(
+    payload,
+    payment.id,
+    keepRefundStatus ? payment.status : status,
+    providerData,
+    pluginConfig
+  )
+
+  // If payment is successful and update succeeded, update the invoice
+  if (status === 'succeeded' && !keepRefundStatus && updateSuccess) {
+    await updateInvoiceOnPaymentSuccess(payload, payment, pluginConfig)
+  } else if (!updateSuccess) {
+    const logger = createContextLogger(payload, 'Mollie')
+    logger.warn(`Failed to update payment ${payment.id}, skipping invoice update`)
+  }
+
+  // (Only `paid` payments are synced: Mollie refunds only paid payments, and a
+  // later canceled/expired status would not carry refunds.)
+  // Mollie calls the payment's webhook again whenever one of its refunds changes
+  // state, so refunds are synced here: provider refund id, status, and the
+  // payment's (partially) refunded status all follow from the refund documents.
+  if (status === 'succeeded' && updateSuccess) {
+    await syncPaymentRefunds(payload, pluginConfig, payment)
+  }
+
+  return updateSuccess
+}
+
 export const mollieProvider = (mollieConfig: MollieProviderConfig & {
   webhookUrl?: string
   redirectUrl?: string
@@ -104,9 +165,6 @@ export const mollieProvider = (mollieConfig: MollieProviderConfig & {
 
               const molliePaymentId = body.slice(3) // Remove 'id=' prefix
 
-              // Fetch the payment details from Mollie
-              const molliePayment = await mollieClient.payments.get(molliePaymentId)
-
               // Find the corresponding payment in our database
               const payment = await findPaymentByProviderId(payload, molliePaymentId, pluginConfig)
 
@@ -114,43 +172,7 @@ export const mollieProvider = (mollieConfig: MollieProviderConfig & {
                 return webhookResponses.paymentNotFound()
               }
 
-              // Map Mollie status to our status using proper type-safe mapping
-              const status = mapMollieStatusToPaymentStatus(molliePayment.status)
-
-              // Mollie keeps reporting a refunded payment as `paid`; that must not undo the
-              // refunded / partially_refunded status our refunds put on it.
-              const keepRefundStatus =
-                status === 'succeeded' && (payment.status === 'refunded' || payment.status === 'partially_refunded')
-
-              // Update the payment status and provider data
-              // Use toPlainObject if available, otherwise spread the object
-              const providerData = typeof molliePayment.toPlainObject === 'function'
-                ? molliePayment.toPlainObject()
-                : { ...molliePayment }
-              const updateSuccess = await updatePaymentStatus(
-                payload,
-                payment.id,
-                keepRefundStatus ? payment.status : status,
-                providerData,
-                pluginConfig
-              )
-
-              // If payment is successful and update succeeded, update the invoice
-              if (status === 'succeeded' && !keepRefundStatus && updateSuccess) {
-                await updateInvoiceOnPaymentSuccess(payload, payment, pluginConfig)
-              } else if (!updateSuccess) {
-                const logger = createContextLogger(payload, 'Mollie Webhook')
-                logger.warn(`Failed to update payment ${payment.id}, skipping invoice update`)
-              }
-
-              // (Only `paid` payments are synced: Mollie refunds only paid payments, and a
-              // later canceled/expired status would not carry refunds.)
-              // Mollie calls the payment's webhook again whenever one of its refunds changes
-              // state, so refunds are synced here: provider refund id, status, and the
-              // payment's (partially) refunded status all follow from the refund documents.
-              if (status === 'succeeded' && updateSuccess) {
-                await syncPaymentRefunds(payload, pluginConfig, payment)
-              }
+              await syncMolliePayment(payload, pluginConfig, mollieClient, payment)
 
               return webhookResponses.success()
             } catch (error) {
@@ -193,6 +215,12 @@ export const mollieProvider = (mollieConfig: MollieProviderConfig & {
       })
       return toProviderRefund(refund)
     },
+    syncPayment: async (payload, pluginConfig, payment) => {
+      if (!payment.providerId) {
+        throw new Error(`Payment ${payment.id} has no Mollie payment id to sync from`)
+      }
+      return syncMolliePayment(payload, pluginConfig, singleton.get(payload), payment)
+    },
     fetchRefunds: async (payload, payment) => {
       const refunds = (await singleton.get(payload).paymentRefunds.page({
         limit: 250, // Mollie's maximum page size
@@ -222,16 +250,20 @@ export const mollieProvider = (mollieConfig: MollieProviderConfig & {
       // Setup URLs with development defaults
       // Only use localhost fallbacks in non-production environments
       const isProduction = process.env.NODE_ENV === 'production'
-      const serverUrl = process.env.NEXT_PUBLIC_SERVER_URL || process.env.PAYLOAD_PUBLIC_SERVER_URL || process.env.SERVER_URL
 
       // Priority: payment.redirectUrl > config.redirectUrl > dev fallback
-      let redirectUrl = payment.redirectUrl || mollieConfig.redirectUrl
+      let redirectUrl = fillReturnToken(payment.redirectUrl || mollieConfig.redirectUrl, payment)
       if (!redirectUrl && !isProduction) {
         redirectUrl = 'https://localhost:3000/payment/success'
       }
 
       let webhookUrl = mollieConfig.webhookUrl
       if (!webhookUrl) {
+        // Read only when no webhookUrl is configured, so a configured one never triggers the
+        // NEXT_PUBLIC_SERVER_URL warning.
+        const serverUrl = getServerUrlFromEnv((message) =>
+          createContextLogger(payload, 'Mollie Provider').warn(message),
+        )
         if (serverUrl) {
           webhookUrl = `${serverUrl}/api/payload-billing/mollie/webhook`
         } else if (!isProduction) {

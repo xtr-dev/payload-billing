@@ -7,8 +7,10 @@ import { extractSlug } from '../plugin/utils'
 import { handleWebhookError, logWebhookEvent } from './utils'
 import { isValidAmount, isValidCurrencyCode } from './currency'
 import { createContextLogger } from '../utils/logger'
+import { fillReturnToken } from '../utils/returnToken'
 import { createHash } from 'node:crypto'
 import { applyProviderRefund } from './refunds'
+import { getServerUrlFromEnv } from './serverUrl'
 import type { Refund } from '../plugin/types/refunds'
 
 const TestModeWarningSymbol = Symbol.for('@xtr-dev/payload-billing/test-mode-warning')
@@ -240,7 +242,9 @@ export const testProvider = (testConfig: TestProviderConfig) => {
   }
 
   const scenarios = testConfig.scenarios || DEFAULT_SCENARIOS
-  const baseUrl = testConfig.baseUrl || process.env.NEXT_PUBLIC_SERVER_URL || process.env.PAYLOAD_PUBLIC_SERVER_URL || process.env.SERVER_URL || 'http://localhost:3000'
+  // Resolved per request, not when testProvider() runs, so the URL comes from the environment
+  // the server runs in rather than the one the config was first evaluated in.
+  const resolveBaseUrl = () => testConfig.baseUrl || getServerUrlFromEnv() || 'http://localhost:3000'
   const uiRoute = testConfig.customUiRoute || '/test-payment'
 
   // Test mode warnings will be logged in onInit when payload is available
@@ -321,9 +325,13 @@ export const testProvider = (testConfig: TestProviderConfig) => {
               })
             }
 
+            const baseUrl = resolveBaseUrl()
             // Determine redirect URL: session.redirectUrl > payment.redirectUrl > config.returnUrl > default
             const defaultReturnUrl = testConfig.returnUrl ? `${baseUrl}${testConfig.returnUrl}` : `${baseUrl}/payment/success`
-            const redirectUrl = session.redirectUrl || (session.payment as Payment)?.redirectUrl || defaultReturnUrl
+            const redirectUrl = fillReturnToken(
+              session.redirectUrl || (session.payment as Payment)?.redirectUrl || defaultReturnUrl,
+              session.payment as Payment,
+            )
 
             // Generate test payment UI
             const html = generateTestPaymentUI(session, scenarios, uiRoute, baseUrl, testConfig, redirectUrl)
@@ -691,6 +699,7 @@ export const testProvider = (testConfig: TestProviderConfig) => {
       // Set provider ID and data
       payment.providerId = testPaymentId
       // Use custom UI route if specified, otherwise use built-in UI endpoint
+      const baseUrl = resolveBaseUrl()
       const paymentUrl = testConfig.customUiRoute
         ? `${baseUrl}${testConfig.customUiRoute}/${testPaymentId}`
         : `${baseUrl}/api/payload-billing/test/payment/${testPaymentId}`

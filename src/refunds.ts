@@ -22,7 +22,8 @@ export type RefundPaymentArgs = {
   idempotencyKey?: string
 }
 
-const billing = (payload: Payload) => {
+/** The running plugin's config; throws when billingPlugin has not initialized. */
+export const billing = (payload: Payload) => {
   const plugin = useBillingPlugin(payload)
   if (!plugin) {
     throw new Error('Billing plugin not initialized. Make sure billingPlugin is configured and Payload has finished initializing.')

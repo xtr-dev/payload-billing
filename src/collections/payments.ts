@@ -7,6 +7,7 @@ import type { Payment } from '../plugin/types/payments'
 import { initProviderPayment } from './hooks'
 import { isValidCurrencyCode } from '../providers/currency'
 import { createContextLogger } from '../utils/logger'
+import { fillReturnToken, generateReturnToken } from '../utils/returnToken'
 
 export function createPaymentsCollection(pluginConfig: BillingPluginConfig): CollectionConfig {
   // Get slugs for relationships - these need to be determined before building fields
@@ -93,8 +94,23 @@ export function createPaymentsCollection(pluginConfig: BillingPluginConfig): Col
       name: 'redirectUrl',
       type: 'text',
       admin: {
-        description: 'URL to redirect user after payment completion',
+        description:
+          'URL to redirect user after payment completion. {returnToken} is replaced with this payment\'s return token.',
       },
+    },
+    {
+      name: 'returnToken',
+      type: 'text',
+      admin: {
+        description:
+          'Random token set by the plugin on create. Put {returnToken} in the redirect URL to get it back on your return page, then find the payment by it.',
+        position: 'sidebar',
+        readOnly: true,
+      },
+      index: true,
+      // Sparse on MongoDB, and SQL allows many NULLs, so payments created before this field
+      // existed (no token) do not collide.
+      unique: true,
     },
     {
       name: 'invoice',
@@ -210,7 +226,21 @@ export function createPaymentsCollection(pluginConfig: BillingPluginConfig): Col
               }
             }
 
+            // The provider needs the return URL before the document has an id, so a random token
+            // (stored on the payment) stands in for it in the URL. Always generated here, never
+            // taken from the caller: a caller-chosen value could be guessable or reuse another
+            // payment's token, and a return page trusts the token to identify one payment.
+            data.returnToken = generateReturnToken()
+            if (data.redirectUrl) {
+              data.redirectUrl = fillReturnToken(data.redirectUrl, data)
+            }
+
             await initProviderPayment(req.payload, data)
+          }
+
+          // The token is fixed once issued; an update cannot set, change or clear it.
+          if (operation === 'update' && 'returnToken' in data) {
+            data.returnToken = originalDoc?.returnToken ?? null
           }
 
           // Auto-increment version for manual updates (not webhook updates)

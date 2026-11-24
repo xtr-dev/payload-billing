@@ -120,7 +120,7 @@ const buildConfigWithSQLite = () => {
                         }
                       } catch (error) {
                         // Log error but don't fail the invoice creation
-                        req.payload.logger.error('Failed to copy custom message to invoice:', error)
+                        req.payload.logger.error({ err: error }, 'Failed to copy custom message to invoice')
                       }
                     }
                     return data

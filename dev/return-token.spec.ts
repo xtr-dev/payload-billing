@@ -66,6 +66,29 @@ describe('returnToken on payment create', () => {
     expect(found.docs.map((doc) => doc.id)).toEqual([payment.id])
   })
 
+  test('ignores a caller-supplied token and keeps the token fixed on update', async () => {
+    const payment = (await payload.create({
+      collection: 'payments',
+      data: { amount: 1500, currency: 'EUR', provider: 'test', returnToken: 'chosen-by-caller' } as any,
+    })) as unknown as Payment
+
+    expect(payment.returnToken).toMatch(/^[0-9a-f]{32}$/)
+
+    const changed = (await payload.update({
+      collection: 'payments',
+      id: payment.id,
+      data: { returnToken: 'changed' } as any,
+    })) as unknown as Payment
+    expect(changed.returnToken).toBe(payment.returnToken)
+
+    const cleared = (await payload.update({
+      collection: 'payments',
+      id: payment.id,
+      data: { returnToken: null } as any,
+    })) as unknown as Payment
+    expect(cleared.returnToken).toBe(payment.returnToken)
+  })
+
   test('sets a token even without a redirect URL', async () => {
     const payment = (await payload.create({
       collection: 'payments',

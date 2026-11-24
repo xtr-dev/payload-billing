@@ -181,7 +181,7 @@ export interface Payment {
    */
   redirectUrl?: string | null;
   /**
-   * Random token set on create. Put {returnToken} in the redirect URL to get it back on your return page, then find the payment by it.
+   * Random token set by the plugin on create. Put {returnToken} in the redirect URL to get it back on your return page, then find the payment by it.
    */
   returnToken?: string | null;
   invoice?: (number | null) | Invoice;

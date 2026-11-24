@@ -510,7 +510,7 @@ await payload.create({
 
 The return URL is sent to the provider while the payment is being created, before it has a
 database id, so there is no `{paymentId}` placeholder. Instead every payment gets a random
-`returnToken` on create (32 hex characters, stored on the payment), and the plugin replaces
+`returnToken` on create (32 random hex characters, unique, stored on the payment), and the plugin replaces
 `{returnToken}` in the redirect URL with it. This works in `payment.redirectUrl` and in the
 provider config's `redirectUrl` (Mollie) / `returnUrl` (Stripe, test provider).
 
@@ -533,8 +533,14 @@ const { docs } = await payload.find({
 })
 ```
 
-Anyone with the return URL can use the token, so show only what the customer may see. The stored
-`redirectUrl` already has the token filled in.
+The plugin always generates the token itself: a `returnToken` passed on create is replaced, and an
+update cannot change it. Payments created before this feature have no token.
+
+Treat the token as a bearer secret for that one payment. Anyone who has the return URL can use it,
+and it also ends up in browser history, server logs and the provider's dashboard. On the return
+page, show only what the customer may see (for example the status), and don't expose the whole
+payment document on a public endpoint keyed only by the token. The stored `redirectUrl` already
+has the token filled in.
 
 ### Invoices
 

@@ -103,11 +103,14 @@ export function createPaymentsCollection(pluginConfig: BillingPluginConfig): Col
       type: 'text',
       admin: {
         description:
-          'Random token set on create. Put {returnToken} in the redirect URL to get it back on your return page, then find the payment by it.',
+          'Random token set by the plugin on create. Put {returnToken} in the redirect URL to get it back on your return page, then find the payment by it.',
         position: 'sidebar',
         readOnly: true,
       },
       index: true,
+      // Sparse on MongoDB, and SQL allows many NULLs, so payments created before this field
+      // existed (no token) do not collide.
+      unique: true,
     },
     {
       name: 'invoice',
@@ -224,15 +227,20 @@ export function createPaymentsCollection(pluginConfig: BillingPluginConfig): Col
             }
 
             // The provider needs the return URL before the document has an id, so a random token
-            // (stored on the payment) stands in for it in the URL.
-            if (!data.returnToken) {
-              data.returnToken = generateReturnToken()
-            }
+            // (stored on the payment) stands in for it in the URL. Always generated here, never
+            // taken from the caller: a caller-chosen value could be guessable or reuse another
+            // payment's token, and a return page trusts the token to identify one payment.
+            data.returnToken = generateReturnToken()
             if (data.redirectUrl) {
               data.redirectUrl = fillReturnToken(data.redirectUrl, data)
             }
 
             await initProviderPayment(req.payload, data)
+          }
+
+          // The token is fixed once issued; an update cannot set, change or clear it.
+          if (operation === 'update' && 'returnToken' in data) {
+            data.returnToken = originalDoc?.returnToken ?? null
           }
 
           // Auto-increment version for manual updates (not webhook updates)

@@ -105,7 +105,7 @@
     "eslint-config-next": "15.4.4",
     "graphql": "^16.8.1",
     "mongodb-memory-server": "10.1.4",
-    "next": "15.4.4",
+    "next": "15.5.29",
     "open": "^10.1.0",
     "payload": "3.37.0",
     "pino": "^9.5.0",

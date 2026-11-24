@@ -95,10 +95,13 @@ export function canTransitionPayment(from: PaymentStatus | null | undefined, to:
   return PAYMENT_TRANSITIONS[from].includes(to)
 }
 
+type ClaimResult = 'claimed' | 'conflict' | 'settled'
+
 /**
  * Claim the right to write the payment: succeeds only when the payment still has the
- * version that was read and its stored status may still move to `toStatus`. Returns false
- * when another writer changed the payment first or it has settled meanwhile.
+ * version that was read and its stored status may still move to `toStatus`. Otherwise
+ * another writer changed the payment first or it has settled meanwhile (MongoDB cannot
+ * tell those two apart and reports `conflict`).
  *
  * On MongoDB this is a real compare-and-set in the database (`updateOne` with the
  * conditions in its filter, i.e. findOneAndUpdate, which returns null when nothing
@@ -106,7 +109,13 @@ export function canTransitionPayment(from: PaymentStatus | null | undefined, to:
  * a replica set). The SQL adapters cannot express that through Payload's adapter API
  * (their `updateOne` / `updateMany` write whole rows and pick the row in a separate
  * select), so there the payment is re-read, inside the transaction when there is one,
- * and compared.
+ * and compared. Without a transaction that re-read is best effort only: it narrows the
+ * window for a concurrent writer but does not close it.
+ *
+ * On MongoDB without a transaction, a failure after a successful claim (e.g. a throwing
+ * beforeChange hook in the status write) leaves the version bumped with the old status.
+ * Nothing is lost: the next attempt re-reads the new version and succeeds; only a writer
+ * that read before the claim sees a conflict.
  */
 async function claimPaymentWrite(
   payload: Payload,
@@ -115,7 +124,7 @@ async function claimPaymentWrite(
   read: Payment,
   toStatus: PaymentStatus,
   req?: { transactionID: string | number },
-): Promise<boolean> {
+): Promise<ClaimResult> {
   const db = payload.db as Payload['db'] & { name?: string }
 
   if (db.name === 'mongoose') {
@@ -127,7 +136,13 @@ async function claimPaymentWrite(
       and: [
         { id: { equals: id } },
         versionMatch,
-        { status: { in: ALL_PAYMENT_STATUSES.filter((from) => canTransitionPayment(from, toStatus)) } },
+        {
+          or: [
+            { status: { in: ALL_PAYMENT_STATUSES.filter((from) => canTransitionPayment(from, toStatus)) } },
+            // Missing or unknown statuses count as open, as in canTransitionPayment
+            { status: { not_in: ALL_PAYMENT_STATUSES } },
+          ],
+        },
       ],
     }
     const claimed = await db.updateOne({
@@ -136,14 +151,12 @@ async function claimPaymentWrite(
       req,
       where,
     })
-    return Boolean(claimed)
+    return claimed ? 'claimed' : 'conflict'
   }
 
   const current = await payload.findByID({ collection, id, ...(req ? { req } : {}) }) as Payment
-  return (
-    (current.version || 1) === (read.version || 1) &&
-    canTransitionPayment(current.status, toStatus)
-  )
+  if ((current.version || 1) !== (read.version || 1)) {return 'conflict'}
+  return canTransitionPayment(current.status, toStatus) ? 'claimed' : 'settled'
 }
 
 /**
@@ -200,7 +213,7 @@ export async function updatePaymentStatus(
     const req = transactionID ? { transactionID } : undefined
 
     try {
-      const claimed = await claimPaymentWrite(
+      const claim = await claimPaymentWrite(
         payload,
         paymentsCollection,
         toPayloadId(paymentId),
@@ -208,9 +221,13 @@ export async function updatePaymentStatus(
         status,
         req,
       )
-      if (!claimed) {
+      if (claim !== 'claimed') {
         // Another process changed the payment, or it settled, after we read it
-        logger.warn(`Version conflict for payment ${paymentId} (expected version: ${currentVersion}), not updating to ${status}`)
+        logger.warn(
+          claim === 'settled'
+            ? `Payment ${paymentId} settled meanwhile; refusing to move it to ${status}`
+            : `Version conflict for payment ${paymentId} (expected version: ${currentVersion}, changed or settled meanwhile), not updating to ${status}`,
+        )
         if (transactionID) {await payload.db.rollbackTransaction(transactionID)}
         return false
       }

@@ -119,6 +119,9 @@ describe('canTransitionPayment', () => {
     ['canceled', 'processing', false],
     ['refunded', 'succeeded', false],
     ['partially_refunded', 'refunded', true],
+    // Missing or legacy statuses are not locked
+    [null, 'succeeded', true],
+    ['paid' as any, 'pending', true],
   ] as const)('%s -> %s is %s', (from, to, allowed) => {
     expect(canTransitionPayment(from, to)).toBe(allowed)
   })
@@ -152,7 +155,12 @@ describe('updatePaymentStatus on MongoDB (fake adapter)', () => {
     expect(where.and).toEqual([
       { id: { equals: 'p1' } },
       { version: { equals: 3 } },
-      { status: { in: ['pending', 'processing', 'succeeded', 'failed', 'canceled'] } },
+      {
+        or: [
+          { status: { in: ['pending', 'processing', 'succeeded', 'failed', 'canceled'] } },
+          { status: { not_in: ['pending', 'processing', 'succeeded', 'failed', 'canceled', 'refunded', 'partially_refunded'] } },
+        ],
+      },
     ])
     expect(stored).toMatchObject({ status: 'succeeded', version: 4 })
   })
@@ -162,5 +170,13 @@ describe('updatePaymentStatus on MongoDB (fake adapter)', () => {
     expect(await updatePaymentStatus(fake, 'p1', 'succeeded', providerData, {} as any)).toBe(false)
     expect(fake.update).not.toHaveBeenCalled()
     expect(stored.status).toBe('pending')
+  })
+
+  test('a payment without a status (older data) is not locked', async () => {
+    const { fake, stored } = fakeMongo({ id: 'p1' })
+    delete stored.status
+    expect(await updatePaymentStatus(fake, 'p1', 'succeeded', providerData, {} as any)).toBe(true)
+    expect(fake.db.updateOne).toHaveBeenCalled()
+    expect(stored.status).toBe('succeeded')
   })
 })

@@ -472,6 +472,7 @@ succeeded → partially_refunded → refunded
 - Amount must be a positive integer
 - Currency normalized to uppercase
 - Version incremented on each update
+- Provider webhooks never move a settled payment back: `succeeded` only moves on to the refund statuses, `failed` / `canceled` only to `succeeded` (Stripe allows a retry after a failed attempt). On MongoDB the version check is a conditional write in the database, so it also holds without a replica set (no transactions)
 - Provider's `initPayment()` called on creation
 - Linked invoice updated when status becomes `succeeded`
 

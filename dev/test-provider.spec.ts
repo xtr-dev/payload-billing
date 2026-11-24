@@ -180,6 +180,13 @@ describe('baseUrl precedence', () => {
     expect(payment.checkoutUrl?.startsWith('https://server.example/')).toBe(true)
   })
 
+  it('reads the environment when a payment is created, not when the provider is built', () => {
+    const provider = testProvider({ enabled: true })!
+    process.env.PAYLOAD_SERVER_URL = 'https://set-after-config.example'
+    const payment = provider.initPayment(null as any, { amount: 500, currency: 'EUR' }) as Payment
+    expect(payment.checkoutUrl?.startsWith('https://set-after-config.example/')).toBe(true)
+  })
+
   it('falls back to http://localhost:3000 when nothing is set', () => {
     const provider = testProvider({ enabled: true })!
     const payment = provider.initPayment(null as any, { amount: 500, currency: 'EUR' }) as Payment

@@ -25,7 +25,8 @@ export function getServerUrlFromEnv(
   if (buildTimeUrl && !warnedAboutBuildTimeUrl) {
     warnedAboutBuildTimeUrl = true
     warn(
-      `Using NEXT_PUBLIC_SERVER_URL (${buildTimeUrl}) as the server URL. Next.js fixes NEXT_PUBLIC_* ` +
+      // Only the variable name is logged: the URL could hold credentials or a private hostname.
+      'Using NEXT_PUBLIC_SERVER_URL as the server URL. Next.js fixes NEXT_PUBLIC_* ' +
         'values at build time, so a build deployed under another URL keeps using this one. Set ' +
         'PAYLOAD_SERVER_URL (read at runtime), or pass webhookUrl / baseUrl in the provider config.',
     )

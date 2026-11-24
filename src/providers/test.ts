@@ -241,7 +241,9 @@ export const testProvider = (testConfig: TestProviderConfig) => {
   }
 
   const scenarios = testConfig.scenarios || DEFAULT_SCENARIOS
-  const baseUrl = testConfig.baseUrl || getServerUrlFromEnv() || 'http://localhost:3000'
+  // Resolved per request, not when testProvider() runs, so the URL comes from the environment
+  // the server runs in rather than the one the config was first evaluated in.
+  const resolveBaseUrl = () => testConfig.baseUrl || getServerUrlFromEnv() || 'http://localhost:3000'
   const uiRoute = testConfig.customUiRoute || '/test-payment'
 
   // Test mode warnings will be logged in onInit when payload is available
@@ -322,6 +324,7 @@ export const testProvider = (testConfig: TestProviderConfig) => {
               })
             }
 
+            const baseUrl = resolveBaseUrl()
             // Determine redirect URL: session.redirectUrl > payment.redirectUrl > config.returnUrl > default
             const defaultReturnUrl = testConfig.returnUrl ? `${baseUrl}${testConfig.returnUrl}` : `${baseUrl}/payment/success`
             const redirectUrl = session.redirectUrl || (session.payment as Payment)?.redirectUrl || defaultReturnUrl
@@ -692,6 +695,7 @@ export const testProvider = (testConfig: TestProviderConfig) => {
       // Set provider ID and data
       payment.providerId = testPaymentId
       // Use custom UI route if specified, otherwise use built-in UI endpoint
+      const baseUrl = resolveBaseUrl()
       const paymentUrl = testConfig.customUiRoute
         ? `${baseUrl}${testConfig.customUiRoute}/${testPaymentId}`
         : `${baseUrl}/api/payload-billing/test/payment/${testPaymentId}`

@@ -79,6 +79,17 @@ export function createRefundsCollection(pluginConfig: BillingPluginConfig): Coll
         unique: true,
       },
       {
+        name: 'manual',
+        type: 'checkbox',
+        admin: {
+          description:
+            'Keep this refund as a record only: it is never sent to the payment provider or polled. Use it for refunds handled by hand, or to hold one back; untick it to let the refund sweep send it.',
+          position: 'sidebar',
+        },
+        defaultValue: false,
+        label: 'Manual (never send to the provider)',
+      },
+      {
         name: 'idempotencyKey',
         type: 'text',
         admin: {

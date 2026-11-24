@@ -35,7 +35,12 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
         description: 'Invoice number (auto-generated as INV-<unix-ms-timestamp>, e.g. INV-1755289904123, unless set explicitly)',
       },
       index: true,
-      required: true,
+      // Not `required: true`: that would make `number` mandatory in the host's generated types,
+      // so creating an invoice from code would need a dummy `number: ''`. The beforeValidate hook
+      // fills it on create, and this validator still rejects a stored invoice without a number
+      // (for example when an admin clears the field on update).
+      validate: (value: null | string | undefined) =>
+        typeof value === 'string' && value.trim() !== '' ? true : 'Invoice number is required',
       unique: true,
     },
     // Optional customer relationship
@@ -332,12 +337,15 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
 
                 logger.info(`Linking payment ${paymentId} back to invoice ${doc.id}`)
 
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 await req.payload.update({
+                  // The payments slug is configurable: without generated types CollectionSlug is plain string
+                  // and the cast looks redundant to ESLint, but tsc needs it when the host app has generated types
+                  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
                   collection: paymentsSlug as CollectionSlug,
                   id: paymentId,
                   data: {
                     invoice: doc.id,
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   } as any,
                 })
 
@@ -356,10 +364,13 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
               const paymentId = typeof doc.payment === 'object' ? doc.payment.id : doc.payment
 
               // Fetch the payment to check its status
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               const payment = await req.payload.findByID({
+                // The payments slug is configurable: without generated types CollectionSlug is plain string
+                // and the cast looks redundant to ESLint, but tsc needs it when the host app has generated types
+                // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
                 collection: paymentsSlug as CollectionSlug,
                 id: paymentId,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               }) as any
 
               // Do not overwrite a provider-reported terminal payment status.
@@ -373,12 +384,15 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
               if (payment && !terminalPaymentStatuses.includes(payment.status)) {
                 logger.info(`Invoice ${doc.id} marked as paid, updating payment ${paymentId}`)
 
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 await req.payload.update({
+                  // The payments slug is configurable: without generated types CollectionSlug is plain string
+                  // and the cast looks redundant to ESLint, but tsc needs it when the host app has generated types
+                  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
                   collection: paymentsSlug as CollectionSlug,
                   id: paymentId,
                   data: {
                     status: 'succeeded',
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   } as any,
                 })
 
@@ -431,8 +445,9 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
           }
 
           if (operation === 'create') {
-            // Generate invoice number if not provided
-            if (!data.number) {
+            // Generate invoice number if not provided (a blank one counts as not provided). The
+            // `number` field's validator relies on this running first: it rejects an empty number.
+            if (!data.number?.trim()) {
               data.number = generateInvoiceNumber()
             }
 

@@ -5,6 +5,7 @@ export type { Invoice, Payment, Refund } from './plugin/types/index'
 export type { BillingCollectionAccess } from './collections/access'
 export type { PaymentProvider, ProviderData, InitPayment, ProviderRefund, ProviderRefundRequest } from './providers/types'
 export { refundPayment, processRefund, processPendingRefunds, syncPaymentRefunds, syncOpenRefunds } from './refunds'
+export { syncPaymentFromProvider } from './payments'
 
 import type { Invoice as InvoiceType } from './plugin/types/invoices'
 import type { Payment as PaymentType } from './plugin/types/payments'

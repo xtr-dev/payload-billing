@@ -77,6 +77,16 @@ describe('initPayment validation', () => {
     )
   })
 
+  it('rejects an amount over the 99999999999 reasonable-limit ceiling', () => {
+    // isValidAmount (src/providers/currency.ts) treats this as the other side of the same
+    // boundary as the negative-amount case above — worth pinning independently since a
+    // regression narrowing or widening the ceiling wouldn't trip either of the other two.
+    const provider = testProvider({ enabled: true })!
+    expect(() =>
+      provider.initPayment(null as any, { amount: 100000000000, currency: 'EUR' }),
+    ).toThrow('Invalid amount: must be a non-negative integer within reasonable limits')
+  })
+
   it('rejects a currency that is not a 3-letter code', () => {
     const provider = testProvider({ enabled: true })!
     expect(() => provider.initPayment(null as any, { amount: 1000, currency: 'EURO' })).toThrow(
@@ -109,6 +119,17 @@ describe('initPayment writes back', () => {
     // would redirect the user somewhere other than where the record says.
     expect(result.checkoutUrl).toBe((result.providerData as any).raw.paymentUrl)
     expect((result.providerData as any).provider).toBe('test')
+    expect((result.providerData as any).raw.testMode).toBe(true)
+    // Pins the full default scenario list surfaced to the checkout UI, not just its length —
+    // a regression reordering or dropping one wouldn't be caught by a count alone.
+    expect((result.providerData as any).raw.scenarios.map((s: { id: string }) => s.id)).toEqual([
+      'instant-success',
+      'delayed-success',
+      'cancelled-payment',
+      'declined-payment',
+      'expired-payment',
+      'pending-payment',
+    ])
     // initPayment mutates its argument in place; the payments beforeChange hook discards
     // whatever initProviderPayment returns and relies on that mutation.
     expect(payment).toBe(result)

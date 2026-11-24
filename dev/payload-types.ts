@@ -219,7 +219,7 @@ export interface Invoice {
   /**
    * Invoice number (auto-generated as INV-<unix-ms-timestamp>, e.g. INV-1755289904123, unless set explicitly)
    */
-  number: string;
+  number?: string | null;
   /**
    * Customer billing information
    */
@@ -337,6 +337,10 @@ export interface Refund {
    * The refund ID from the payment provider. Filled in when the provider accepts the refund; supply it to record a refund made elsewhere.
    */
   providerId?: string | null;
+  /**
+   * Keep this refund as a record only: it is never sent to the payment provider or polled. Use it for refunds handled by hand, or to hold one back; untick it to let the refund sweep send it.
+   */
+  manual?: boolean | null;
   /**
    * Sent to the provider so retrying this refund can never pay out twice
    */
@@ -580,6 +584,7 @@ export interface InvoicesSelect<T extends boolean = true> {
  */
 export interface RefundsSelect<T extends boolean = true> {
   providerId?: T;
+  manual?: T;
   idempotencyKey?: T;
   failureReason?: T;
   payment?: T;

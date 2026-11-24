@@ -472,6 +472,7 @@ succeeded → partially_refunded → refunded
 - Amount must be a positive integer
 - Currency normalized to uppercase
 - Version incremented on each update
+- Provider webhooks never move a settled payment back: `succeeded` only moves on to the refund statuses, `failed` / `canceled` only to `succeeded` (Stripe allows a retry after a failed attempt). On MongoDB the version check is a conditional write in the database, so it also holds without a replica set (no transactions)
 - Provider's `initPayment()` called on creation
 - Linked invoice updated when status becomes `succeeded`
 
@@ -839,6 +840,18 @@ refund.status      // 'processing' until Mollie settles it, then 'succeeded' | '
   you've used returns the existing refund. A webhook + sweep retry can't pay out twice.
 - **Provider errors:** a 4xx rejection stores the refund as `failed` with `failureReason`; a network
   or 5xx error leaves it `pending` for `processPendingRefunds(payload)` (run it from a cron/job).
+- **Sweeps:** `processPendingRefunds` and `syncOpenRefunds` work through every matching refund,
+  oldest first, not just one page. `syncOpenRefunds` only polls `processing` refunds with a
+  `providerId` (the only ones the provider can still move on).
+- **Manual refunds:** tick `manual` on a refund (field in the admin sidebar, or `manual: true` on
+  create) to keep it as a record only: `processRefund`, `processPendingRefunds` and
+  `syncOpenRefunds` skip it, so it is never paid out by the plugin. Use it for refunds handled by
+  hand or to hold one back; untick it to let the next sweep send it. A manual refund still counts
+  against what can be refunded while it is `pending` / `processing` / `succeeded`. It only stops
+  the plugin from *sending* or *polling* it: a manual refund with a `providerId` is still updated
+  when the payment's webhook or `syncPaymentRefunds` reports that refund. Anyone who can update
+  refunds can clear `manual` (and so release it to the sweep): restrict it together with
+  `providerId`, e.g. with field-level access via `collections.refunds.extend`.
 
 **Access:** by default any authenticated user can create refunds, which now means reserving real
 payouts (or, with a `providerId`, marking a refund `succeeded`). Restrict the refunds collection
@@ -1065,6 +1078,20 @@ mollieProvider({
 testProvider({ enabled: true, baseUrl: process.env.PAYLOAD_SERVER_URL })
 ```
 
+**Syncing a payment without the webhook:** when a webhook never arrived (local development,
+an outage), pull the payment from the provider with the same code path the webhook uses
+(status update, invoice marked paid, refunds synced), e.g. from a cron job or a thank-you page:
+
+```typescript
+import { syncPaymentFromProvider } from '@xtr-dev/payload-billing'
+
+const payment = await syncPaymentFromProvider(payload, paymentId) // our payment id
+```
+
+It throws when the payment has no provider payment id yet or its provider cannot sync
+(currently only Mollie can). To only read a Mollie status the way the plugin does, use
+`mapMollieStatusToPaymentStatus` from `@xtr-dev/payload-billing/mollie`.
+
 ### Webhook Security
 
 All webhook endpoints:
@@ -1170,6 +1197,7 @@ type ProviderData<T = any> = {
 Full TypeScript support with comprehensive type definitions:
 
 ```typescript
+import type { Payload } from 'payload'
 import type {
   // Main types
   Payment,
@@ -1217,7 +1245,7 @@ const createPayment = async (
       currency,
       status: 'pending' as PaymentStatus
     }
-  })
+  }) as Payment
 }
 ```
 
@@ -1301,6 +1329,7 @@ curl -X POST https://yourdomain.com/api/payload-billing/mollie/webhook \
 3. **Check database transactions** are supported
 4. **Look for version conflicts** (optimistic locking failures)
 5. **Verify payment exists** with matching `providerId`
+6. **Resync it by hand** with `syncPaymentFromProvider(payload, paymentId)` (Mollie)
 
 ### Invoice Not Updating After Payment
 
@@ -1314,7 +1343,7 @@ curl -X POST https://yourdomain.com/api/payload-billing/mollie/webhook \
    console.log(payment.invoice)  // Should be populated
    ```
 
-2. **Verify payment status** is `succeeded` or `paid`
+2. **Verify payment status** is `succeeded`
 
 3. **Check collection hooks** are not disabled
 

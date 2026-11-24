@@ -66,10 +66,6 @@ export type RefundHook = (args: RefundHookArgs) => Promise<void> | void
 
 // Plugin configuration
 export interface BillingPluginConfig {
-  admin?: {
-    customComponents?: boolean
-    dashboard?: boolean
-  }
   collections?: {
     invoices?: CollectionExtension
     payments?: CollectionExtension

@@ -166,6 +166,37 @@ describe('mollie syncPayment (the path syncPaymentFromProvider takes)', () => {
     expect(client.paymentRefunds.page).toHaveBeenCalledWith({ limit: 250, paymentId: 'tr_abc' })
   })
 
+  test('running the sync twice (e.g. cron next to the webhook) records the refund only once', async () => {
+    const stored: any = { ...payment, invoice: 55, status: 'pending', version: 1 }
+    const refunds: any[] = []
+    const logger = { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() }
+    const sp: any = {
+      db: {},
+      find: vi.fn(async ({ collection, where }: any) => ({
+        docs: collection === 'refunds' ? refunds.filter((r) => r.providerId === where?.providerId?.equals) : [],
+      })),
+      findByID: vi.fn(async () => stored),
+      logger: { child: () => logger },
+      update: vi.fn(async (args: any) => {
+        if (args.collection === 'payments') {Object.assign(stored, args.data)}
+        return stored
+      }),
+    }
+    sp.create = vi.fn(async ({ data }: any) => {
+      const doc = { id: refunds.length + 1, ...data }
+      refunds.push(doc)
+      return doc
+    })
+    await provider.onInit(sp)
+    client.payments.get = vi.fn().mockResolvedValue({ id: 'tr_abc', status: 'paid' })
+    client.paymentRefunds.page.mockResolvedValue([mollieRefund({ status: 'refunded' })])
+
+    expect(await provider.syncPayment(sp, { providers: [provider] } as any, stored)).toBe(true)
+    expect(await provider.syncPayment(sp, { providers: [provider] } as any, stored)).toBe(true)
+    expect(refunds).toHaveLength(1)
+    expect(stored.status).toBe('succeeded')
+  })
+
   test('keeps a refunded payment refunded, as the webhook does', async () => {
     const { stored, updates } = await runSync('refunded', 'paid')
     expect(stored.status).toBe('refunded')

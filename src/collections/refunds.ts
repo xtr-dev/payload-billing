@@ -121,19 +121,26 @@ export function createRefundsCollection(pluginConfig: BillingPluginConfig): Coll
 
             // Update the related payment's refund relationship
             try {
+              const paymentId = typeof doc.payment === 'object' ? doc.payment.id : doc.payment
               const payment = await req.payload.findByID({
-                id: typeof doc.payment === 'string' ? doc.payment : doc.payment.id,
+                id: paymentId,
                 collection: paymentsSlug,
+                depth: 0,
               }) as Payment
 
-              const refundIds = Array.isArray(payment.refunds) ? payment.refunds : []
-              await req.payload.update({
-                id: typeof doc.payment === 'string' ? doc.payment : doc.payment.id,
-                collection: paymentsSlug,
-                data: {
-                  refunds: [...refundIds, doc.id],
-                },
-              })
+              // Normalise to IDs (populated docs can't be written back to a relationship field)
+              // and skip the write if the refund is already linked.
+              const refundIds = (Array.isArray(payment.refunds) ? payment.refunds : [])
+                .map((refund) => (typeof refund === 'object' ? refund.id : refund))
+              if (!refundIds.includes(doc.id)) {
+                await req.payload.update({
+                  id: paymentId,
+                  collection: paymentsSlug,
+                  data: {
+                    refunds: [...refundIds, doc.id],
+                  },
+                })
+              }
             } catch (error) {
               const logger = createContextLogger(req.payload, 'Refunds Collection')
               logger.error(`Failed to update payment refunds: ${error}`)

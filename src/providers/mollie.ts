@@ -1,5 +1,7 @@
 import type { Payment } from '../plugin/types/payments'
+import type { Refund } from '../plugin/types/refunds'
 import type { PaymentProvider } from '../plugin/types/index'
+import type { BillingPluginConfig } from '../plugin/config'
 import type { Payload } from 'payload'
 import { createSingleton } from '../plugin/singleton'
 import type { createMollieClient, MollieClient } from '@mollie/api-client'
@@ -9,9 +11,10 @@ import {
   updatePaymentStatus,
   updateInvoiceOnPaymentSuccess,
   handleWebhookError,
+  upsertRefund,
   validateProductionUrl
 } from './utils'
-import { formatAmountForProvider, isValidAmount, isValidCurrencyCode } from './currency'
+import { formatAmountForProvider, isValidAmount, isValidCurrencyCode, parseAmountFromProvider } from './currency'
 import { createContextLogger } from '../utils/logger'
 
 const symbol = Symbol.for('@xtr-dev/payload-billing/mollie')
@@ -33,6 +36,57 @@ function mapMollieStatusToPaymentStatus(mollieStatus: string): Payment['status']
   }
 
   return mollieStatusMap[mollieStatus] || 'processing'
+}
+
+/**
+ * Map Mollie refund status to internal refund status
+ * @see https://docs.mollie.com/reference/refunds-api#refund-statuses
+ */
+function mapMollieRefundStatus(mollieStatus: string): Refund['status'] {
+  const mollieRefundStatusMap: Record<string, Refund['status']> = {
+    'queued': 'pending',
+    'pending': 'pending',
+    'processing': 'processing',
+    'refunded': 'succeeded',
+    'failed': 'failed',
+    'canceled': 'canceled',
+  }
+
+  return mollieRefundStatusMap[mollieStatus] || 'processing'
+}
+
+/**
+ * Mirror every refund Mollie holds for a payment into the refunds collection.
+ * Each refund is synced independently so one failing write does not block the others
+ * or the payment status update that follows.
+ */
+async function syncMollieRefunds(
+  payload: Payload,
+  mollieClient: MollieClient,
+  molliePaymentId: string,
+  payment: Payment,
+  pluginConfig: BillingPluginConfig
+): Promise<void> {
+  const logger = createContextLogger(payload, 'Mollie Webhook')
+
+  for await (const mollieRefund of mollieClient.paymentRefunds.iterate({ paymentId: molliePaymentId })) {
+    try {
+      await upsertRefund(payload, payment.id, {
+        providerId: mollieRefund.id,
+        status: mapMollieRefundStatus(mollieRefund.status),
+        amount: parseAmountFromProvider(mollieRefund.amount.value, mollieRefund.amount.currency),
+        currency: mollieRefund.amount.currency,
+        description: mollieRefund.description || null,
+        metadata: mollieRefund.metadata ?? null,
+        providerData: typeof mollieRefund.toPlainObject === 'function'
+          ? mollieRefund.toPlainObject()
+          : { ...mollieRefund },
+      }, pluginConfig)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      logger.error(`Failed to sync Mollie refund ${mollieRefund.id} for payment ${payment.id}: ${message}`)
+    }
+  }
 }
 
 export const mollieProvider = (mollieConfig: MollieProviderConfig & {
@@ -82,7 +136,27 @@ export const mollieProvider = (mollieConfig: MollieProviderConfig & {
               }
 
               // Map Mollie status to our status using proper type-safe mapping
-              const status = mapMollieStatusToPaymentStatus(molliePayment.status)
+              let status = mapMollieStatusToPaymentStatus(molliePayment.status)
+
+              // Mollie keeps a refunded payment's status at 'paid' and calls this same webhook
+              // when a refund is created or changes status, so refunds are derived from
+              // amountRefunded and the payment's refund list rather than from the status.
+              if (status === 'succeeded') {
+                const refundedAmount = molliePayment.amountRefunded
+                  ? parseAmountFromProvider(molliePayment.amountRefunded.value, molliePayment.amountRefunded.currency)
+                  : 0
+
+                // A refund list link also exists when all refunds failed or were canceled
+                // (amountRefunded back to 0); syncing then records the final refund status.
+                if (refundedAmount > 0 || molliePayment._links?.refunds) {
+                  await syncMollieRefunds(payload, mollieClient, molliePaymentId, payment, pluginConfig)
+                }
+
+                if (refundedAmount > 0) {
+                  const paidAmount = parseAmountFromProvider(molliePayment.amount.value, molliePayment.amount.currency)
+                  status = refundedAmount >= paidAmount ? 'refunded' : 'partially_refunded'
+                }
+              }
 
               // Update the payment status and provider data
               // Use toPlainObject if available, otherwise spread the object

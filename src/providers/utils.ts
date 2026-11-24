@@ -1,5 +1,6 @@
 import type { Payload } from 'payload'
 import type { Payment } from '../plugin/types/payments'
+import type { Refund } from '../plugin/types/refunds'
 import type { BillingPluginConfig } from '../plugin/config'
 import type { ProviderData } from './types'
 import { defaults } from '../plugin/config'
@@ -152,6 +153,89 @@ export async function updatePaymentStatus(
       logger.error(`Stack trace: ${errorStack}`)
     }
     return false
+  }
+}
+
+/**
+ * Refund state as reported by a payment provider, normalised to the plugin's refund fields
+ */
+export interface ProviderRefundSync {
+  providerId: string
+  status: Refund['status']
+  /** Amount in smallest currency unit */
+  amount: number
+  currency: string
+  description?: string | null
+  metadata?: Refund['metadata']
+  providerData: Refund['providerData']
+}
+
+/**
+ * Create or update a refund document from provider data, keyed by the provider's refund ID.
+ *
+ * Webhooks are delivered at least once and may arrive concurrently, so this is idempotent:
+ * an existing refund is only written when its status changed, and a unique-constraint
+ * conflict on create (another webhook created it first) falls back to an update.
+ * Only status and providerData are updated on existing refunds, so fields set locally
+ * (reason, description, metadata) are never overwritten by the provider.
+ */
+export async function upsertRefund(
+  payload: Payload,
+  paymentId: Payment['id'],
+  data: ProviderRefundSync,
+  pluginConfig: BillingPluginConfig
+): Promise<Refund> {
+  const refundsCollection = extractSlug(pluginConfig.collections?.refunds, defaults.refundsCollection)
+
+  const findExisting = async (): Promise<Refund | null> => {
+    const result = await payload.find({
+      collection: refundsCollection,
+      where: { providerId: { equals: data.providerId } },
+      limit: 1,
+      depth: 0,
+    })
+    return result.docs.length > 0 ? result.docs[0] as Refund : null
+  }
+
+  const updateExisting = async (existing: Refund): Promise<Refund> => {
+    if (existing.status === data.status) {
+      return existing
+    }
+    return await payload.update({
+      collection: refundsCollection,
+      id: toPayloadId(existing.id),
+      data: {
+        status: data.status,
+        providerData: data.providerData,
+      },
+    }) as Refund
+  }
+
+  const existing = await findExisting()
+  if (existing) {
+    return updateExisting(existing)
+  }
+
+  try {
+    return await payload.create({
+      collection: refundsCollection,
+      data: {
+        providerId: data.providerId,
+        payment: toPayloadId(paymentId),
+        status: data.status,
+        amount: data.amount,
+        currency: data.currency,
+        description: data.description ?? undefined,
+        metadata: data.metadata ?? undefined,
+        providerData: data.providerData,
+      },
+    }) as Refund
+  } catch (error) {
+    const concurrentlyCreated = await findExisting()
+    if (concurrentlyCreated) {
+      return updateExisting(concurrentlyCreated)
+    }
+    throw error
   }
 }
 

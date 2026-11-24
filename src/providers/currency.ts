@@ -92,3 +92,14 @@ export function isValidCurrencyCode(currency: string): boolean {
 export function isValidAmount(amount: number): boolean {
   return Number.isInteger(amount) && amount > 0 && amount <= 99999999999 // Max ~999 million in major units
 }
+/**
+ * Convert a provider's decimal amount string (e.g. "12.50") to the smallest currency unit
+ * @param value - Decimal amount as returned by the payment provider
+ * @param currency - ISO 4217 currency code
+ * @returns Amount in smallest unit (e.g., 1250 cents for "12.50" EUR)
+ */
+export function parseAmountFromProvider(value: string, currency: string): number {
+  const decimals = getCurrencyDecimals(currency)
+  // Rounding guards against floating point artefacts such as 0.29 * 100 = 28.999999999999996
+  return Math.round(parseFloat(value) * Math.pow(10, decimals))
+}

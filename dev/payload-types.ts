@@ -177,9 +177,13 @@ export interface Payment {
    */
   checkoutUrl?: string | null;
   /**
-   * URL to redirect user after payment completion
+   * URL to redirect user after payment completion. {returnToken} is replaced with this payment's return token.
    */
   redirectUrl?: string | null;
+  /**
+   * Random token set on create. Put {returnToken} in the redirect URL to get it back on your return page, then find the payment by it.
+   */
+  returnToken?: string | null;
   invoice?: (number | null) | Invoice;
   /**
    * Additional metadata for the payment
@@ -518,6 +522,7 @@ export interface PaymentsSelect<T extends boolean = true> {
   description?: T;
   checkoutUrl?: T;
   redirectUrl?: T;
+  returnToken?: T;
   invoice?: T;
   metadata?: T;
   providerData?: T;

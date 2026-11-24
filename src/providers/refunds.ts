@@ -11,10 +11,46 @@ type RefundStatus = Refund['status']
 
 /** Statuses a refund can still move on from. */
 const OPEN_STATUSES: RefundStatus[] = ['pending', 'processing']
+/**
+ * Statuses the provider can still move a refund on from. A refund the provider has accepted
+ * is `processing` or terminal; `pending` with a providerId is only a hand-made record.
+ */
+const PROVIDER_OPEN_STATUSES: RefundStatus[] = ['processing']
+
+/**
+ * Matches refunds that are not marked `manual`. Rows written before the field existed have
+ * no value (NULL / missing), so those count as not manual too.
+ */
+const NOT_MANUAL: Where = {
+  or: [{ manual: { equals: false } }, { manual: { exists: false } }],
+}
+
 /** Statuses that count against what can still be refunded. */
 const RESERVING_STATUSES: RefundStatus[] = ['pending', 'processing', 'succeeded']
 /** Payment statuses a refund can be issued against. */
 const REFUNDABLE_PAYMENT_STATUSES: Payment['status'][] = ['succeeded', 'partially_refunded']
+
+/**
+ * Every refund matching `where`, oldest first, with only the fields a sweep needs. Reads all
+ * matches up front (not a page of them), so rows that stay open cannot crowd out newer ones,
+ * and rows that change while the sweep runs cannot shift an offset.
+ */
+async function findAllRefunds(
+  payload: Payload,
+  pluginConfig: BillingPluginConfig,
+  where: Where,
+): Promise<Pick<Refund, 'id' | 'payment'>[]> {
+  const refundsSlug = extractSlug(pluginConfig.collections?.refunds, defaults.refundsCollection)
+  const result = await payload.find({
+    collection: refundsSlug,
+    depth: 0,
+    pagination: false,
+    select: { payment: true },
+    sort: 'createdAt',
+    where,
+  })
+  return result.docs as Pick<Refund, 'id' | 'payment'>[]
+}
 
 const rank = (status: RefundStatus) => (status === 'pending' ? 0 : status === 'processing' ? 1 : 2)
 
@@ -177,7 +213,7 @@ export async function processRefund(
   const refundsSlug = extractSlug(pluginConfig.collections?.refunds, defaults.refundsCollection)
   const paymentsSlug = extractSlug(pluginConfig.collections?.payments, defaults.paymentsCollection)
   const refund = (await payload.findByID({ id: toPayloadId(refundId), collection: refundsSlug, depth: 0 })) as Refund
-  if (refund.providerId || refund.status !== 'pending') {
+  if (refund.providerId || refund.status !== 'pending' || refund.manual) {
     return refund
   }
   const payment = (await payload.findByID({
@@ -209,19 +245,15 @@ export async function processRefund(
 }
 
 /**
- * Retry every refund still `pending` without a provider refund. Meant for a cron / job queue.
+ * Retry every refund still `pending` without a provider refund, except `manual` ones. Meant
+ * for a cron / job queue.
  */
 export async function processPendingRefunds(payload: Payload, pluginConfig: BillingPluginConfig): Promise<Refund[]> {
-  const refundsSlug = extractSlug(pluginConfig.collections?.refunds, defaults.refundsCollection)
-  const pending = await payload.find({
-    collection: refundsSlug,
-    depth: 0,
-    limit: 100,
-    sort: 'createdAt',
-    where: { and: [{ status: { equals: 'pending' } }, { providerId: { exists: false } }] },
+  const pending = await findAllRefunds(payload, pluginConfig, {
+    and: [{ status: { equals: 'pending' } }, { providerId: { exists: false } }, NOT_MANUAL],
   })
   const done: Refund[] = []
-  for (const refund of pending.docs as Refund[]) {
+  for (const refund of pending) {
     done.push(await processRefund(payload, pluginConfig, refund.id))
   }
   return done
@@ -299,20 +331,16 @@ export async function syncPaymentRefunds(
 }
 
 /**
- * Poll every open provider refund. Meant for a cron / job queue, alongside webhooks.
+ * Poll every refund the provider is still working on (`processing` with a provider refund
+ * id, not `manual`), once per payment. Meant for a cron / job queue, alongside webhooks.
  */
 export async function syncOpenRefunds(payload: Payload, pluginConfig: BillingPluginConfig): Promise<void> {
-  const refundsSlug = extractSlug(pluginConfig.collections?.refunds, defaults.refundsCollection)
   const paymentsSlug = extractSlug(pluginConfig.collections?.payments, defaults.paymentsCollection)
-  const open = await payload.find({
-    collection: refundsSlug,
-    depth: 0,
-    limit: 100,
-    sort: 'createdAt',
-    where: { and: [{ status: { in: OPEN_STATUSES } }, { providerId: { exists: true } }] },
+  const open = await findAllRefunds(payload, pluginConfig, {
+    and: [{ status: { in: PROVIDER_OPEN_STATUSES } }, { providerId: { exists: true } }, NOT_MANUAL],
   })
   const seen = new Set<string>()
-  for (const refund of open.docs as Refund[]) {
+  for (const refund of open) {
     const id = paymentId(refund.payment)
     if (seen.has(String(id))) {continue}
     seen.add(String(id))

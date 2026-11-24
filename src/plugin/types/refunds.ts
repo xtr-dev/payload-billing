@@ -8,6 +8,10 @@ export interface Refund {
    */
   providerId?: string | null;
   /**
+   * A record only: never sent to the provider and skipped by the refund sweeps
+   */
+  manual?: boolean | null;
+  /**
    * Stable key that makes retries of this refund safe (sent to the provider)
    */
   idempotencyKey?: string | null;

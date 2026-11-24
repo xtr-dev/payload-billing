@@ -1145,6 +1145,7 @@ type ProviderData<T = any> = {
 Full TypeScript support with comprehensive type definitions:
 
 ```typescript
+import type { Payload } from 'payload'
 import type {
   // Main types
   Payment,
@@ -1192,7 +1193,7 @@ const createPayment = async (
       currency,
       status: 'pending' as PaymentStatus
     }
-  })
+  }) as Payment
 }
 ```
 
@@ -1288,7 +1289,7 @@ curl -X POST https://yourdomain.com/api/payload-billing/mollie/webhook \
    console.log(payment.invoice)  // Should be populated
    ```
 
-2. **Verify payment status** is `succeeded` or `paid`
+2. **Verify payment status** is `succeeded`
 
 3. **Check collection hooks** are not disabled
 

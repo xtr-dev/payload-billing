@@ -84,7 +84,7 @@
     "@eslint/eslintrc": "^3.2.0",
     "@mollie/api-client": "^3.7.0",
     "@payloadcms/db-mongodb": "3.37.0",
-    "@payloadcms/db-postgres": "3.37.0",
+    "@payloadcms/db-postgres": "3.73.0",
     "@payloadcms/db-sqlite": "3.37.0",
     "@payloadcms/eslint-config": "3.9.0",
     "@payloadcms/next": "3.37.0",

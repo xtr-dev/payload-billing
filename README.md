@@ -1040,6 +1040,20 @@ const campaignPayments = await payload.find({
 - In production, throws an error if no valid server URL is configured
 - Mollie validates webhooks by verifying payment ID exists
 
+**Syncing a payment without the webhook:** when a webhook never arrived (local development,
+an outage), pull the payment from the provider with the same code path the webhook uses
+(status update, invoice marked paid, refunds synced), e.g. from a cron job or a thank-you page:
+
+```typescript
+import { syncPaymentFromProvider } from '@xtr-dev/payload-billing'
+
+const payment = await syncPaymentFromProvider(payload, paymentId) // our payment id
+```
+
+It throws when the payment has no provider payment id yet or its provider cannot sync
+(currently only Mollie can). To only read a Mollie status the way the plugin does, use
+`mapMollieStatusToPaymentStatus` from `@xtr-dev/payload-billing/mollie`.
+
 ### Webhook Security
 
 All webhook endpoints:
@@ -1275,6 +1289,7 @@ curl -X POST https://yourdomain.com/api/payload-billing/mollie/webhook \
 3. **Check database transactions** are supported
 4. **Look for version conflicts** (optimistic locking failures)
 5. **Verify payment exists** with matching `providerId`
+6. **Resync it by hand** with `syncPaymentFromProvider(payload, paymentId)` (Mollie)
 
 ### Invoice Not Updating After Payment
 

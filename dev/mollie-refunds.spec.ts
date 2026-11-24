@@ -130,3 +130,51 @@ describe('mollie webhook with refunds', () => {
     expect(updates.find((u) => u.collection === 'payments').data.status).toBe('succeeded')
   })
 })
+
+describe('mollie syncPayment (the path syncPaymentFromProvider takes)', () => {
+  const runSync = async (paymentStatus: string, mollieStatus: string) => {
+    const stored: any = { ...payment, invoice: 55, status: paymentStatus, version: 1 }
+    const updates: any[] = []
+    const logger = { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() }
+    const sp: any = {
+      db: {},
+      find: vi.fn(async () => ({ docs: [] })),
+      findByID: vi.fn(async () => stored),
+      logger: { child: () => logger },
+      update: vi.fn(async (args: any) => {
+        updates.push(args)
+        if (args.collection === 'payments') {Object.assign(stored, args.data)}
+        return stored
+      }),
+    }
+    sp.create = vi.fn(async ({ data }: any) => ({ id: 77, ...data }))
+    await provider.onInit(sp)
+    client.payments.get = vi.fn().mockResolvedValue({ id: 'tr_abc', status: mollieStatus })
+    client.paymentRefunds.page.mockResolvedValue([])
+
+    const updated = await provider.syncPayment(sp, { providers: [provider] } as any, stored)
+    return { stored, updated, updates }
+  }
+
+  test('fetches the payment from Mollie, records it paid and marks the invoice paid', async () => {
+    const { stored, updated, updates } = await runSync('pending', 'paid')
+    expect(client.payments.get).toHaveBeenCalledWith('tr_abc')
+    expect(updated).toBe(true)
+    expect(stored.status).toBe('succeeded')
+    expect(updates.find((u) => u.collection === 'invoices')?.data.status).toBe('paid')
+    // Refunds are synced too, as in the webhook
+    expect(client.paymentRefunds.page).toHaveBeenCalledWith({ limit: 250, paymentId: 'tr_abc' })
+  })
+
+  test('keeps a refunded payment refunded, as the webhook does', async () => {
+    const { stored, updates } = await runSync('refunded', 'paid')
+    expect(stored.status).toBe('refunded')
+    expect(updates.some((u) => u.collection === 'invoices')).toBe(false)
+  })
+
+  test('records an expired payment as canceled without touching the invoice', async () => {
+    const { stored, updates } = await runSync('pending', 'expired')
+    expect(stored.status).toBe('canceled')
+    expect(updates.some((u) => u.collection === 'invoices')).toBe(false)
+  })
+})

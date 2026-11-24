@@ -56,6 +56,12 @@ export type PaymentProvider = {
    * only tell us "something changed on this payment".
    */
   fetchRefunds?: (payload: Payload, payment: Payment) => Promise<ProviderRefund[]>
+  /**
+   * Fetch the payment's current state from the provider and apply it the same way the
+   * provider's webhook does (status update, invoice, refunds). Returns whether the payment
+   * document was updated. Called by `syncPaymentFromProvider`.
+   */
+  syncPayment?: (payload: Payload, pluginConfig: BillingPluginConfig, payment: Payment) => Promise<boolean>
 }
 
 /**

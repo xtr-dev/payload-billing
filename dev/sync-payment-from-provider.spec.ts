@@ -40,6 +40,24 @@ describe('syncPaymentFromProvider', () => {
     await expect(syncPaymentFromProvider(payload, payment.id)).rejects.toThrow('does not support syncing')
   })
 
+  test('refuses a payment without a provider payment id', async () => {
+    const payment = await newPayment()
+    await payload.db.updateOne({ collection: 'payments', data: { ...payment, providerId: null }, id: payment.id } as any)
+    await expect(syncPaymentFromProvider(payload, payment.id)).rejects.toThrow('no provider payment id')
+  })
+
+  test('returns the payment unchanged when the provider could not update it', async () => {
+    const payment = await newPayment()
+    const testProvider = useBillingPlugin(payload)!.config.providers!.find((p) => p?.key === 'test')!
+    testProvider.syncPayment = vi.fn(async () => false)
+    try {
+      const synced = await syncPaymentFromProvider(payload, payment.id)
+      expect(synced.status).toBe(payment.status)
+    } finally {
+      delete testProvider.syncPayment
+    }
+  })
+
   test("runs the provider's syncPayment and returns the stored payment", async () => {
     const payment = await newPayment()
     const testProvider = useBillingPlugin(payload)!.config.providers!.find((p) => p?.key === 'test')!

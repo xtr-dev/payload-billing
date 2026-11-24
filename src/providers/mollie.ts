@@ -24,6 +24,7 @@ export type MollieProviderConfig = Parameters<typeof createMollieClient>[0]
  * Type-safe mapping of Mollie payment status to internal status. Exported so hosts can
  * read a Mollie status the same way the plugin does; to apply it, prefer
  * `syncPaymentFromProvider`, which also runs the refund guard, invoice update and refund sync.
+ * Any status not listed (a new or unknown Mollie status) maps to `processing`.
  */
 export function mapMollieStatusToPaymentStatus(mollieStatus: string): Payment['status'] {
   // Define known Mollie statuses for type safety
@@ -110,7 +111,7 @@ async function syncMolliePayment(
   if (status === 'succeeded' && !keepRefundStatus && updateSuccess) {
     await updateInvoiceOnPaymentSuccess(payload, payment, pluginConfig)
   } else if (!updateSuccess) {
-    const logger = createContextLogger(payload, 'Mollie Webhook')
+    const logger = createContextLogger(payload, 'Mollie')
     logger.warn(`Failed to update payment ${payment.id}, skipping invoice update`)
   }
 

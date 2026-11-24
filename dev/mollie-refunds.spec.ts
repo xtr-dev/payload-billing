@@ -178,3 +178,27 @@ describe('mollie syncPayment (the path syncPaymentFromProvider takes)', () => {
     expect(updates.some((u) => u.collection === 'invoices')).toBe(false)
   })
 })
+
+describe('mollie syncPayment edge cases', () => {
+  test('refuses a payment without a Mollie payment id', async () => {
+    await expect(
+      provider.syncPayment({} as any, { providers: [provider] } as any, { ...payment, providerId: null }),
+    ).rejects.toThrow('no Mollie payment id')
+  })
+
+  test('the webhook does not call Mollie for a payment we do not know', async () => {
+    const logger = { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() }
+    const wh: any = {
+      db: {},
+      find: vi.fn(async () => ({ docs: [] })),
+      logger: { child: () => logger },
+    }
+    await provider.onInit(wh)
+    client.payments.get = vi.fn()
+    const config: any = {}
+    provider.onConfig!(config, { providers: [provider] } as any)
+    const res = await config.endpoints[0].handler({ payload: wh, text: () => Promise.resolve('id=tr_unknown') })
+    expect(res.status).toBe(200)
+    expect(client.payments.get).not.toHaveBeenCalled()
+  })
+})

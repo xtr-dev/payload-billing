@@ -123,8 +123,8 @@ importers:
         specifier: ^2.10.0
         version: 2.15.1
       stripe:
-        specifier: ^18.5.0
-        version: 18.5.0(@types/node@22.18.1)
+        specifier: ^22.5.0
+        version: 22.6.2(@types/node@22.18.1)
       tailwindcss:
         specifier: ^4.1.17
         version: 4.1.17
@@ -4915,10 +4915,6 @@ packages:
     resolution: {integrity: sha512-eZ7l+0ZVy3He9c85pEM9KEBR9DFA4jrmWvIjm9wpcHvScwc/vgZDl2TNOF0pm0JsWKw24XBUZOY0Wxn7/nvJnw==}
     engines: {node: '>=18'}
 
-  qs@6.14.0:
-    resolution: {integrity: sha512-YWWTjgABSKcvs/nWBi9PycY/JiPJqOD4JA6o9Sej2AtvSGarXxKC3OQSk4pAarbdQlKAh5D4FCQkJNkW+GAn3w==}
-    engines: {node: '>=0.6'}
-
   quansync@0.2.11:
     resolution: {integrity: sha512-AifT7QEbW9Nri4tAwR5M/uzpBuqfZf+zwaEM/QkzEjj7NBuFD2rBuy0K3dE+8wltbezDV7JMA0WfnCPYRSYbXA==}
 
@@ -5375,11 +5371,11 @@ packages:
     resolution: {integrity: sha512-ErcwpJBYr8EfX/Br7JauOIGXoRE92w0hVtuS9j92UFgbATxA+WRSIZksSUDzEeItfWB/0QCEprTZT55RSINUHQ==}
     engines: {node: '>=22'}
 
-  stripe@18.5.0:
-    resolution: {integrity: sha512-Hp+wFiEQtCB0LlNgcFh5uVyKznpDjzyUZ+CNVEf+I3fhlYvh7rZruIg+jOwzJRCpy0ZTPMjlzm7J2/M2N6d+DA==}
-    engines: {node: '>=12.*'}
+  stripe@22.6.2:
+    resolution: {integrity: sha512-PwRE2scocvXqDKPiskMa5vRJEAEkq46W69XyUYmAwrNSLr675lQnfqLwnsndAWizwgihOWw/irLmoFRo3ez7ew==}
+    engines: {node: '>=18'}
     peerDependencies:
-      '@types/node': '>=12.x.x'
+      '@types/node': '>=18'
     peerDependenciesMeta:
       '@types/node':
         optional: true
@@ -11302,10 +11298,6 @@ snapshots:
 
   qs-esm@8.0.1: {}
 
-  qs@6.14.0:
-    dependencies:
-      side-channel: 1.1.0
-
   quansync@0.2.11: {}
 
   queue-lit@1.5.2: {}
@@ -11852,9 +11844,7 @@ snapshots:
 
   strip-json-comments@5.1.0: {}
 
-  stripe@18.5.0(@types/node@22.18.1):
-    dependencies:
-      qs: 6.14.0
+  stripe@22.6.2(@types/node@22.18.1):
     optionalDependencies:
       '@types/node': 22.18.1
 

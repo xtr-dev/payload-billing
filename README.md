@@ -177,12 +177,12 @@ mollieProvider({
 ```bash
 MOLLIE_API_KEY=test_...
 MOLLIE_WEBHOOK_URL=https://yourdomain.com/api/payload-billing/mollie/webhook  # Optional if server URL is set
-NEXT_PUBLIC_SERVER_URL=https://yourdomain.com  # Or PAYLOAD_PUBLIC_SERVER_URL or SERVER_URL
+PAYLOAD_SERVER_URL=https://yourdomain.com  # Or PAYLOAD_PUBLIC_SERVER_URL or SERVER_URL; see Server URL below
 ```
 
 **Important Notes:**
 - Mollie requires HTTPS URLs in production (no localhost)
-- Webhook URL is auto-generated from server URL environment variables (checked in order: `NEXT_PUBLIC_SERVER_URL`, `PAYLOAD_PUBLIC_SERVER_URL`, `SERVER_URL`)
+- Webhook URL is auto-generated from server URL environment variables (checked in order: `PAYLOAD_SERVER_URL`, `PAYLOAD_PUBLIC_SERVER_URL`, `SERVER_URL`, `NEXT_PUBLIC_SERVER_URL`). See [Server URL](#server-url)
 - Falls back to `https://localhost:3000` only in non-production environments
 - In production, throws an error if no valid URL can be determined
 - Amounts are formatted as decimal strings (e.g., "50.00")
@@ -1018,9 +1018,10 @@ const campaignPayments = await payload.find({
 1. **Set server URL** (webhook URL is auto-generated):
    ```bash
    # Any of these work (checked in this order):
-   NEXT_PUBLIC_SERVER_URL=https://yourdomain.com
+   PAYLOAD_SERVER_URL=https://yourdomain.com
    PAYLOAD_PUBLIC_SERVER_URL=https://yourdomain.com
    SERVER_URL=https://yourdomain.com
+   NEXT_PUBLIC_SERVER_URL=https://yourdomain.com  # last resort, fixed at build time (see Server URL)
 
    # Or set explicit webhook URL:
    MOLLIE_WEBHOOK_URL=https://yourdomain.com/api/payload-billing/mollie/webhook
@@ -1031,14 +1032,38 @@ const campaignPayments = await payload.find({
 3. **Test locally with ngrok:**
    ```bash
    ngrok http 3000
-   # Use ngrok URL as NEXT_PUBLIC_SERVER_URL
+   # Use ngrok URL as PAYLOAD_SERVER_URL
    ```
 
 **Important:**
 - Mollie requires HTTPS URLs (no `http://` or `localhost` in production)
-- Webhook URL auto-generated from `NEXT_PUBLIC_SERVER_URL`, `PAYLOAD_PUBLIC_SERVER_URL`, or `SERVER_URL`
+- Webhook URL auto-generated from `PAYLOAD_SERVER_URL`, `PAYLOAD_PUBLIC_SERVER_URL`, `SERVER_URL` or `NEXT_PUBLIC_SERVER_URL` (in that order)
 - In production, throws an error if no valid server URL is configured
 - Mollie validates webhooks by verifying payment ID exists
+
+### Server URL
+
+When a provider config has no `webhookUrl` (Mollie) or `baseUrl` (test provider), the plugin builds
+those URLs from the environment, checking in order:
+
+1. `PAYLOAD_SERVER_URL`
+2. `PAYLOAD_PUBLIC_SERVER_URL`
+3. `SERVER_URL`
+4. `NEXT_PUBLIC_SERVER_URL`
+
+`NEXT_PUBLIC_SERVER_URL` is checked last, and the plugin logs a warning when it uses it. Next.js
+replaces every `process.env.NEXT_PUBLIC_*` with its value at `next build`, so an image built once
+and deployed under another URL would send Mollie webhooks and test-checkout redirects to the URL it
+was built with. Set one of the runtime variables, or pass the URL in the config:
+
+```typescript
+mollieProvider({
+  apiKey: process.env.MOLLIE_API_KEY!,
+  webhookUrl: `${process.env.PAYLOAD_SERVER_URL}/api/payload-billing/mollie/webhook`,
+})
+
+testProvider({ enabled: true, baseUrl: process.env.PAYLOAD_SERVER_URL })
+```
 
 ### Webhook Security
 
@@ -1258,10 +1283,11 @@ echo $STRIPE_WEBHOOK_SECRET
 
 **Mollie:**
 ```bash
-# Verify server URL is set (any of these work):
-echo $NEXT_PUBLIC_SERVER_URL
+# Verify server URL is set (any of these work, checked in this order):
+echo $PAYLOAD_SERVER_URL
 echo $PAYLOAD_PUBLIC_SERVER_URL
 echo $SERVER_URL
+echo $NEXT_PUBLIC_SERVER_URL
 
 # Check webhook URL is accessible (must be HTTPS in production)
 curl -X POST https://yourdomain.com/api/payload-billing/mollie/webhook \
@@ -1298,7 +1324,7 @@ curl -X POST https://yourdomain.com/api/payload-billing/mollie/webhook \
 - Use ngrok or deploy to staging for local testing:
   ```bash
   ngrok http 3000
-  # Set NEXT_PUBLIC_SERVER_URL to ngrok URL
+  # Set PAYLOAD_SERVER_URL to ngrok URL
   ```
 
 ### Test Provider Payment Not Processing

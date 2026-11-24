@@ -14,7 +14,7 @@ import type { Payment } from '../src/plugin/types/payments'
 import { beforeEach, afterEach, describe, expect, it } from 'vitest'
 import { testProvider } from '../src/providers/test'
 
-const ENV_KEYS = ['NEXT_PUBLIC_SERVER_URL', 'PAYLOAD_PUBLIC_SERVER_URL', 'SERVER_URL'] as const
+const ENV_KEYS = ['PAYLOAD_SERVER_URL', 'NEXT_PUBLIC_SERVER_URL', 'PAYLOAD_PUBLIC_SERVER_URL', 'SERVER_URL'] as const
 
 let savedEnv: Record<string, string | undefined>
 
@@ -140,10 +140,26 @@ describe('baseUrl precedence', () => {
     expect(payment.checkoutUrl?.startsWith('https://config.example/')).toBe(true)
   })
 
-  it('prefers NEXT_PUBLIC_SERVER_URL over the remaining env vars', () => {
+  it('prefers PAYLOAD_SERVER_URL over every other env var', () => {
+    process.env.PAYLOAD_SERVER_URL = 'https://payload-runtime.example'
     process.env.NEXT_PUBLIC_SERVER_URL = 'https://next-public.example'
     process.env.PAYLOAD_PUBLIC_SERVER_URL = 'https://payload-public.example'
     process.env.SERVER_URL = 'https://server.example'
+    const provider = testProvider({ enabled: true })!
+    const payment = provider.initPayment(null as any, { amount: 500, currency: 'EUR' }) as Payment
+    expect(payment.checkoutUrl?.startsWith('https://payload-runtime.example/')).toBe(true)
+  })
+
+  it('prefers the runtime env vars over the build-time NEXT_PUBLIC_SERVER_URL', () => {
+    process.env.NEXT_PUBLIC_SERVER_URL = 'https://next-public.example'
+    process.env.SERVER_URL = 'https://server.example'
+    const provider = testProvider({ enabled: true })!
+    const payment = provider.initPayment(null as any, { amount: 500, currency: 'EUR' }) as Payment
+    expect(payment.checkoutUrl?.startsWith('https://server.example/')).toBe(true)
+  })
+
+  it('still falls back to NEXT_PUBLIC_SERVER_URL when it is the only one set', () => {
+    process.env.NEXT_PUBLIC_SERVER_URL = 'https://next-public.example'
     const provider = testProvider({ enabled: true })!
     const payment = provider.initPayment(null as any, { amount: 500, currency: 'EUR' }) as Payment
     expect(payment.checkoutUrl?.startsWith('https://next-public.example/')).toBe(true)

@@ -9,6 +9,7 @@ import { isValidAmount, isValidCurrencyCode } from './currency'
 import { createContextLogger } from '../utils/logger'
 import { createHash } from 'node:crypto'
 import { applyProviderRefund } from './refunds'
+import { getServerUrlFromEnv } from './serverUrl'
 import type { Refund } from '../plugin/types/refunds'
 
 const TestModeWarningSymbol = Symbol.for('@xtr-dev/payload-billing/test-mode-warning')
@@ -240,7 +241,7 @@ export const testProvider = (testConfig: TestProviderConfig) => {
   }
 
   const scenarios = testConfig.scenarios || DEFAULT_SCENARIOS
-  const baseUrl = testConfig.baseUrl || process.env.NEXT_PUBLIC_SERVER_URL || process.env.PAYLOAD_PUBLIC_SERVER_URL || process.env.SERVER_URL || 'http://localhost:3000'
+  const baseUrl = testConfig.baseUrl || getServerUrlFromEnv() || 'http://localhost:3000'
   const uiRoute = testConfig.customUiRoute || '/test-payment'
 
   // Test mode warnings will be logged in onInit when payload is available

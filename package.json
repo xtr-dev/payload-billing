@@ -56,8 +56,7 @@
     "test:pack": "pnpm build && sh scripts/verify-packed-exports.sh",
     "test:e2e": "playwright test",
     "test:int": "vitest",
-    "typecheck": "tsc --noEmit",
-    "release": "changeset publish"
+    "typecheck": "tsc --noEmit"
   },
   "keywords": [
     "payloadcms",
@@ -80,7 +79,6 @@
   },
   "homepage": "https://github.com/xtr-dev/payload-billing#readme",
   "devDependencies": {
-    "@changesets/cli": "^2.27.1",
     "@eslint/eslintrc": "^3.2.0",
     "@mollie/api-client": "^3.7.0",
     "@payloadcms/db-mongodb": "3.90.0",

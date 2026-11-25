@@ -1,0 +1,20 @@
+# Changelog
+
+## [0.4.0] - 2026-11-25
+
+### Features
+- {returnToken} placeholder in payment redirect URLs ([#104](https://github.com/xtr-dev/payload-billing/issues/104)) ([4982a9a](https://github.com/xtr-dev/payload-billing/commit/4982a9a91903024bd3f341d319e4e2b4f091291f))
+- export syncPaymentFromProvider (and the Mollie status mapping) ([#103](https://github.com/xtr-dev/payload-billing/issues/103)) ([866f3d8](https://github.com/xtr-dev/payload-billing/commit/866f3d832a3ee199ef9c571cb89b320af5bd8db1))
+
+### Fixes
+- **deps:** align all @payloadcms packages with payload 3.90.0 ([#111](https://github.com/xtr-dev/payload-billing/issues/111)) ([d29d7fa](https://github.com/xtr-dev/payload-billing/commit/d29d7faa3fb1ac2f53325d928cbfdd8f32da8e72))
+- allow stripe 19-22 as a peer and loosen the apiVersion type ([#35](https://github.com/xtr-dev/payload-billing/issues/35)) ([308d629](https://github.com/xtr-dev/payload-billing/commit/308d629501faae2f6cedf7929eaa210caf29bf94))
+- read a runtime server URL before NEXT_PUBLIC_SERVER_URL ([#102](https://github.com/xtr-dev/payload-billing/issues/102)) ([f5a61ef](https://github.com/xtr-dev/payload-billing/commit/f5a61efa8ee4171a77eebc66394c04240322f999))
+- never move a settled payment back, check the version in the database ([#101](https://github.com/xtr-dev/payload-billing/issues/101)) ([c0ca356](https://github.com/xtr-dev/payload-billing/commit/c0ca356cc3a4dbf68d7c3196eb7ea8ce01b35a92))
+- page refund sweeps through every row, add a manual (hold) flag ([#110](https://github.com/xtr-dev/payload-billing/issues/110)) ([ae154f0](https://github.com/xtr-dev/payload-billing/commit/ae154f06a24221100bd809637fc9fb2933749c6c))
+- **types:** use Id for refund ids and stop requiring invoice number ([#100](https://github.com/xtr-dev/payload-billing/issues/100)) ([680623f](https://github.com/xtr-dev/payload-billing/commit/680623fcccd873f4fee2ae932b8257b4c0f28141))
+
+### Other
+- release through the shared workflow with xtr-dev/changelog ([#113](https://github.com/xtr-dev/payload-billing/issues/113)) ([54762fd](https://github.com/xtr-dev/payload-billing/commit/54762fde2ababa62b57e6acb5f495ae2ed92083d))
+- refunds section no longer claims open default access ([#112](https://github.com/xtr-dev/payload-billing/issues/112)) ([dd29671](https://github.com/xtr-dev/payload-billing/commit/dd2967152e8c73a0e5f94c65cbdf77c8184ccd92))
+- **deps:** bump the npm_and_yarn group across 1 directory with 15 updates ([#109](https://github.com/xtr-dev/payload-billing/issues/109)) ([cec1820](https://github.com/xtr-dev/payload-billing/commit/cec18209beb69bfb3f8ba80129c87d5ace068896))

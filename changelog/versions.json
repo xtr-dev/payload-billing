@@ -1,0 +1,197 @@
+{
+  "$schema": "https://unpkg.com/@xtr-dev/changelog/schema/versions.schema.json",
+  "schemaVersion": 2,
+  "versions": [
+    {
+      "version": "0.4.0",
+      "date": "2026-11-25",
+      "commit": "54762fd",
+      "breaking": false,
+      "groups": {
+        "features": [
+          {
+            "type": "feat",
+            "scope": null,
+            "description": "{returnToken} placeholder in payment redirect URLs (#104)",
+            "commit": "4982a9a",
+            "hash": "4982a9a91903024bd3f341d319e4e2b4f091291f",
+            "author": "Bas",
+            "breaking": false,
+            "notes": [
+              {
+                "title": "Co-authored-by",
+                "text": "Claude Opus 5.5 <noreply@anthropic.com>"
+              }
+            ]
+          },
+          {
+            "type": "feat",
+            "scope": null,
+            "description": "export syncPaymentFromProvider (and the Mollie status mapping) (#103)",
+            "commit": "866f3d8",
+            "hash": "866f3d832a3ee199ef9c571cb89b320af5bd8db1",
+            "author": "Bas",
+            "breaking": false,
+            "notes": [
+              {
+                "title": "Co-authored-by",
+                "text": "Claude Opus 5.5 <noreply@anthropic.com>"
+              }
+            ]
+          }
+        ],
+        "fixes": [
+          {
+            "type": "fix",
+            "scope": "deps",
+            "description": "align all @payloadcms packages with payload 3.90.0 (#111)",
+            "commit": "d29d7fa",
+            "hash": "d29d7faa3fb1ac2f53325d928cbfdd8f32da8e72",
+            "author": "Bas",
+            "breaking": false,
+            "notes": [
+              {
+                "title": "Co-authored-by",
+                "text": "Claude Opus 5.5 <noreply@anthropic.com>"
+              }
+            ]
+          },
+          {
+            "type": "fix",
+            "scope": null,
+            "description": "allow stripe 19-22 as a peer and loosen the apiVersion type (#35)",
+            "commit": "308d629",
+            "hash": "308d629501faae2f6cedf7929eaa210caf29bf94",
+            "author": "XTR Bas",
+            "breaking": false,
+            "notes": [
+              {
+                "title": "Co-authored-by",
+                "text": "Bas <30904649+bvdaakster@users.noreply.github.com>"
+              },
+              {
+                "title": "Co-authored-by",
+                "text": "Claude Opus 5.5 <noreply@anthropic.com>"
+              },
+              {
+                "title": "Co-authored-by",
+                "text": "Bas van den Aakster <bvdaakster@gmail.com>"
+              }
+            ]
+          },
+          {
+            "type": "fix",
+            "scope": null,
+            "description": "read a runtime server URL before NEXT_PUBLIC_SERVER_URL (#102)",
+            "commit": "f5a61ef",
+            "hash": "f5a61efa8ee4171a77eebc66394c04240322f999",
+            "author": "Bas",
+            "breaking": false,
+            "notes": [
+              {
+                "title": "Co-authored-by",
+                "text": "Claude Opus 5.5 <noreply@anthropic.com>"
+              }
+            ]
+          },
+          {
+            "type": "fix",
+            "scope": null,
+            "description": "never move a settled payment back, check the version in the database (#101)",
+            "commit": "c0ca356",
+            "hash": "c0ca356cc3a4dbf68d7c3196eb7ea8ce01b35a92",
+            "author": "Bas",
+            "breaking": false,
+            "notes": [
+              {
+                "title": "Co-authored-by",
+                "text": "Claude Opus 5.5 <noreply@anthropic.com>"
+              }
+            ]
+          },
+          {
+            "type": "fix",
+            "scope": null,
+            "description": "page refund sweeps through every row, add a manual (hold) flag (#110)",
+            "commit": "ae154f0",
+            "hash": "ae154f06a24221100bd809637fc9fb2933749c6c",
+            "author": "Bas",
+            "breaking": false,
+            "notes": [
+              {
+                "title": "Co-authored-by",
+                "text": "Claude Opus 5.5 <noreply@anthropic.com>"
+              }
+            ]
+          },
+          {
+            "type": "fix",
+            "scope": "types",
+            "description": "use Id for refund ids and stop requiring invoice number (#100)",
+            "commit": "680623f",
+            "hash": "680623fcccd873f4fee2ae932b8257b4c0f28141",
+            "author": "Bas",
+            "breaking": false,
+            "notes": [
+              {
+                "title": "Co-authored-by",
+                "text": "Claude Opus 5.5 <noreply@anthropic.com>"
+              }
+            ]
+          }
+        ],
+        "other": [
+          {
+            "type": "ci",
+            "scope": null,
+            "description": "release through the shared workflow with xtr-dev/changelog (#113)",
+            "commit": "54762fd",
+            "hash": "54762fde2ababa62b57e6acb5f495ae2ed92083d",
+            "author": "Bas",
+            "breaking": false,
+            "notes": [
+              {
+                "title": "Co-authored-by",
+                "text": "Claude Opus 5.5 <noreply@anthropic.com>"
+              }
+            ]
+          },
+          {
+            "type": "docs",
+            "scope": null,
+            "description": "refunds section no longer claims open default access (#112)",
+            "commit": "dd29671",
+            "hash": "dd2967152e8c73a0e5f94c65cbdf77c8184ccd92",
+            "author": "Bas",
+            "breaking": false,
+            "notes": [
+              {
+                "title": "Co-authored-by",
+                "text": "Claude Opus 5.5 <noreply@anthropic.com>"
+              }
+            ]
+          },
+          {
+            "type": "chore",
+            "scope": "deps",
+            "description": "bump the npm_and_yarn group across 1 directory with 15 updates (#109)",
+            "commit": "cec1820",
+            "hash": "cec18209beb69bfb3f8ba80129c87d5ace068896",
+            "author": "dependabot[bot]",
+            "breaking": false,
+            "notes": [
+              {
+                "title": "Signed-off-by",
+                "text": "dependabot[bot] <support@github.com>"
+              },
+              {
+                "title": "Co-authored-by",
+                "text": "dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -890,9 +890,9 @@ refund.status      // 'processing' until Mollie settles it, then 'succeeded' | '
   refunds can clear `manual` (and so release it to the sweep): restrict it together with
   `providerId`, e.g. with field-level access via `collections.refunds.extend`.
 
-**Access:** by default any authenticated user can create refunds, which now means reserving real
-payouts (or, with a `providerId`, marking a refund `succeeded`). Restrict the refunds collection
-with `collections.refunds.extend` (e.g. `access.create` limited to staff).
+**Access:** refunds are admin-only by default (see [Access Control](#access-control)). Creating a
+refund reserves a real payout (or, with a `providerId`, marks it `succeeded`), so if you open
+`collections.refunds.access.create` keep it limited to staff.
 
 **Hooks** (e.g. to email the buyer and alert staff). They run once per status transition, and an
 error thrown in one is logged, never rolls the refund back:

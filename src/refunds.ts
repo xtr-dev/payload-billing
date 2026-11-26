@@ -5,6 +5,7 @@ import { defaults } from './plugin/config'
 import { useBillingPlugin } from './plugin/index'
 import { extractSlug, toPayloadId } from './plugin/utils'
 import * as core from './providers/refunds'
+import { SKIP_REFUND_JOB_CONTEXT } from './plugin/jobs'
 
 export type RefundPaymentArgs = {
   /** The payment to refund (our document id, not the provider's). */
@@ -44,8 +45,8 @@ function assertSameRequest(existing: Refund, args: RefundPaymentArgs): Refund {
  * Issue a refund through the payment's provider. Reserves the refund (creates its document),
  * checks the reservation against concurrent refunds of the payment, and only then sends it to
  * the provider. Creating a `pending` refund document by hand only reserves it; send it with
- * {@link processRefund} or the sweep. The returned refund has its provider id and `processing` /
- * `succeeded` / `failed` status (or `pending` if the provider could not be reached, in which
+ * {@link processRefund} or the sweep, or turn on the plugin's `refundJobs` option. The returned
+ * refund has its provider id and `processing` / `succeeded` / `failed` status (or `pending` if the provider could not be reached, in which
  * case {@link processPendingRefunds} retries it). Rejects when the payment is not refundable
  * or the amount exceeds what is left.
  */
@@ -66,6 +67,8 @@ export async function refundPayment(payload: Payload, args: RefundPaymentArgs): 
   try {
     reserved = (await payload.create({
       collection: refundsSlug,
+      // Sent right below, so the refunds collection must not also queue a refund job for it
+      context: { [SKIP_REFUND_JOB_CONTEXT]: true },
       data: {
         amount: args.amount,
         description: args.description,

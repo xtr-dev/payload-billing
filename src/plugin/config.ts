@@ -1,6 +1,7 @@
 import type { CollectionConfig } from 'payload'
 import type { BillingCollectionAccess } from '../collections/access'
 import type { FieldsOverride } from './utils'
+import type { RefundJobsConfig } from './jobs'
 import type { Payload, PayloadRequest } from 'payload'
 import type { Payment, PaymentProvider, Refund } from './types/index'
 
@@ -88,4 +89,12 @@ export interface BillingPluginConfig {
     onRefundFailed?: RefundHook
   }
   providers?: (PaymentProvider | undefined | null)[]
+  /**
+   * Send refunds through Payload's jobs queue. A refund created without a `providerId` outside
+   * `refundPayment` (admin panel, REST, `payload.create`) only reserves the payout; with this on,
+   * that create also queues a job that sends it to the provider, and a scheduled sweep retries
+   * pending refunds and polls open ones. Your app still has to run the queue (`jobs.autoRun` or a
+   * cron calling `/api/payload-jobs/run`). Adds Payload's jobs collection to the schema.
+   */
+  refundJobs?: boolean | RefundJobsConfig
 }

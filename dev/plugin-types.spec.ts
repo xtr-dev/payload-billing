@@ -1,4 +1,5 @@
 import type { Id, Payment, Refund } from '../src/plugin/types/index'
+import type { StripeProviderConfig } from '../src/providers/stripe'
 
 import { describe, expectTypeOf, test } from 'vitest'
 
@@ -13,5 +14,11 @@ describe('exported document types', () => {
 
   test('Payment.refunds entries use Id', () => {
     expectTypeOf<NonNullable<Payment['refunds']>[number]>().toEqualTypeOf<Id | Refund>()
+  })
+})
+
+describe('StripeProviderConfig', () => {
+  test('still accepts the deprecated, ignored webhookUrl so existing configs keep compiling', () => {
+    expectTypeOf<{ secretKey: string; webhookUrl: string }>().toExtend<StripeProviderConfig>()
   })
 })

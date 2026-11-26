@@ -25,6 +25,12 @@ export interface StripeProviderConfig {
   // breaks on every SDK bump that changes the pin rather than only on ones that matter here.
   apiVersion?: string
   returnUrl?: string
+  /**
+   * @deprecated Ignored; it never had an effect. Stripe sends webhooks to the endpoint URL you
+   * register in the Stripe Dashboard (Developers → Webhooks), not to a URL chosen per payment, so
+   * there is nothing for the plugin to pass it to. Remove it from your config; it will be dropped
+   * from this type in a future major release.
+   */
   webhookUrl?: string
 }
 

@@ -533,7 +533,8 @@ describe('checkout page outcome handling', () => {
     provider.initPayment(null as any, payment)
     const { '/payload-billing/test/payment/:id': uiHandler } = endpointsFor(provider)
     const html = await (await uiHandler({ url: `/api/payload-billing/test/payment/${payment.providerId}` })).text()
-    const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1])[0]
+    // The page has a single inline script block (dev/test-provider-ui-escape.spec.ts checks that)
+    const script = html.slice(html.indexOf('<script>') + '<script>'.length, html.indexOf('</script>'))
 
     const element = () => ({ addEventListener() {}, appendChild() {}, className: '', disabled: false, innerHTML: '', style: {}, textContent: '' })
     const elements: Record<string, any> = { processBtn: element(), status: element() }

@@ -229,6 +229,11 @@ testProvider({
 | Expired Payment | `expired` | 5000ms |
 | Pending Payment | `pending` | 1500ms |
 
+A scenario's `delay` (including `0`) wins over `defaultDelay`, which defaults to 1000ms. Once a
+scenario settles as `paid`, `failed`, `cancelled` or `expired`, the checkout page sends the
+customer to the payment's redirect URL, as Mollie and Stripe do, so the return page handles
+declined payments too.
+
 **Custom Scenarios:**
 
 ```typescript
@@ -729,6 +734,7 @@ Track refunds associated with payments.
    └─> After delay, update payment in database
    └─> Map scenario outcome to payment status
    └─> Update linked invoice if succeeded
+   └─> Checkout page redirects to the return URL on any final outcome
 ```
 
 ## Usage Examples

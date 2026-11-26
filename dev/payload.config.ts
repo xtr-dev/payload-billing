@@ -25,7 +25,7 @@ const resolveSqliteUrl = () => {
   // Under vitest every spec file boots this config against the same on-disk database from
   // its own worker process, so parallel workers race on payload.sqlite (SQLITE_BUSY). Give
   // each process its own throwaway file in the OS temp dir; `pnpm dev` (no VITEST env) keeps
-  // the persistent dev/payload.sqlite that README and DEMO_GUIDE reset by deleting it.
+  // the persistent dev/payload.sqlite that dev/README.md resets by deleting it.
   if (process.env.VITEST) {
     return `file:${vitestSqlitePath()}`
   }

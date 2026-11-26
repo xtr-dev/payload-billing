@@ -357,7 +357,7 @@ export const testProvider = (testConfig: TestProviderConfig) => {
                 showTestBadges: testConfig.testModeIndicators?.showTestBadges ?? true,
                 consoleWarnings: testConfig.testModeIndicators?.consoleWarnings ?? true
               },
-              defaultDelay: testConfig.defaultDelay || 1000,
+              defaultDelay: testConfig.defaultDelay ?? 1000,
               customUiRoute: uiRoute
             }
             return new Response(JSON.stringify(response), {
@@ -438,6 +438,9 @@ export const testProvider = (testConfig: TestProviderConfig) => {
               session.method = method
               session.status = 'pending'
 
+              // A scenario's own delay wins, including 0 (Instant Success), so `??` rather than `||`
+              const delay = scenario.delay ?? testConfig.defaultDelay ?? 1000
+
               // Process payment after delay
               setTimeout(() => {
                 processTestPayment(payload, session, pluginConfig).catch(async (error) => {
@@ -476,13 +479,13 @@ export const testProvider = (testConfig: TestProviderConfig) => {
                     logWebhookEvent('Test Provider', `Payment ${session.id} marked as failed after processing error`, undefined, req.payload)
                   }
                 })
-              }, scenario.delay || testConfig.defaultDelay || 1000)
+              }, delay)
 
               return new Response(JSON.stringify({
                 success: true,
                 status: 'processing',
                 scenario: scenario.name,
-                delay: scenario.delay || testConfig.defaultDelay || 1000
+                delay
               }), {
                 headers: { 'Content-Type': 'application/json' }
               })
@@ -1123,7 +1126,7 @@ function generateTestPaymentUI(
                     status.appendChild(document.createTextNode(\`Processing payment with \${result.scenario}...\`));
 
                     // Poll for status updates
-                    setTimeout(() => pollStatus(), result.delay || 1000);
+                    setTimeout(() => pollStatus(), result.delay ?? 1000);
                 } else {
                     throw new Error(result.error || 'Failed to process payment');
                 }
@@ -1151,10 +1154,14 @@ function generateTestPaymentUI(
                         window.location.href = ${jsString(redirectUrl)};
                     }, 2000);
                 } else if (result.status === 'failed' || result.status === 'cancelled' || result.status === 'expired') {
+                    // Like Mollie and Stripe, every final outcome returns the customer to the
+                    // site, so the host's return page also handles declined payments.
                     status.className = 'status error';
-                    status.textContent = \`❌ Payment \${result.status}\`;
-                    btn.disabled = false;
-                    btn.textContent = 'Try Again';
+                    status.textContent = \`❌ Payment \${result.status}. Returning to the site...\`;
+                    btn.disabled = true;
+                    setTimeout(() => {
+                        window.location.href = ${jsString(redirectUrl)};
+                    }, 2000);
                 } else if (result.status === 'pending') {
                     status.className = 'status processing';
                     status.innerHTML = '<span class="loading"></span>Payment is still pending...';

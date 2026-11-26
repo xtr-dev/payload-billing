@@ -10,8 +10,10 @@
 // Out of scope, deliberately: the scenario-to-status mapping inside processTestPayment (the
 // setTimeout-scheduled outcome of /process) needs faked timers and a real payload, which is a
 // second step from the one this file covers.
+import vm from 'node:vm'
+
 import type { Payment } from '../src/plugin/types/payments'
-import { beforeEach, afterEach, describe, expect, it } from 'vitest'
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import { testProvider } from '../src/providers/test'
 
 const ENV_KEYS = ['PAYLOAD_SERVER_URL', 'NEXT_PUBLIC_SERVER_URL', 'PAYLOAD_PUBLIC_SERVER_URL', 'SERVER_URL'] as const
@@ -248,6 +250,14 @@ describe('/payload-billing/test/config', () => {
 
     expect(body.testModeIndicators.showWarningBanners).toBe(false)
   })
+
+  it('lets defaultDelay: 0 survive instead of falling back to 1000', async () => {
+    const provider = testProvider({ enabled: true, defaultDelay: 0 })!
+    const { '/payload-billing/test/config': handler } = endpointsFor(provider)
+    const body = await (await handler()).json()
+
+    expect(body.defaultDelay).toBe(0)
+  })
 })
 
 describe('/payload-billing/test/status/:id and /payload-billing/test/payment/:id', () => {
@@ -446,4 +456,120 @@ describe('/payload-billing/test/process', () => {
     // (or the file) finishes.
     await new Promise((resolve) => setTimeout(resolve, 50))
   })
+
+  // Schedules /process with the given provider config and scenario and reports the delay
+  // both in the response and in the setTimeout call that processes the payment.
+  async function processDelay(config: Parameters<typeof testProvider>[0], scenarioId: string) {
+    const provider = testProvider(config)!
+    const { '/payload-billing/test/process': handler } = endpointsFor(provider)
+    const payment = provider.initPayment(null as any, { amount: 500, currency: 'EUR' }) as Payment
+    const paymentDoc = { id: 1, providerId: payment.providerId, status: 'pending' }
+    const payloadForTimer = {
+      find: async () => ({ docs: [paymentDoc] }),
+      update: async ({ data }: any) => Object.assign(paymentDoc, data),
+    } as any
+
+    const realSetTimeout = globalThis.setTimeout
+    const scheduled: (number | undefined)[] = []
+    const spy = vi.spyOn(globalThis, 'setTimeout').mockImplementation(((fn: () => void, ms?: number) => {
+      scheduled.push(ms)
+      return realSetTimeout(fn, 0)
+    }) as any)
+    try {
+      const response = await handler({
+        payload: payloadForTimer,
+        json: async () => ({ paymentId: payment.providerId, scenarioId, method: 'ideal' }),
+      } as any)
+      const body = await response.json()
+      return { body, scheduled, paymentDoc }
+    } finally {
+      spy.mockRestore()
+      await new Promise((resolve) => realSetTimeout(resolve, 20))
+    }
+  }
+
+  it('processes the built-in Instant Success scenario (delay 0) without waiting', async () => {
+    const { body, scheduled, paymentDoc } = await processDelay({ enabled: true }, 'instant-success')
+
+    expect(body.delay).toBe(0)
+    expect(scheduled).toEqual([0])
+    expect(paymentDoc.status).toBe('succeeded')
+  })
+
+  it('uses delay 0 from a custom scenario over defaultDelay', async () => {
+    const { body, scheduled } = await processDelay(
+      {
+        enabled: true,
+        defaultDelay: 4000,
+        scenarios: [{ id: 'now', name: 'Now', description: 'now', outcome: 'paid', delay: 0 }],
+      },
+      'now',
+    )
+
+    expect(body.delay).toBe(0)
+    expect(scheduled).toEqual([0])
+  })
+
+  it('falls back to defaultDelay when a scenario has no delay, and to 1000 without either', async () => {
+    const scenario = { id: 'nodelay', name: 'No delay', description: 'none', outcome: 'paid' as const }
+
+    const withDefault = await processDelay({ enabled: true, defaultDelay: 250, scenarios: [scenario] }, 'nodelay')
+    expect(withDefault.body.delay).toBe(250)
+
+    const withZeroDefault = await processDelay({ enabled: true, defaultDelay: 0, scenarios: [scenario] }, 'nodelay')
+    expect(withZeroDefault.body.delay).toBe(0)
+
+    const without = await processDelay({ enabled: true, scenarios: [scenario] }, 'nodelay')
+    expect(without.body.delay).toBe(1000)
+  })
 })
+
+// Runs the checkout page's inline script against a minimal stand-in DOM and calls its
+// pollStatus() with a stubbed status response, to see where the page sends the customer.
+describe('checkout page outcome handling', () => {
+  async function pageAfterOutcome(outcomeStatus: string) {
+    const provider = testProvider({ enabled: true })!
+    const payment: any = { amount: 500, currency: 'EUR', redirectUrl: 'https://shop.example/checkout/return?t=abc' }
+    provider.initPayment(null as any, payment)
+    const { '/payload-billing/test/payment/:id': uiHandler } = endpointsFor(provider)
+    const html = await (await uiHandler({ url: `/api/payload-billing/test/payment/${payment.providerId}` })).text()
+    const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1])[0]
+
+    const element = () => ({ addEventListener() {}, appendChild() {}, className: '', disabled: false, innerHTML: '', style: {}, textContent: '' })
+    const elements: Record<string, any> = { processBtn: element(), status: element() }
+    const location = { href: '' }
+    const timers: (() => void)[] = []
+    const context: any = {
+      console: { error() {}, warn() {} },
+      document: { getElementById: (id: string) => elements[id], querySelectorAll: () => [] },
+      encodeURIComponent,
+      fetch: async () => ({ json: async () => ({ status: outcomeStatus }) }),
+      // Queue page timers so the test can run the ones pollStatus scheduled, once.
+      setTimeout: (fn: () => void) => timers.push(fn),
+      window: { location },
+    }
+    vm.createContext(context)
+    new vm.Script(script).runInContext(context)
+    await vm.runInContext('pollStatus()', context)
+    return { location, status: elements.status, timers }
+  }
+
+  for (const outcome of ['paid', 'failed', 'cancelled', 'expired']) {
+    it(`returns the customer to the redirect URL after a ${outcome} outcome`, async () => {
+      const { location, timers } = await pageAfterOutcome(outcome)
+      expect(location.href).toBe('')
+      timers.forEach((fn) => fn())
+      expect(location.href).toBe('https://shop.example/checkout/return?t=abc')
+    })
+  }
+
+  it('keeps polling and stays on the page while the payment is pending', async () => {
+    const { location, status, timers } = await pageAfterOutcome('pending')
+
+    expect(location.href).toBe('')
+    expect(status.className).toBe('status processing')
+    // The only scheduled timer is the next poll, not a redirect.
+    expect(timers).toHaveLength(1)
+  })
+})
+

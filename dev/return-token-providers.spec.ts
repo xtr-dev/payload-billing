@@ -1,5 +1,5 @@
 // The Stripe and Mollie providers fill {returnToken} in the return URL from their own config when
-// the payment has no redirectUrl. Both clients are mocked; only the URL sent to them is checked.
+// the payment has no redirectUrl. Both clients are mocked; only the URL each provider resolves is checked.
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 
 const mollieClient = { payments: { create: vi.fn() } }
@@ -45,8 +45,10 @@ describe('{returnToken} in provider config URLs', () => {
     const payload: any = { logger: { child: () => ({ debug() {}, error() {}, info() {}, warn() {} }) } }
     await provider.onInit(payload)
 
-    await provider.initPayment(payload, { amount: 1000, currency: 'EUR', returnToken: 'tok123' } as any)
+    const payment = await provider.initPayment(payload, { amount: 1000, currency: 'EUR', returnToken: 'tok123' } as any)
 
-    expect(stripePaymentIntentsCreate.mock.calls[0]?.[0].return_url).toBe('https://shop.example/thanks?t=tok123')
+    // Stripe takes the return URL at confirm time (Stripe.js), so it is stored on the payment
+    // rather than sent with the PaymentIntent create call.
+    expect(payment.redirectUrl).toBe('https://shop.example/thanks?t=tok123')
   })
 })

@@ -73,7 +73,10 @@ const payment = await payload.create({
 ```
 
 - **Stripe**: `providerId` is the PaymentIntent id. Confirm it on the frontend with Stripe.js
-  using `payment.providerData.raw.client_secret`.
+  using `payment.providerData.raw.client_secret`, and pass `payment.redirectUrl` as
+  `confirmParams.return_url`. The plugin stores the resolved return URL there (the provider's
+  `returnUrl` when the payment has none, `{returnToken}` filled in); Stripe only accepts it at
+  confirm time, not when the PaymentIntent is created.
 - **Mollie** and **test**: redirect the customer to `payment.checkoutUrl`.
 
 ## Payment Providers
@@ -87,7 +90,7 @@ stripeProvider({
   secretKey: string        // sk_test_... or sk_live_...
   webhookSecret?: string   // whsec_...; the webhook endpoint is only registered when set
   apiVersion?: string      // default '2025-08-27.basil'
-  returnUrl?: string       // used when the payment has no redirectUrl
+  returnUrl?: string       // stored as the payment's redirectUrl when it has none
 })
 ```
 

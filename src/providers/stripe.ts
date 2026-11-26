@@ -277,8 +277,17 @@ export const stripeProvider = (stripeConfig: StripeProviderConfig) => {
         automatic_payment_methods: {
           enabled: true,
         },
-        ...(returnUrl && { return_url: returnUrl }),
+        // No `return_url` here: Stripe only accepts it together with `confirm: true`, and this
+        // PaymentIntent is confirmed by the frontend (Stripe.js `confirmPayment` with the client
+        // secret), which takes the return URL as `confirmParams.return_url`.
       })
+
+      // Store the resolved return URL (with {returnToken} filled in) on the payment, so the
+      // frontend can pass `payment.redirectUrl` to `confirmPayment` even when it came from the
+      // provider's `returnUrl` default.
+      if (returnUrl) {
+        payment.redirectUrl = returnUrl
+      }
 
       payment.providerId = paymentIntent.id
       const providerData: ProviderData<Stripe.PaymentIntent> = {

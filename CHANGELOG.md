@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.0](https://github.com/xtr-dev/payload-billing/compare/v0.4.0...v0.5.0) - 2026-11-26
+
+### Features
+- **refunds:** send admin-created refunds through Payload's jobs queue ([#115](https://github.com/xtr-dev/payload-billing/issues/115)) ([7f57523](https://github.com/xtr-dev/payload-billing/commit/7f57523e4aa84a93aa0eeb2c1cf48e6ebde81c48))
+
+### Fixes
+- **test-provider:** return to the site on every final outcome and honour delay 0 ([#114](https://github.com/xtr-dev/payload-billing/issues/114)) ([62e7f3c](https://github.com/xtr-dev/payload-billing/commit/62e7f3ca34fe1e09601cf6331641b32234f7e8b1))
+
 ## [0.4.0] - 2026-11-25
 
 ### Features

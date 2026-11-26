@@ -3,6 +3,48 @@
   "schemaVersion": 2,
   "versions": [
     {
+      "version": "0.5.0",
+      "date": "2026-11-26",
+      "commit": "7f57523",
+      "breaking": false,
+      "groups": {
+        "features": [
+          {
+            "type": "feat",
+            "scope": "refunds",
+            "description": "send admin-created refunds through Payload's jobs queue (#115)",
+            "commit": "7f57523",
+            "hash": "7f57523e4aa84a93aa0eeb2c1cf48e6ebde81c48",
+            "author": "Bas",
+            "breaking": false,
+            "notes": [
+              {
+                "title": "Co-authored-by",
+                "text": "Claude Opus 5.5 <noreply@anthropic.com>"
+              }
+            ]
+          }
+        ],
+        "fixes": [
+          {
+            "type": "fix",
+            "scope": "test-provider",
+            "description": "return to the site on every final outcome and honour delay 0 (#114)",
+            "commit": "62e7f3c",
+            "hash": "62e7f3ca34fe1e09601cf6331641b32234f7e8b1",
+            "author": "Bas",
+            "breaking": false,
+            "notes": [
+              {
+                "title": "Co-authored-by",
+                "text": "Claude Opus 5.5 <noreply@anthropic.com>"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
       "version": "0.4.0",
       "date": "2026-11-25",
       "commit": "54762fd",

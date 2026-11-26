@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto'
 import { updatePaymentRefundStatus, validateRefundRequest } from '../providers/refunds'
 import { createContextLogger } from '../utils/logger'
 import { isValidCurrencyCode } from '../providers/currency'
+import { queueRefundJob } from '../plugin/jobs'
 
 async function onRefundStatusChanged(
   req: PayloadRequest,
@@ -193,6 +194,10 @@ export function createRefundsCollection(pluginConfig: BillingPluginConfig): Coll
           if (previousStatus !== doc.status) {
             await onRefundStatusChanged(req, pluginConfig, doc as Refund, previousStatus)
           }
+          // A new reservation, or one released by clearing `manual`, goes to the refund job
+          if (operation === 'create' || (previousDoc?.manual && !doc.manual)) {
+            await queueRefundJob(req, pluginConfig, doc as Refund)
+          }
           if (operation === 'create') {
             const logger = createContextLogger(req.payload, 'Refunds Collection')
             logger.info(`Refund created: ${doc.id} for payment: ${typeof doc.payment === 'object' ? doc.payment.id : doc.payment}`)
@@ -237,7 +242,8 @@ export function createRefundsCollection(pluginConfig: BillingPluginConfig): Coll
 
             // No provider refund yet: this document is a reservation. Reject what clearly cannot
             // be refunded now; the provider is called later by processRefund (refundPayment does
-            // both), because the race-safe re-check must run after this reservation has committed.
+            // both, and with refundJobs on afterChange queues a job for it), because the race-safe
+            // re-check must run after this reservation has committed.
             if (!data.providerId) {
               const payment = (await req.payload.findByID({
                 collection: paymentsSlug,

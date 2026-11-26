@@ -638,7 +638,7 @@ Track refunds associated with payments.
   - Full refund: payment status → `refunded`
   - Partial refund: payment status → `partially_refunded`
 - Refunds tracked in payment's `refunds` array
-- A refund created without a `providerId` is **sent to the provider** (Mollie and the test provider; see [Issuing a Refund](#issuing-a-refund))
+- A refund created without a `providerId` is a reservation that is **sent to the provider** (Mollie and the test provider) by `refundPayment`, by the [refund jobs](#refunds-from-the-admin-panel) or by `processRefund` / `processPendingRefunds`; see [Issuing a Refund](#issuing-a-refund)
 
 ## Payment Flows
 
@@ -862,7 +862,8 @@ refund.status      // 'processing' until Mollie settles it, then 'succeeded' | '
   read replicas or Mongo reads from secondaries. If your Payload reads go to a replica, two
   concurrent refunds can both pass verification; point Payload at the primary. The tests only cover
   single-connection SQLite. Creating a `pending` refund document by hand **only reserves it**: send it with
-  `processRefund(payload, refund.id)` or let `processPendingRefunds` pick it up.
+  `processRefund(payload, refund.id)`, let `processPendingRefunds` pick it up, or turn on
+  [`refundJobs`](#refunds-from-the-admin-panel).
 - **Validation:** the payment must be `succeeded` / `partially_refunded`, and the amount may not
   exceed what is left after pending, processing and succeeded refunds.
 - **Status:** Mollie's `queued`/`pending`/`processing` map to `processing`, `refunded` to
@@ -889,6 +890,31 @@ refund.status      // 'processing' until Mollie settles it, then 'succeeded' | '
   when the payment's webhook or `syncPaymentRefunds` reports that refund. Anyone who can update
   refunds can clear `manual` (and so release it to the sweep): restrict it together with
   `providerId`, e.g. with field-level access via `collections.refunds.extend`.
+
+#### Refunds from the admin panel
+
+A refund created in the admin panel (Billing > Refunds > Create), over REST or with
+`payload.create` is only a reservation. Set `refundJobs` to have the plugin send it through
+[Payload's jobs queue](https://payloadcms.com/docs/jobs-queue/overview):
+
+```typescript
+billingPlugin({
+  refundJobs: true, // or { queue: 'billing', sweepSchedule: '*/5 * * * *' }
+})
+```
+
+- Creating a refund without a `providerId` (or clearing `manual` on a pending one) queues a
+  `billingProcessRefund` job in the same transaction. The job runs `processRefund`, which does the
+  same reserve, verify, send as `refundPayment`. `refundPayment` sends the refund itself and
+  queues nothing.
+- A `billingRefundSweep` task runs `processPendingRefunds` and `syncOpenRefunds` every 5 minutes by
+  default (`sweepSchedule`; `false` registers it unscheduled). It retries refunds left `pending` by
+  a provider outage and polls refunds the provider is still processing.
+- Both tasks use the `default` queue unless you set `queue`. Your app still has to **run** that
+  queue, either with `jobs.autoRun` on a long-running server or with a cron calling
+  `GET /api/payload-jobs/run` (serverless). That call also queues the scheduled sweep.
+- This adds Payload's `payload-jobs` collection (and `payload-job-stats` for the schedule), so run
+  a migration on Postgres/SQLite.
 
 **Access:** refunds are admin-only by default (see [Access Control](#access-control)). Creating a
 refund reserves a real payout (or, with a `providerId`, marks it `succeeded`), so if you open
@@ -1153,6 +1179,7 @@ type BillingPluginConfig = {
   customerRelationSlug?: string
   customerInfoExtractor?: CustomerInfoExtractor
   disabled?: boolean
+  refundJobs?: boolean | { queue?: string; sweepSchedule?: string | false }
 }
 ```
 

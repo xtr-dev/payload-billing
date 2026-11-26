@@ -2,6 +2,7 @@ import { createInvoicesCollection, createPaymentsCollection, createRefundsCollec
 import type { BillingPluginConfig } from './config'
 import type { CollectionConfig, Config, Payload } from 'payload'
 import { createSingleton } from './singleton'
+import { createRefundTasks } from './jobs'
 import type { PaymentProvider } from '../providers/index'
 
 const singleton = createSingleton(Symbol.for('@xtr-dev/payload-billing'))
@@ -47,6 +48,15 @@ export const billingPlugin = (pluginConfig: BillingPluginConfig = {}) => (config
       ? disableCollectionBehavior(collection)
       : collection),
   ]
+
+  // Registered even when disabled, like the collections, so the jobs schema stays put
+  const refundTasks = createRefundTasks(pluginConfig)
+  if (refundTasks.length > 0) {
+    config.jobs = {
+      ...config.jobs,
+      tasks: [...(config.jobs?.tasks || []), ...refundTasks],
+    }
+  }
 
   if (pluginConfig.disabled) {
     return config

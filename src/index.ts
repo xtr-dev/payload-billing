@@ -6,6 +6,8 @@ export type { BillingCollectionAccess } from './collections/access'
 export type { PaymentProvider, ProviderData, InitPayment, ProviderRefund, ProviderRefundRequest } from './providers/types'
 export { refundPayment, processRefund, processPendingRefunds, syncPaymentRefunds, syncOpenRefunds } from './refunds'
 export { syncPaymentFromProvider } from './payments'
+export { REFUND_SWEEP_TASK_SLUG, REFUND_TASK_SLUG } from './plugin/jobs'
+export type { RefundJobsConfig } from './plugin/jobs'
 
 import type { Invoice as InvoiceType } from './plugin/types/invoices'
 import type { Payment as PaymentType } from './plugin/types/payments'

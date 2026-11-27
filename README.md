@@ -481,8 +481,8 @@ billingPlugin({
   It retries refunds left `pending` by a provider outage and polls refunds the provider is still
   processing.
 - Both tasks use the `default` queue unless you set `queue`. The plugin only queues the jobs: your
-  app has to **run** that queue, or refunds stay `pending`. Do so either with `jobs.autoRun` on a long-running server or with a cron calling
-  `GET /api/payload-jobs/run` (serverless). That call also queues the scheduled sweep.
+  app has to **run** that queue, or refunds stay `pending`. Do so either with `jobs.autoRun` on a
+  long-running server or with a cron calling `GET /api/payload-jobs/run` (serverless). That call also queues the scheduled sweep.
 - This adds Payload's `payload-jobs` collection (and `payload-job-stats` for the schedule), so run
   a migration on Postgres/SQLite.
 

@@ -3,6 +3,63 @@
   "schemaVersion": 2,
   "versions": [
     {
+      "version": "0.5.1",
+      "date": "2026-11-27",
+      "commit": "d9f4e2c",
+      "breaking": false,
+      "groups": {
+        "fixes": [
+          {
+            "type": "fix",
+            "scope": "stripe",
+            "description": "stop sending return_url when creating the PaymentIntent (#117)",
+            "commit": "475d404",
+            "hash": "475d404bfd39e8ca7d5afc0c989c152713ab4f1d",
+            "author": "Bas",
+            "breaking": false,
+            "notes": [
+              {
+                "title": "Co-authored-by",
+                "text": "Claude Opus 5.5 <noreply@anthropic.com>"
+              }
+            ]
+          }
+        ],
+        "other": [
+          {
+            "type": "chore",
+            "scope": "stripe",
+            "description": "deprecate the ignored webhookUrl option (#118)",
+            "commit": "d9f4e2c",
+            "hash": "d9f4e2c58c4d807351a18cd703fe0790adb55b75",
+            "author": "Bas",
+            "breaking": false,
+            "notes": [
+              {
+                "title": "Co-authored-by",
+                "text": "Claude Opus 5.5 <noreply@anthropic.com>"
+              }
+            ]
+          },
+          {
+            "type": "docs",
+            "scope": null,
+            "description": "audit README and docs for accuracy and brevity (#116)",
+            "commit": "8e1ed1a",
+            "hash": "8e1ed1abd1e42a3cdc41237c8e89bc5a548e3759",
+            "author": "Bas",
+            "breaking": false,
+            "notes": [
+              {
+                "title": "Co-authored-by",
+                "text": "Claude Opus 5.5 <noreply@anthropic.com>"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
       "version": "0.5.0",
       "date": "2026-11-26",
       "commit": "7f57523",

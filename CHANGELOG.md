@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.5.1](https://github.com/xtr-dev/payload-billing/compare/v0.5.0...v0.5.1) - 2026-11-27
+
+### Fixes
+- **stripe:** stop sending return_url when creating the PaymentIntent ([#117](https://github.com/xtr-dev/payload-billing/issues/117)) ([475d404](https://github.com/xtr-dev/payload-billing/commit/475d404bfd39e8ca7d5afc0c989c152713ab4f1d))
+
+### Other
+- **stripe:** deprecate the ignored webhookUrl option ([#118](https://github.com/xtr-dev/payload-billing/issues/118)) ([d9f4e2c](https://github.com/xtr-dev/payload-billing/commit/d9f4e2c58c4d807351a18cd703fe0790adb55b75))
+- audit README and docs for accuracy and brevity ([#116](https://github.com/xtr-dev/payload-billing/issues/116)) ([8e1ed1a](https://github.com/xtr-dev/payload-billing/commit/8e1ed1abd1e42a3cdc41237c8e89bc5a548e3759))
+
 ## [0.5.0](https://github.com/xtr-dev/payload-billing/compare/v0.4.0...v0.5.0) - 2026-11-26
 
 ### Features

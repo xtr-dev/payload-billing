@@ -5,7 +5,7 @@
 Payments, invoices and refunds for PayloadCMS 3.x, with Stripe, Mollie and a local test provider.
 Provider webhooks keep payment, invoice and refund statuses in sync.
 
-⚠️ **Pre-release Warning**: This package is in active development (v0.1.x). Breaking changes may occur before v1.0.0. Not recommended for production use.
+**v0.x** — minor versions may contain breaking changes until 1.0.
 
 ## Contents
 
@@ -460,8 +460,11 @@ refund.status      // 'processing' until Mollie settles it, then 'succeeded' | '
 ### Refunds from the admin panel
 
 A refund created in the admin panel (Billing > Refunds > Create), over REST or with
-`payload.create` is only a reservation. Set `refundJobs` to have the plugin send it through
-[Payload's jobs queue](https://payloadcms.com/docs/jobs-queue/overview):
+`payload.create` is only a reservation. `refundJobs` is **opt-in** (off by default): without it
+nothing sends that refund until you call `processRefund` or `processPendingRefunds` yourself. Set
+it to have the plugin send the refund through
+[Payload's jobs queue](https://payloadcms.com/docs/jobs-queue/overview), which your app must run
+(see below):
 
 ```typescript
 billingPlugin({
@@ -477,8 +480,8 @@ billingPlugin({
   `syncOpenRefunds` every 5 minutes by default (`sweepSchedule`; `false` registers it unscheduled).
   It retries refunds left `pending` by a provider outage and polls refunds the provider is still
   processing.
-- Both tasks use the `default` queue unless you set `queue`. Your app still has to **run** that
-  queue, either with `jobs.autoRun` on a long-running server or with a cron calling
+- Both tasks use the `default` queue unless you set `queue`. The plugin only queues the jobs: your
+  app has to **run** that queue, or refunds stay `pending`. Do so either with `jobs.autoRun` on a long-running server or with a cron calling
   `GET /api/payload-jobs/run` (serverless). That call also queues the scheduled sweep.
 - This adds Payload's `payload-jobs` collection (and `payload-job-stats` for the schedule), so run
   a migration on Postgres/SQLite.

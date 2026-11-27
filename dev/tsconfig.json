@@ -21,12 +21,6 @@
       ],
       "temp-plugin": [
         "../src/index.ts"
-      ],
-      "temp-plugin/client": [
-        "../src/exports/client.ts"
-      ],
-      "temp-plugin/rsc": [
-        "../src/exports/rsc.ts"
       ]
     },
     "noEmit": true,

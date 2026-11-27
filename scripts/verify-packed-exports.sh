@@ -1,30 +1,15 @@
 #!/bin/sh
 
+# Packs the package, installs the tarball into an empty ESM project and imports every
+# subpath in the published `exports` map, so an export that points at a file missing
+# from the tarball fails here instead of in a consumer's build.
+
 set -eu
 
 consumer_directory="$(mktemp -d -t payload-billing-esm-XXXXXX)"
 trap 'rm -rf "$consumer_directory"' EXIT
 
 package_tarball="$(pnpm pack --pack-destination "$consumer_directory" | tail -n 1)"
-react_tarball="$consumer_directory/$(npm_config_cache="$consumer_directory/npm-cache" npm pack --silent --pack-destination "$consumer_directory" ./node_modules/react | tail -n 1)"
-
-PACKAGE_TARBALL="$package_tarball" node --input-type=module --eval '
-  import { readFile } from "node:fs/promises"
-  import { execFileSync } from "node:child_process"
-  import semver from "semver"
-
-  const packageJson = JSON.parse(
-    execFileSync("tar", ["-xOf", process.env.PACKAGE_TARBALL, "package/package.json"]),
-  )
-  const reactPackageJson = JSON.parse(await readFile("node_modules/react/package.json", "utf8"))
-
-  if (!packageJson.peerDependencies?.react) {
-    throw new Error("The published package must declare its React runtime import as a peer dependency")
-  }
-  if (!semver.satisfies(reactPackageJson.version, packageJson.peerDependencies.react)) {
-    throw new Error(`The React fixture ${reactPackageJson.version} does not satisfy ${packageJson.peerDependencies.react}`)
-  }
-'
 
 cd "$consumer_directory"
 node --input-type=module --eval \
@@ -33,18 +18,46 @@ npm_config_cache="$consumer_directory/npm-cache" npm install \
   --offline \
   --ignore-scripts \
   --legacy-peer-deps \
-  "$package_tarball" \
-  "$react_tarball"
+  "$package_tarball"
 
 node --input-type=module --eval '
+  import { existsSync } from "node:fs"
   import { readFile } from "node:fs/promises"
+  import { join } from "node:path"
 
-  const packageJson = JSON.parse(
-    await readFile("node_modules/@xtr-dev/payload-billing/package.json", "utf8"),
-  )
-  const importSpecifiers = Object.keys(packageJson.exports).map((subpath) =>
+  const packageDirectory = "node_modules/@xtr-dev/payload-billing"
+  const packageJson = JSON.parse(await readFile(join(packageDirectory, "package.json"), "utf8"))
+
+  // The package ships no React components: the placeholder /client and /rsc entry points
+  // were removed, and React must not come back as a peer dependency without a real import.
+  const expectedSubpaths = [".", "./mollie", "./stripe"]
+  const publishedSubpaths = Object.keys(packageJson.exports).sort()
+  if (JSON.stringify(publishedSubpaths) !== JSON.stringify(expectedSubpaths)) {
+    throw new Error(`Expected exports ${expectedSubpaths.join(", ")} but the tarball has ${publishedSubpaths.join(", ")}`)
+  }
+  if (packageJson.peerDependencies?.react) {
+    throw new Error("The package has no React import, so it must not declare a react peer dependency")
+  }
+
+  // Every condition of every export (import, types, default) has to point at a packed file.
+  for (const [subpath, conditions] of Object.entries(packageJson.exports)) {
+    for (const [condition, target] of Object.entries(conditions)) {
+      if (!existsSync(join(packageDirectory, target))) {
+        throw new Error(`Export "${subpath}" (${condition}) points at ${target}, which is not in the tarball`)
+      }
+    }
+  }
+
+  const importSpecifiers = publishedSubpaths.map((subpath) =>
     subpath === "." ? packageJson.name : `${packageJson.name}/${subpath.slice(2)}`,
   )
-
   await Promise.all(importSpecifiers.map((specifier) => import(specifier)))
+
+  // The removed subpaths must be rejected by Node rather than resolve to a leftover file.
+  for (const removedSubpath of ["client", "rsc"]) {
+    const resolved = await import(`${packageJson.name}/${removedSubpath}`).then(() => true, () => false)
+    if (resolved) {
+      throw new Error(`${packageJson.name}/${removedSubpath} still resolves`)
+    }
+  }
 '

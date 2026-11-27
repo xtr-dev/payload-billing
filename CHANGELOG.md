@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.0](https://github.com/xtr-dev/payload-billing/compare/v0.5.1...v0.6.0) - 2026-11-27
+
+### Breaking
+- remove the placeholder /client and /rsc exports ([#119](https://github.com/xtr-dev/payload-billing/issues/119)) ([84a4d5d](https://github.com/xtr-dev/payload-billing/commit/84a4d5d50853512b0525ecebb701d8ab0855c1ff))
+
+### Other
+- replace the pre-release warning with a v0.x note ([#120](https://github.com/xtr-dev/payload-billing/issues/120)) ([9f0ede9](https://github.com/xtr-dev/payload-billing/commit/9f0ede9b467e81510234cf38acba1d9edefb84c5))
+
 ## [0.5.1](https://github.com/xtr-dev/payload-billing/compare/v0.5.0...v0.5.1) - 2026-11-27
 
 ### Fixes

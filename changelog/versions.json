@@ -3,6 +3,65 @@
   "schemaVersion": 2,
   "versions": [
     {
+      "version": "0.6.0",
+      "date": "2026-11-27",
+      "commit": "9f0ede9",
+      "breaking": true,
+      "groups": {
+        "breaking": [
+          {
+            "type": "feat",
+            "scope": null,
+            "description": "remove the placeholder /client and /rsc exports (#119)",
+            "commit": "84a4d5d",
+            "hash": "84a4d5d50853512b0525ecebb701d8ab0855c1ff",
+            "author": "Bas",
+            "breaking": true,
+            "notes": [
+              {
+                "title": "Co-authored-by",
+                "text": "Claude Fable 5.2 <noreply@anthropic.com>"
+              }
+            ]
+          }
+        ],
+        "features": [
+          {
+            "type": "feat",
+            "scope": null,
+            "description": "remove the placeholder /client and /rsc exports (#119)",
+            "commit": "84a4d5d",
+            "hash": "84a4d5d50853512b0525ecebb701d8ab0855c1ff",
+            "author": "Bas",
+            "breaking": true,
+            "notes": [
+              {
+                "title": "Co-authored-by",
+                "text": "Claude Fable 5.2 <noreply@anthropic.com>"
+              }
+            ]
+          }
+        ],
+        "other": [
+          {
+            "type": "docs",
+            "scope": null,
+            "description": "replace the pre-release warning with a v0.x note (#120)",
+            "commit": "9f0ede9",
+            "hash": "9f0ede9b467e81510234cf38acba1d9edefb84c5",
+            "author": "Bas",
+            "breaking": false,
+            "notes": [
+              {
+                "title": "Co-authored-by",
+                "text": "Claude Fable 5.2 <noreply@anthropic.com>"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
       "version": "0.5.1",
       "date": "2026-11-27",
       "commit": "d9f4e2c",

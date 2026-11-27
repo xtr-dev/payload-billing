@@ -10,16 +10,6 @@
       "types": "./src/index.ts",
       "default": "./src/index.ts"
     },
-    "./client": {
-      "import": "./src/exports/client.tsx",
-      "types": "./src/exports/client.tsx",
-      "default": "./src/exports/client.tsx"
-    },
-    "./rsc": {
-      "import": "./src/exports/rsc.tsx",
-      "types": "./src/exports/rsc.tsx",
-      "default": "./src/exports/rsc.tsx"
-    },
     "./stripe": {
       "import": "./src/exports/stripe.ts",
       "types": "./src/exports/stripe.ts",
@@ -126,7 +116,6 @@
   "peerDependencies": {
     "@mollie/api-client": "^3.7.0 || ^4.0.0",
     "payload": "^3.37.0",
-    "react": "^19.0.0",
     "stripe": "^18.5.0 || ^19.0.0 || ^20.0.0 || ^21.0.0 || ^22.0.0"
   },
   "engines": {
@@ -139,16 +128,6 @@
         "import": "./dist/index.js",
         "types": "./dist/index.d.ts",
         "default": "./dist/index.js"
-      },
-      "./client": {
-        "import": "./dist/exports/client.js",
-        "types": "./dist/exports/client.d.ts",
-        "default": "./dist/exports/client.js"
-      },
-      "./rsc": {
-        "import": "./dist/exports/rsc.js",
-        "types": "./dist/exports/rsc.d.ts",
-        "default": "./dist/exports/rsc.js"
       },
       "./stripe": {
         "import": "./dist/exports/stripe.js",

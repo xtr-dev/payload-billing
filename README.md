@@ -572,6 +572,9 @@ It throws when the payment has no provider payment id yet or its provider cannot
 | `@xtr-dev/payload-billing/stripe` | `stripeProvider` |
 | `@xtr-dev/payload-billing/mollie` | `mollieProvider`, `mapMollieStatusToPaymentStatus` |
 
+There are no `/client` or `/rsc` entry points: the plugin ships no React components. They held
+unwired demo components until 0.5.x and were removed.
+
 Types (from the main entry): `Payment`, `Invoice`, `Refund`, `PaymentStatus`, `InvoiceStatus`,
 `RefundStatus`, `RefundReason`, `Address`, `InvoiceItem`, `CustomerInfo`, `BillingPluginConfig`,
 `CustomerInfoExtractor`, `BillingCollectionAccess`, `RefundJobsConfig`, `RefundHook`,
@@ -625,7 +628,6 @@ in a PR.
 
 - **PayloadCMS**: ^3.37.0
 - **Node.js**: ^18.20.2 || >=20.9.0
-- **React**: ^19
 - **Package Manager**: pnpm ^9 || ^10
 
 ## License

@@ -49,7 +49,7 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
       type: 'relationship' as const,
       admin: {
         position: 'sidebar' as const,
-        description: 'Link to customer record (optional)',
+        description: 'Link to customer record (optional when the customer name and email are filled in)',
       },
       relationTo: customerRelationSlug as any,
       required: false,
@@ -60,7 +60,7 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
       type: 'group',
       admin: {
         description: customerRelationSlug && customerInfoExtractor
-          ? 'Customer billing information (auto-populated from customer relationship)'
+          ? 'Customer billing information (auto-populated when a customer is selected; an invoice without a customer keeps the name and email it was created with)'
           : 'Customer billing information',
         readOnly: !!(customerRelationSlug && customerInfoExtractor),
       },
@@ -114,7 +114,7 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
       type: 'group',
       admin: {
         description: customerRelationSlug && customerInfoExtractor
-          ? 'Billing address (auto-populated from customer relationship)'
+          ? 'Billing address (auto-populated when a customer is selected)'
           : 'Billing address',
         readOnly: !!(customerRelationSlug && customerInfoExtractor),
       },
@@ -477,13 +477,11 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
         ({ data }) => {
           if (!data) {return}
 
-          // If using extractor, customer relationship is required
-          if (customerRelationSlug && customerInfoExtractor && !data.customer) {
-            throw new Error('Please select a customer')
-          }
-
-          // If not using extractor but have customer collection, either relationship or info is required
-          if (customerRelationSlug && !customerInfoExtractor &&
+          // With a customer collection an invoice is billed either to a customer record or to a
+          // guest described by the snapshot alone. This holds with an extractor too: the extractor
+          // only fills the snapshot when a customer is selected, so a host that sells to both
+          // members and guests can still invoice a guest by supplying the name and email itself.
+          if (customerRelationSlug &&
               !data.customer && (!data.customerInfo?.name || !data.customerInfo?.email)) {
             throw new Error('Either select a customer or provide customer information')
           }

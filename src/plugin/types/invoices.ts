@@ -8,11 +8,12 @@ export interface Invoice<TCustomer = unknown> {
    */
   number: string;
   /**
-   * Link to customer record (optional)
+   * Link to customer record (optional when the customer name and email are filled in)
    */
   customer?: (Id | null) | TCustomer;
   /**
-   * Customer billing information (auto-populated from customer relationship)
+   * Customer billing information. With a `customerInfoExtractor` it is filled from the selected
+   * customer; an invoice without a customer keeps the name and email it was created with.
    */
   customerInfo?: {
     /**
@@ -37,7 +38,7 @@ export interface Invoice<TCustomer = unknown> {
     taxId?: string | null;
   };
   /**
-   * Billing address (auto-populated from customer relationship)
+   * Billing address (filled from the selected customer when a `customerInfoExtractor` is configured)
    */
   billingAddress?: {
     /**

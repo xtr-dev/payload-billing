@@ -354,7 +354,10 @@ has the token filled in.
 | `status` | `draft`, `open`, `paid`, `void`, `uncollectible` |
 | `currency` | ISO 4217 |
 | `items[]` | `{ description, quantity, unitAmount, totalAmount }`. `totalAmount` = quantity × unitAmount |
-| `subtotal` / `taxAmount` / `amount` | `subtotal` = sum of items, `amount` = subtotal + taxAmount |
+| `subtotal` | Sum of the items' `totalAmount`. Calculated |
+| `discountAmount` | Optional discount in cents, from 0 up to `subtotal`. Defaults to 0 |
+| `taxAmount` | Tax in cents. Defaults to 0 |
+| `amount` | `subtotal` − `discountAmount` + `taxAmount`. Calculated |
 | `dueDate` | Defaults to 30 days after creation |
 | `paidAt` | Set when the status becomes `paid` |
 | `payment` | Linked payment. Linking on create also sets the payment's `invoice` |
@@ -362,6 +365,12 @@ has the token filled in.
 
 When an invoice is marked `paid`, its linked payment becomes `succeeded`, unless the provider has
 already reported a final status for it.
+
+To show a discount, keep the items at their normal prices and set `discountAmount`. An invoice
+whose discount is larger than its subtotal is refused, so `amount` cannot become negative through
+a discount. Item `unitAmount` values cannot be negative. The plugin does not calculate tax: work
+out `taxAmount` on the discounted amount yourself. Providers are charged whatever `amount` you pass
+when creating the payment, so pass `invoice.amount` to charge the discounted total.
 
 ```typescript
 const invoice = await payload.create({
@@ -374,11 +383,12 @@ const invoice = await payload.create({
       { description: 'Website development', quantity: 40, unitAmount: 15000 },
       { description: 'Hosting (annual)', quantity: 1, unitAmount: 50000 },
     ],
-    taxAmount: 136500,
+    discountAmount: 50000, // optional
+    taxAmount: 126000,
     status: 'open',
   },
 })
-// subtotal 650000, amount 786500
+// subtotal 650000, amount 650000 − 50000 + 126000 = 726000
 
 await payload.create({
   collection: 'payments',

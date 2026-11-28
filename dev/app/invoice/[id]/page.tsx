@@ -33,6 +33,7 @@ interface Invoice {
   currency: string
   items: InvoiceItem[]
   subtotal: number
+  discountAmount?: number
   taxAmount?: number
   total: number
   status: string
@@ -266,6 +267,12 @@ export default function InvoiceViewPage() {
                     <span>Subtotal:</span>
                     <span className="font-medium">{formatCurrency(invoice.subtotal)}</span>
                   </div>
+                  {invoice.discountAmount !== undefined && invoice.discountAmount > 0 && (
+                    <div className="flex justify-between py-2 text-slate-700">
+                      <span>Discount:</span>
+                      <span className="font-medium">−{formatCurrency(invoice.discountAmount)}</span>
+                    </div>
+                  )}
                   {invoice.taxAmount !== undefined && invoice.taxAmount > 0 && (
                     <div className="flex justify-between py-2 text-slate-700">
                       <span>Tax:</span>

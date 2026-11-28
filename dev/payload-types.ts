@@ -302,11 +302,15 @@ export interface Invoice {
    */
   subtotal?: number | null;
   /**
+   * Discount in cents, subtracted from the subtotal. Cannot exceed the subtotal
+   */
+  discountAmount?: number | null;
+  /**
    * Tax amount in cents
    */
   taxAmount?: number | null;
   /**
-   * Total amount (subtotal + tax)
+   * Total amount (subtotal − discount + tax)
    */
   amount?: number | null;
   dueDate?: string | null;
@@ -602,6 +606,7 @@ export interface InvoicesSelect<T extends boolean = true> {
         id?: T;
       };
   subtotal?: T;
+  discountAmount?: T;
   taxAmount?: T;
   amount?: T;
   dueDate?: T;

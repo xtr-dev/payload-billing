@@ -57,8 +57,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       return sum + (item.unitAmount * item.quantity)
     }, 0) || 0
 
+    const discountAmount = invoice.discountAmount || 0
     const taxAmount = invoice.taxAmount || 0
-    const total = invoice.amount || (subtotal + taxAmount)
+    // `??` rather than `||`: a fully discounted invoice has a stored total of 0, which must not
+    // fall back to the recomputed figure.
+    const total = invoice.amount ?? (subtotal - discountAmount + taxAmount)
 
     // Prepare the response
     const invoiceData = {
@@ -68,6 +71,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       currency: invoice.currency,
       items: invoice.items || [],
       subtotal,
+      discountAmount,
       taxAmount,
       total,
       status: invoice.status,

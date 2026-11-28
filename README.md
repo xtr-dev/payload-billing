@@ -205,9 +205,15 @@ wiring.
 
 Invoices store a customer snapshot (`customerInfo` and `billingAddress`). There are three ways to fill it.
 
-**1. Customer relationship with an extractor.** The invoice's `customer` relationship is required,
-and the snapshot is read-only. The extractor fills it whenever an invoice is created or its
-`customer` changes. Later edits to the customer record are not copied to existing invoices.
+**1. Customer relationship with an extractor.** The extractor fills the snapshot whenever an
+invoice is created with a `customer` or its `customer` changes, replacing any `customerInfo` and
+`billingAddress` passed alongside it. Later edits to the customer record are not copied to existing
+invoices.
+
+An invoice for a guest leaves `customer` empty and passes the name and email in `customerInfo`
+itself (other snapshot fields are optional); the extractor is not called. An invoice with neither a
+`customer` nor a name and email is refused. The snapshot fields are read-only in the admin panel,
+so guest invoices are created through the Local API or REST.
 
 ```typescript
 import type { CustomerInfoExtractor } from '@xtr-dev/payload-billing'

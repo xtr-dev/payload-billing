@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.7.0](https://github.com/xtr-dev/payload-billing/compare/v0.6.0...v0.7.0) - 2026-11-28
+
+### Features
+- **invoices:** add discountAmount so an invoice can show a discount ([#122](https://github.com/xtr-dev/payload-billing/issues/122)) ([ae75c83](https://github.com/xtr-dev/payload-billing/commit/ae75c8355b05f50da3833546c081e4903bd41572))
+- **invoices:** accept guest invoices when a customerInfoExtractor is configured ([#121](https://github.com/xtr-dev/payload-billing/issues/121)) ([ab03567](https://github.com/xtr-dev/payload-billing/commit/ab035672f4d65093917d8eb2b9560edabc0c7453))
+
 ## [0.6.0](https://github.com/xtr-dev/payload-billing/compare/v0.5.1...v0.6.0) - 2026-11-27
 
 ### Breaking

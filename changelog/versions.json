@@ -3,6 +3,46 @@
   "schemaVersion": 2,
   "versions": [
     {
+      "version": "0.7.0",
+      "date": "2026-11-28",
+      "commit": "ae75c83",
+      "breaking": false,
+      "groups": {
+        "features": [
+          {
+            "type": "feat",
+            "scope": "invoices",
+            "description": "add discountAmount so an invoice can show a discount (#122)",
+            "commit": "ae75c83",
+            "hash": "ae75c8355b05f50da3833546c081e4903bd41572",
+            "author": "Bas",
+            "breaking": false,
+            "notes": [
+              {
+                "title": "Co-authored-by",
+                "text": "Claude Fable 5.2 <noreply@anthropic.com>"
+              }
+            ]
+          },
+          {
+            "type": "feat",
+            "scope": "invoices",
+            "description": "accept guest invoices when a customerInfoExtractor is configured (#121)",
+            "commit": "ab03567",
+            "hash": "ab035672f4d65093917d8eb2b9560edabc0c7453",
+            "author": "Bas",
+            "breaking": false,
+            "notes": [
+              {
+                "title": "Co-authored-by",
+                "text": "Claude Fable 5.2 <noreply@anthropic.com>"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
       "version": "0.6.0",
       "date": "2026-11-27",
       "commit": "9f0ede9",

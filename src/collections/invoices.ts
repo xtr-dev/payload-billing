@@ -256,6 +256,15 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
       },
     },
     {
+      name: 'discountAmount',
+      type: 'number',
+      admin: {
+        description: 'Discount in cents, subtracted from the subtotal. Cannot exceed the subtotal',
+      },
+      defaultValue: 0,
+      min: 0,
+    },
+    {
       name: 'taxAmount',
       type: 'number',
       admin: {
@@ -267,7 +276,7 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
       name: 'amount',
       type: 'number',
       admin: {
-        description: 'Total amount (subtotal + tax)',
+        description: 'Total amount (subtotal − discount + tax)',
         readOnly: true,
       },
     },
@@ -504,8 +513,18 @@ export function createInvoicesCollection(pluginConfig: BillingPluginConfig): Col
               0
             )
 
+            // A discount is one invoice-level figure, like the tax, so the lines keep showing the
+            // undiscounted prices and the invoice can print the discount as its own row. It may
+            // not exceed the subtotal: a larger discount would turn the invoice into a credit,
+            // which no payment provider can collect. A negative value is left to the field's
+            // `min: 0` validation, which reports it as a field error.
+            const discountAmount = data.discountAmount || 0
+            if (discountAmount > (data.subtotal || 0)) {
+              throw new Error('Discount cannot exceed the invoice subtotal')
+            }
+
             // Calculate total amount
-            data.amount = (data.subtotal || 0) + (data.taxAmount || 0)
+            data.amount = (data.subtotal || 0) - discountAmount + (data.taxAmount || 0)
           }
         },
       ] satisfies CollectionBeforeValidateHook<Invoice>[],

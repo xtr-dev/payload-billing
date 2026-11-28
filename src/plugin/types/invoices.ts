@@ -86,11 +86,15 @@ export interface Invoice<TCustomer = unknown> {
    */
   subtotal?: number | null;
   /**
+   * Discount in cents, subtracted from the subtotal. Cannot exceed the subtotal
+   */
+  discountAmount?: number | null;
+  /**
    * Tax amount in cents
    */
   taxAmount?: number | null;
   /**
-   * Total amount (subtotal + tax)
+   * Total amount (subtotal − discount + tax)
    */
   amount?: number | null;
   dueDate?: string | null;
